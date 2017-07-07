@@ -1,0 +1,83 @@
+---
+title: "Lab notebook"
+author: "Dan Ovando"
+date: '`r Sys.Date()`'
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+Arlington had radioacoustic tags for CPUE and viability in reserves 
+
+Olivier critique the non-fished species aren't a good control. This is the lynchpun
+
+* Following recommendations of "bayesian primer"; think of the biomass as a hierarchical process where the observed biomass is a random variable drawn from a true model, say log-normal, with a mean of observed numbers-at-length times weight ogive and standard deviation, where the numbers-at-length are drawn from a multinomial or something like that. Need to draw this out but that's the right way to account for all this. You'll follow a similar process in project `zissou`, but now you're more concerned with modeling the age structure itself. See Box 6.2.2
+
+# Ideas
+
+- Think about crowding of other vessels as a covariate in the model: both a sign of abundance but also an incentive to go elsewhere if vessels are competing/crowding each other out
+
+## The Pivot
+
+Zissou is now about economic priors. 
+
+Project Summary: 
+
+Many fisheries around the world require management guidance but lack the robust data streams that underpin state-of-the art science driven fisheries management. To resolve this problem, a large and growing suite of "data-limited stock assessments" (DLAs) have emerged, designed to provide management advice using relatively minimal data (but generous assumptions). Interestingly though, nearly all of the quantitative DLAs established rely exclusively on fish-centric data, for example length frequency distributions, catch data, or CPUE trends. While these data are clearly critical to proper understanding of a fishery's status, they also ignore the potential light that the economic history of a fishery may shed on its current biological status. This project proposes to address this challenge, by developing a quantitative method for integrating economic information into the stock assessment process. Length-based DLAs provide a useful entry point for this process. Length-based approaches often rely on equilibrium assumptions in order to "account" for recruitment fluctuations. However, this assumption is rarely justified. Attempts to relax this assumption can be hampered by the difficulties in separating changes in recruitment from changes in fishing mortality. We propose to address this challenge by utilizing economic data to set informative priors on the rate of change of fishing mortality.
+
+Proposed Methods:
+
+  - Collect historic data on fishing mortality *f* and economic data (e.g. prices, costs, labor) for a series of case-study fisheries
+  
+  - Explore ability of alternative models to utilize economic data to predict observed changes in *f*
+  
+  - Simultaneously explore simulation testing of evolution of *f* under different economic assumptions
+  
+  - Once (hopefully) a suitable functional for for estimating changes in *f* as a function of economic data is established, begin integration to DLAs
+  
+  - Develop model to use lengths (plus additional data as desired) to attempt to estimate a vector of *f*  and recruitment *r* over time. Use the established economic model to provide informative priors on the evolution of *f* over time. 
+  
+  - Simulation test model
+  
+  - Test against stock assessments 
+
+Key Questions:
+
+- What might be candidate fisheries for empirical exploration?
+    - Something with long time period of *f*, including *f* from period unconstrained by management
+    - Must also have access to concurrent dataset of economic data (prices, cost, labor, fleet size, etc.)
+  
+- Are there good examples of similar approaches in fisheries/other disciplines
+    - Predicting demand? E.g. how many widgets should you stock up on this year based on widget consumer behavior last year
+
+- What conditions would make this a non-starter
+    - All models are wrong, when is this one useful?
+    - What might be management scenarios that would completely invalidate this approach
+  
+- As an economist, what evidence would you need to see to be convinced of this idea?
+  
+  
+# 2017-05-15
+
+Sent email to Erin Steiner to get the data request ball rolling again https://www.nwfsc.noaa.gov/contact/display_staffprofile.cfm?staffid=2870
+
+Also, don't forget about the regulations database at 
+
+http://calcomfish.ucsc.edu/regulation_main.asp
+
+
+# Idea for empirical model exploration
+
+Holy cow, this could be a great way to start. Build of Cody's framework for classifying the "predictability" of a fishery. Take the RAM dynamics. Your goal is to predict the dynamics of the fishery using available data. Consider for example the change in fishing effort and or F over time. Can that change by predicted by a simple model of profits and expansion factor?
+
+So, take the F or effort. Calcualte the changes. In each time step, calculate the "profits", as price * catch - cost * effort ^ beta, where you break the cost thing into component factors of labor and fuel, times some coefficient, plus some constant ( c= 1 + fuel * effort + labor * effort). 
+
+See how good that is at predicting dynamics. Test out more complicated forms, a random forest approach, and a GAM based approach. This will be your evidence for the ability of economic parameters to guide stock assessment. 
+
+You can then work on degrading the data to develop a sense for the minimum amount needed to be informative. 
+
+As a simple one, regress delta F on delta profits, on economic indicators, and use those coefficients to describe coefficients for the prior idea. 
+
+
+
+

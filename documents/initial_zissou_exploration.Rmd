@@ -1,0 +1,190 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(forcats)
+library(scales)
+library(ggthemes)
+library(ggsci)
+
+```
+
+
+Goal of this notebook is to make some plots of mean length, density ratio, and density, for some sample species from PISCO data
+
+First let's get the lengths in here?
+
+```{r}
+
+rawdat <- read.csv('../data/UCSB_FISH raw thru 2013.csv', stringsAsFactors = F)
+
+life.history <- read.csv('../data/VRG Fish Life History in MPA_04_08_11_12 11-Mar-2014.csv', stringsAsFactors = F) %>%
+  rename(classcode = pisco_classcode)
+
+species.dat <- read.csv('../data/master_spp_table.csv', stringsAsFactors = F)
+
+site.dat <- read.csv('../data/Final_Site_Table_UCSB.csv', stringsAsFactors = F) %>%
+  rename(site = SITE)
+
+mlpa_dat <- left_join(rawdat,life.history, by = 'classcode') %>%
+  left_join(site.dat, by = 'site') %>%
+  left_join(species.dat, by = 'classcode' )
+
+
+conditions_dat <- mlpa_dat %>%
+  group_by(year,SITE_SIDE) %>%
+  summarise(mean_temp = mean(temp, na.rm = T),
+            num_transects = length(site),
+            mean_depth = mean(depth, na.rm = T),
+            #             mean_surge = mean(surge, na.rm = T), # need to convert this to numeric
+            mean_vis = mean(vis, na.rm = T),
+            mpa_group = unique(MPAGROUP),
+            pct_kelp_canopy = mean(pctcnpy, na.rm = T)
+  ) %>%
+  rename(site_side = SITE_SIDE)
+
+# Processed PISCO data ----
+# These are the processed biomass density estimates metric tons / hectare for is "biomass"
+
+# Tidy data
+# note that biomass is in units of mt/hectare and fish is un # per hectare
+
+
+processed_site_dat <- read.csv('../data/ci_reserve_data_final3 txt.csv', stringsAsFactors = F) %>%
+  gather('concat.name','value', grep('_',colnames(.)),convert = T) %>%
+  mutate(data.type = gsub('\\_.*', '', concat.name),
+         classcode = gsub('.*\\_','',concat.name)) %>%
+  mutate(value = as.numeric(value)) %>%
+  spread(data.type,value) %>%
+  rename(site_side = site.side) %>%
+  left_join(conditions_dat,by = c('year','site_side')) %>%
+  left_join(life.history, by = 'classcode') %>%
+  rename(description2 = Description) %>%
+  subset(is.na(biomass) == F)
+
+colnames(processed_site_dat) <- tolower(colnames(processed_site_dat)) #make all variables lower case
+
+capfun <- function(x,cap1=0,cap2 = 3000)
+{
+  x[x == cap1] <- cap2
+
+  return(x)
+}
+
+processed_dat <- processed_site_dat %>%
+  rename(common_name = commonname) %>%
+  group_by(site_side, common_name) %>%
+  mutate(ever.seen = mean(biomass, na.rm = T)>0) %>%
+  subset(year != 1999 & ever.seen == T & grepl('YOY',classcode) == F  & grepl('YOY',common_name) == F) %>% #remove 1999, species never seen at a site, and young of the year. Why remove YOY again?
+  ungroup() %>%
+  mutate(year_mlpa_mpa = year.mpa * as.numeric(year.mpa >= 2003)) %>%
+  group_by(site_side) %>%
+  mutate(num.years.surveyed = length(unique(year)),
+         will_be_mlpa = year_mlpa_mpa>0) %>%
+  subset(num.years.surveyed > 2) %>% #Only keep sites that have been surveyed two or more years
+  ungroup() %>%
+  mutate(year_mpa2 = capfun(year_mlpa_mpa)) %>%
+  group_by(region,year) %>%
+  mutate(region_has_mpas = any(year_mpa2 <= year)) %>%
+  ungroup() %>%
+  group_by(region) %>%
+  mutate(year_region_has_mlpa_mpas = min(year[year >= year_mpa2])) %>% #redefining 'MPA' as an MLPA created MPA
+  ungroup() %>%
+  group_by(common_name) %>%
+  mutate(total_species_samples = sum(biomass>0, na.rm = T)) %>%
+  ungroup() %>%
+  subset(total_species_samples > quantile(total_species_samples,.1))
+
+```
+
+OK, which of these has the damn length data?
+
+```{r explore length data}
+# colnames(mlpa_dat) <- tolower(colnames(mlpa_dat))
+
+length_trends <- mlpa_dat %>% 
+  as_data_frame() %>% 
+  group_by(CommonName, year,Targeted) %>% 
+  summarise(mean_length = sum(count * fish_tl, na.rm = T) / sum(count, na.rm = T),
+            perc_above_juve = sum(count[fish_tl > Juv.cut.cm
+], na.rm = T)/ sum(count, na.rm = T))
+  
+
+length_trends %>% 
+  filter(str_detect(tolower(CommonName),'garibaldi') | str_detect( tolower(CommonName),'^blue rockfish$')) %>% 
+  group_by(CommonName) %>% 
+  mutate(norm_length = mean_length / mean(mean_length, na.rm = T)) %>% 
+  ggplot(aes(year,norm_length, color = CommonName)) + 
+  geom_hline(aes(yintercept = 1), linetype = 2) +
+  geom_point() + 
+  geom_smooth(method = 'lm') +
+  facet_wrap(~CommonName) + 
+  scale_y_continuous(labels = percent, name = '% of Mean Length') + 
+  xlab('Year') + 
+  scale_color_npg()
+
+```
+Interesting, so that's telling you that there has been a large shift in size, relative to the mean observed size, over the observed time period for blue rockfish, but not really for garibaldi. 
+
+Now let's try density ratio
+
+```{r}
+
+density_trends <- processed_dat %>% 
+  group_by(site_side) %>% 
+  mutate(years_mpa = max(0,(year - (year_mlpa_mpa-1)) * as.numeric(year_mlpa_mpa>0)),
+eventual_mpa = as.numeric(max(years_mpa) >0)) %>%
+  group_by(common_name, year, mpa.status) %>% 
+  summarise(mean_density = mean(biomass, na.rm = T)) %>% 
+  group_by(common_name) %>% 
+    mutate(norm_density= mean_density / mean(mean_density, na.rm = T))
+
+
+density_trends %>% 
+    filter(str_detect(tolower(common_name),'garibaldi') | str_detect( tolower(common_name),'^blue rockfish$')) %>% 
+ggplot(aes(year,norm_density, fill = mpa.status)) + 
+  geom_hline(aes(yintercept = 1), linetype = 2) +
+  geom_point(shape = 21) + 
+  geom_smooth(method = 'lm', aes(color = mpa.status), se = F) +
+  scale_y_continuous(labels = percent, name = 'Normalized density') +
+  facet_wrap(~common_name) + 
+  scale_fill_npg() + 
+  scale_color_npg()
+
+```
+
+Now let's look at density ratio
+
+```{r}
+
+density_ratio_trends <- processed_dat %>% 
+  filter(year >= 2003) %>% 
+  group_by(common_name, year) %>% 
+  summarise(density_ratio = mean(biomass[mpa.status == 'reference'], na.rm = T) / mean(biomass[mpa.status == 'SMR'], na.rm = T)) %>% 
+  group_by(common_name) %>% 
+      mutate(norm_density= density_ratio / mean(density_ratio, na.rm = T)) %>% 
+      filter(str_detect(tolower(common_name),'garibaldi') | str_detect( tolower(common_name),'^blue rockfish$'))
+
+
+  
+
+density_ratio_trends %>% 
+    filter(str_detect(tolower(common_name),'garibaldi') | str_detect( tolower(common_name),'^blue rockfish$')) %>% 
+ggplot(aes(year,density_ratio, fill = common_name)) + 
+    geom_hline(aes(yintercept = 1), linetype = 2) +
+  geom_point(shape = 21) + 
+  geom_smooth(method = 'lm',aes(color = common_name), se = F) +
+  scale_y_continuous(labels = percent, name = 'Density Ratio') +
+    scale_fill_npg() + 
+  scale_color_npg() + 
+  facet_wrap(~common_name) + 
+  scale_x_continuous(breaks = seq(2003,2014, by = 2))
+
+```
+
+
+
+

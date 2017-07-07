@@ -1,0 +1,15 @@
+---
+title: "Lab notebook"
+author: "Dan Ovando"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+Arlington had radioacoustic tags for CPUE and visbility in reserves 
+
+Olivier critique the nonfished species aren't a good control. This is the lynchpun
+
+* Following recommendations of "bayesian primer"; think of the biomass as a hierarchical process where the observed biomass is a random variable drawn from a true model, say log-normal, with a mean of observed numbers-at-length times weight ogive and standard deviation, where the numbers-at-length are drawn from a multinomial or something like that. Need to draw this out but that's the right way to account for all this. You'll follow a similar process in 
+
+
+

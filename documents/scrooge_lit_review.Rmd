@@ -1,0 +1,44 @@
+---
+title: "Zissou Lit Review"
+output: html_notebook
+biblio-style: apalike
+bibliography: Dissertation.bib
+---
+
+# @Fulton2011
+
+# @Gillis1993
+
+empirical exploration of IFD based on foraging theory. SOme vidence that competition among vessels messes with this
+
+# @Karnauskas2011
+
+### Abstract
+
+Size-based indicators have emerged as useful tools to analyze the status of fisheries which lack fishery dependent data over long time series, such as many coral reef fisheries. In this study, we calculate a number of size-based indicators for the Haitian fishery at the remote Navassa Island, where a reef fish visual census (RVC) data set is available over an 8-year study period (2002–2009). We also calculate the slope of the size spectrum indicator within a Bayesian framework, which allows for potential biases inherent in the RVC method to be accounted for in credibility intervals around parameter estimates. Results of our analyses suggest that stocks targeted by traps declined from 2002 to 2004, followed by a period of increase from 2006 to 2009. The slope of the size spectrum declined from 2002 to 2004 and remained constant for the remainder of the study period, and this pattern was driven by a decrease in abundance of larger species targeted by hook-and-line. Analysis of the Lmax spectrum also indicated a decrease in the occurrence rates of larger species throughout the study period. Our methods can be applied to fisheries in other areas where limited fishery-independent data and no fishery-dependent data are available.
+
+### Notes
+
+* Interesting! There's a bit of a hidden literature here on using visual survey data in assessment, even in a Bayesian framework to deal with the data collection issues, See Graham and other things she sites
+* Use a poisson distribution to simulate length comp. for large schools of fish, based on min,max,mean
+* See @Serafy2007 for a check on your delta methods
+* Need to think about site/species balance
+  * basically bootstrapping over the samples to get equal sample sizes
+* So basically they are running a standardization procedure, with fixed effects for year and size class, controlling for diver and place
+* What's the difference between fixed and random effects in a Bayesian framework? Fixed are assumed to be independent, random have a shared prior?
+* Visual survey data tends to overestimate numbers of small fish
+
+# @Jardim2015
+
+### Abstract
+
+There are a large number of commercially exploited stocks lacking quantitative assessments and reliable estimates of stock status. Providing MSY-based advice for these data-limited stocks remains a challenge for fisheries science. For many data-limited stocks, catch length composition and/or survey biomass indices or catch-per-unit effort (cpue) are available. Information on life history traits may also be available or borrowed from similar species/stocks. In this work we present three harvest control rules (HCRs), driven by indicators derived from key monitoring data. These were tested through simulation using two exploitation scenarios (development and over-exploitation) applied to 50 stocks (pelagic, demersal, deep sea species and Nephrops). We examine the performance of the HCRs to deliver catch-based advice that is risk adverse and drives stocks to MSY. The HCR with a biomass index-adjusted status quo catch, used to provide catch-based advice for several European data-limited stocks, showed the poorest performance, keeping the biomass at low or very low levels. The HCRs that adjust the status quo catch based on the variability of the biomass index time series was able to drive most of the stocks to MSY, showing low to moderate biological risk. The recovery of biomass required asymmetric confidence intervals for the biomass index and larger decreases in status quo catch than increases. The HCR based on length reference points as proxies for the FSQ/FMSY ratio was able to reverse the decreasing trend in biomass but with levels of catch below MSY. This HCR did not prevent some of the stocks declining when subject to over- exploitation. For data-limited stocks, the empirical HCRs tested in this work can provide the basis for catch advice. Nevertheless, applications to real life cases require simulation testing to be carried out to tune the HCRs. Our approach to simulation testing can be used for such analysis.
+
+### Notes
+
+  * Interesting reference on multi-indicator control rules
+  * They use "survey" to imply targeted biological sampling, e.g. trawl index, not generic term for any fishery independent data
+  * Length frequency also assumed to come from fishery dependent data
+  * Interesting, see @Hilborn2001b (COLERAINE) for finally an example of a double normal distribution (dome shaped selectivity)
+  * Length by itself did a bad job of providing for fisheries, though was conservative with respect to biomass
+  * See @Klaer2012 for more on length based control rules

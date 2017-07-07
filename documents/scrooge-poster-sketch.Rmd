@@ -1,0 +1,541 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Content for the scrooge poster
+
+```{r}
+set.seed(42)
+
+library(tidyverse)
+library(broom)
+library(scales)
+library(GUM)
+library(forcats)
+library(stringr)
+library(ggrepel)
+library(ggthemes)
+library(lazyeval)
+library(trelliscopejs)
+library(LBSPR)
+library(simfish)
+library(ggsci)
+library(hrbrthemes)
+library(viridis)
+library(ggExtra)
+library(ggalt)
+library(LIME)
+
+hrbrthemes::update_geom_font_defaults()
+
+poster_theme <- theme_ipsum(base_size = 32, plot_title_size = 38,axis_title_size = 38,
+                            strip_text_size = 35, strip_text_face = 'bold')
+
+theme_set(poster_theme)
+
+dat <- data.table::fread('~/Box Sync/Shared Upside Results/ProjectionData.csv',
+                         showProgress = T)  %>% 
+  set_names(colnames(.) %>% tolower())
+
+
+a = dat %>% 
+  group_by(policy,year, scenario) %>% 
+  summarise(tc = sum(catch, na.rm = T), tmsy = sum(msy)) %>% 
+  filter(year == 2010 | year == 2050) %>% 
+  ungroup() %>% 
+  mutate(pc = tc / tc[policy == 'Historic'] - 1)
+
+
+a <- dat %>% 
+  filter(year == 2050, policy == 'Fmsy', 
+         scenario == 'All Stocks') %>% 
+  mutate(c_v_msy = catch / msy)
+
+a = dat %>% 
+  filter(idorig == 'WGSSDS-SOLECS-1970-2011-NEUBAUER', policy == 'Fmsy', 
+         scenario == 'All Stocks') %>% 
+  ggplot(aes(year,bvbmsy)) + 
+  geom_line()
+  
+
+
+dat %>% 
+  group_by(policy,year, scenario) %>% 
+  summarise(p_overfished = mean(bvbmsy < 1),
+            p_overfishing = mean(fvfmsy > 1)) %>% 
+  filter(year == 2010 | year == 2050) 
+  
+
+  
+
+
+ram <- dat %>% 
+  filter(dbase =='RAM')
+
+current_ram <- ram %>% 
+  group_by(year) %>% 
+  summarise(tc = sum(catch, na.rm = T)) %>% 
+  filter(year == 2012) %>% {
+    .$tc
+  }
+
+global_catch <- 81e6
+
+percent_unassessed <- ((1 - current_ram / global_catch) * 100) %>% round(0)
+
+
+```
+
+
+# Figure 1
+
+```{r}
+strain_lbspr <- function(sigma_recruits = 0, sigma_f = 0, ac_recruits = 0,HistoricalF = 0.1){
+
+  
+    vbk = 0.21
+    linf = 64.58
+    lwa = 0.0245
+    lwb = 2.79
+    S50 = 30
+    selex_input = "length"
+    M50 = 34
+    maturity_input = "length"
+    binwidth = 1
+    CVlen = 0.1
+    SigmaR = sigma_recruits
+    M = 0.2
+    rho = ac_recruits
+  
+  
+  lh <-
+  create_lh_list(
+    vbk = vbk,
+    linf = linf,
+    lwa = lwa,
+    lwb = lwb,
+    S50 = S50,
+    selex_input = selex_input,
+    M50 = M50,
+    maturity_input = maturity_input,
+    binwidth = binwidth,
+    CVlen = CVlen,
+    SigmaR = SigmaR,
+    M = M,
+    rho = rho,
+    F1 = HistoricalF,
+    SigmaF = sigma_f
+  )
+  
+  simmed_fish <- sim_pop(
+  lh = lh,
+  Nyears = 50,
+  Fdynamics = 'Constant',
+  Rdynamics = 'BH',
+  nburn = 5,
+  modname = 'blah',
+  seed = 42,
+  init_depl = 0,
+  comp_sample = 1000,
+  pool = T,
+  Nyears_comp = 50,
+  mismatch = F
+)
+  
+  lbspr_lengths <- simmed_fish$LF %>%
+  t() %>% 
+  as_data_frame() %>% 
+  set_names(1:dim(.)[2])
+
+lbspr_lengths <- data.frame(LMids = simmed_fish$mids %>% as.numeric(),lbspr_lengths, check.names = F)
+
+
+babel_lengths <- new("LB_lengths")
+
+babel_lengths@LMids <- simmed_fish$mids
+
+babel_lengths@LData <- lbspr_lengths %>% as.matrix()
+  
+  babel_lengths@Years <-
+  as.numeric(lbspr_lengths %>% select(-LMids) %>% colnames())
+
+babel_lengths@NYears <- length(babel_lengths@Years)
+
+babel_pars <- new("LB_pars")
+
+babel_pars@Species <- "babelfish"
+
+babel_pars@Linf <- linf
+
+babel_pars@L50 <- M50
+
+babel_pars@L95 <-  M50+1
+
+babel_pars@MK <- M / vbk
+
+babel_pars@BinWidth <- 1
+
+babel_fit <- LBSPRfit(babel_pars, babel_lengths,
+                      yrs = 1:babel_lengths@NYears, Control = list(modtype = 'absel',
+                                                                   Nage = lh$AgeMax
+                                                                   ))
+real <- data_frame(year = 1:50, spr = simmed_fish$SPR_t, name = 'True Value')
+
+lbspr <- data_frame(year = 1:50, spr = babel_fit@SPR, name = 'LBSPR Estimate')
+
+spr_comp_plot <- real %>%
+  bind_rows(lbspr) %>% 
+  ggplot(aes(year,spr, color = name)) +
+  geom_line(size = 2) +
+  scale_y_continuous(limits = c(0,NA))
+
+real <- data_frame(year = 1:50, fvm = simmed_fish$F_t / lh$M, name = 'True Value')
+
+lbspr <- data_frame(year = 1:50, fvm = babel_fit@FM, name = 'LBSPR Estimate')
+
+fvm_comp_plot <- real %>%
+  bind_rows(lbspr) %>% 
+  ggplot(aes(year,fvm, color = name)) +
+  geom_line(size = 2) +
+  scale_y_continuous(limits = c(0,NA))
+
+return(list(spr_comp_plot = spr_comp_plot,fvm_comp_plot = fvm_comp_plot))
+}
+
+f <- 0.3
+
+no_strain <- strain_lbspr(HistoricalF = f)
+
+no_strain$spr_comp_plot
+
+
+plenty_strain <- strain_lbspr(sigma_recruits = 1.1, ac_recruits = 0.75,
+                              HistoricalF = f, sigma_f = 0)
+
+plenty_strain$spr_comp_plot
+
+spr_strain_plot <- plenty_strain$spr_comp_plot  + 
+  xlab('Time') + 
+  ylab('Spawning Potential Ratio') + 
+  scale_color_npg(guide = F) + 
+  labs(title = 'A: Rec. Assumptions Violated')
+
+spr_no_strain_plot <- no_strain$spr_comp_plot  + 
+  xlab('') + 
+  theme(axis.title.y = element_blank()) + 
+  labs(title = 'B: Rec. Assumptions Satisfied') + 
+  scale_color_npg(name = '', labels = c('LBSPR Estimate','True Value'))
+
+lbspr_performance_plot <- gridExtra::arrangeGrob(spr_strain_plot,spr_no_strain_plot,
+                                                  ncol = 2, nrow = 1)
+png(file = 'test.png', width = 20, height = 12, units = 'in', res = 72)
+ gridExtra::grid.arrange(spr_strain_plot,spr_no_strain_plot,
+                                                  ncol = 2, nrow = 1,
+                         widths = unit(c(10,10),'in'),heights = unit(c(12),'in'))
+ dev.off()
+
+
+# 
+# cowplot::plot_grid(spr_strain_plot,spr_no_strain_plot, labels = 'AUTO')
+# 
+# cowplot::save_plot('test.png', lbspr_performance_plot, base_height = 12,
+#                    base_aspect_ratio = 1.25)
+
+```
+
+
+```{r}
+
+r <- 1.1
+
+k <- 100
+
+q <- .2
+
+alpha <- 1e-2
+
+p = 5
+ 
+cost = 20
+
+beta = 1.3
+
+msy <- r*k / 4
+
+bmsy <- k / 2
+
+emsy <- msy / (q * bmsy)
+
+pmsy <- p * msy - cost * emsy ^ beta
+
+oa <- data_frame(year = 1965:1990, b = NA, f = NA, catch = NA, profits = NA, effort = NA)
+
+time <- length(1965:1990)
+
+oa$b[1] <- k
+
+oa$effort[1] <- .01
+
+oa$f[1] <- q * oa$effort[1]
+
+oa$catch[1] <- oa$f[1] *oa$b[1] 
+
+oa$profits[1] <- (p * oa$catch[1]  - cost * oa$effort[1] ^ beta) / pmsy
+
+for (i in 2:time) {
+  
+  last_b <- oa$b[i - 1]
+  
+  oa$b[i] <- last_b + last_b * r * (1 - last_b / k) - oa$catch[i - 1]
+  
+  oa$effort[i] <- oa$effort[ i - 1] + alpha * oa$profits[ i - 1]
+  
+  oa$f[i] <- oa$effort[i] * q
+  
+  oa$catch[i] <- oa$b[i] * oa$f[i]
+  
+  oa$profits[i] <-  p * oa$catch[i] - cost * oa$effort[i] ^ beta
+  
+}
+
+# oa  %>% 
+#   mutate(commname = 'Tragic Hardinfish', bvbmsy = b / bmsy, 
+#          fvfmsy = f / (r/2)) %>% 
+#   select(commname, year, bvbmsy, fvfmsy) %>% 
+#   ggplot(aes(bvbmsy, fvfmsy)) + 
+#   geom_hline(aes(yintercept = 1), linetype = 2) + 
+#   geom_vline(aes(xintercept = 1), linetype = 2) +
+#   geom_path() + 
+#   geom_point(aes(fill = year), shape = 21, size = 10) + 
+#   scale_fill_viridis(name = 'Year') + 
+#   labs(x = 'B/Bmsy', y = 'F/Fmsy') + 
+#   facet_wrap(~commname) +
+#   theme(legend.key.height = unit(1.5,'in'),
+#         legend.key.width = unit(.35,'in'))
+
+# Ram example
+
+historic_ram <- ram %>% 
+  filter(idorig == 'NAFO-SC-YELL3LNO-1960-2009-BAUM', year <= 1990) %>% 
+  select(commname, year, bvbmsy, fvfmsy) %>% 
+  mutate(commname = paste('B) RAM Data - ',commname, sep = ''))
+
+
+oa_plot <- oa  %>% 
+  mutate(commname = 'A) Stylized Model - Tragic Hardinfish', bvbmsy = b / bmsy, 
+         fvfmsy = f / (r/2)) %>% 
+  select(commname, year, bvbmsy, fvfmsy) %>% 
+  bind_rows(historic_ram) %>% 
+  ggplot(aes(bvbmsy, fvfmsy)) + 
+  geom_hline(aes(yintercept = 1), linetype = 2) + 
+  geom_vline(aes(xintercept = 1), linetype = 2) +
+  geom_path() + 
+  geom_point(aes(fill = year), shape = 21, size = 10) + 
+  scale_fill_viridis(name = 'Year') + 
+  labs(x = 'B/Bmsy', y = 'F/Fmsy') + 
+  facet_wrap(~commname) +
+  theme(legend.key.height = unit(1.5,'in'),
+        legend.key.width = unit(.35,'in'))
+
+oa_plot
+
+ggplot2::ggsave('oa_plot.png', oa_plot, width = 20,height = 12, unit = 'in')
+
+```
+
+
+
+# Project Summary
+
+Can Economic Data Improve Data-Limited Stock Assessments?
+
+# The Problem
+
+
+
+
+
+
+# Project Summary
+
+Most fisheries around the world require management guidance but lack the robust data streams required for state-of-the-art fisheries management. To resolve this problem, a large and growing suite of "data-limited stock assessments" (DLAs) have emerged, designed to provide management advice using relatively minimal data (but generous assumptions). Interestingly though, nearly all of the quantitative DLAs established rely exclusively on fish-centric data, for example length frequency distributions [e.g. @Gedamke2006; @Hoenig1983; @Hordyk2016], catch data [e.g. models summarized in @Rosenberg2017; @Carruthers2014]. While these data are clearly critical to proper understanding of a fishery's status, they also ignore the potential light that the economic history of a fishery may shed on its current biological status. This project proposes to address this challenge, by developing a quantitative method for integrating economic information into the stock assessment process, which we can loosely term economic-DLAs (eDLAs).
+
+
+DLAs common
+
+Big problems when assumptions are violated
+
+Graph showing LBSPR thing
+
+Graph of problem with data from central coast
+
+# Economics and Fisheries
+
+Summaries of fleet dynamics and theory behind linkages of profits and fishing effort
+
+Maybe some plots showing how different incentives create different behavior
+
+# Proposed Methods
+
+Empirical Examination
+
+Very few papers actually making this link 
+
+How do we propose to fit this? Test out of sample predictive ability of different fleet model structures and parameters 
+
+Simulation testing!
+
+Application to California!
+
+# Expected outcomes
+
+New source of data for DLAs
+
+Isolating recruitment from F
+
+# Results
+
+Example figure of open access looking thing from RAM
+
+```{r}
+
+
+ram <- dat %>% filter(dbase == 'RAM' & year <= 1990, is.na(fvfmsy) == F)
+
+ram_series <- ram %>%
+  select(idorig, year, bvbmsy, fvfmsy, catch) %>%
+  nest(-idorig) %>%
+  mutate(oa = map_plot(
+  data,
+  ~ ggplot(.x, aes(bvbmsy, fvfmsy)) + geom_vline(aes(xintercept = 1), linetype = 2) + geom_hline(aes(yintercept = 1), linetype = 2) + geom_path()  + geom_point(aes(color = year))
+  ))
+# 
+# trelliscope(ram_series %>% select(idorig,oa), name = 'blah', self_contained = T,panel_col = 'oa')
+
+
+
+```
+
+price correlations
+```{r}
+
+edat <- read_csv(file.path('../data',
+                           'SouthCoastHumanActivitiesCommercialFisheriesEconomicandSpatialData1992to2012',
+                           'sc_comm_fisheries_region_landings_data_1992_2012.csv')) %>% 
+  set_names(colnames(.) %>% tolower()) %>% 
+  mutate(pounds = str_replace(pounds,',','') %>% as.numeric(),
+         revenue = str_replace_all(revenue,'[\\$|,]','') %>% as.numeric(),
+         `average price` = str_replace(`average price`, '[\\$]','') %>% as.numeric(),
+         `count of landings` = as.numeric(`count of landings`)
+         )
+
+
+x <- function(a,f,d) {
+  
+  f(a,d)
+  
+}
+
+x(c(1,2,3),lag,1)
+
+leads_and_lags <- function(df,variable,foo, x) {
+  foo_name <- enquo(foo)
+  
+  for (i in seq_along(x)) {
+  name <- paste(quo_name(foo_name),x[i], sep = '_')
+  
+ df <-  mutate(df, 
+         !!name := foo(!!variable,x[i])
+         )
+  }
+  
+  return(df)
+}
+
+edat <- edat %>% 
+  group_by(region,fishery,gear) %>% 
+  arrange(year) %>% 
+  leads_and_lags(quo(`average price`),lag,0:5) %>% 
+  leads_and_lags(quo(`average price`),lead,1:5)
+
+
+price_pounds <- edat %>% 
+  select(region,fishery,gear,year,pounds,contains('lead'), contains('lag')) %>% 
+  gather('variable','value',contains('_')) %>% 
+  group_by(region,fishery,gear,variable) %>% 
+  summarise(pearson_correlation = cor(pounds,value, use = 'na.or.complete'),
+            cross_correlation = ccf(pounds,value,lag.max = 0, plot = F, na.action = na.pass)$acf %>% as.numeric()) %>% 
+  mutate(is_lag = str_detect(variable,'lag'),
+         lead = str_split(variable,'_', simplify = T)[,2] %>% as.numeric()) %>% 
+  mutate(lead = ifelse(is_lag == T, -lead,lead))
+
+price_pounds <- price_pounds %>% 
+  ungroup() %>% 
+  mutate(fishery = tools::toTitleCase(fishery %>% tolower()),
+         gear =tools::toTitleCase(gear %>% tolower())) %>% 
+  mutate(fish_gear = paste(fishery,gear, sep = '-'))
+
+
+price_pounds$fishery[price_pounds$fishery == 'Nearshore'] <- 'Nearshore Finfish'
+
+
+
+good_examples <- c('California Halibut-Hook & Line',
+                   'Nearshore Finfish-Trap',
+                   'Spot Prawn-Trap',
+                   'Lobster-Trap')
+
+price_pound_corr_plot <- price_pounds %>% 
+  filter(is_lag == T,
+         is.na(region) == F, is.na(fishery) == F, is.na(gear) == F) %>%
+  filter(fish_gear %in% good_examples) %>% 
+  ggplot(aes(lead,cross_correlation)) + 
+  geom_hline(aes(yintercept = 0), linetype = 2) +
+  geom_lollipop(aes(color = fishery), size = 4) + 
+  scale_color_npg(guide = F) +
+  facet_wrap( ~ fish_gear) +
+ labs(x= 'Price Lag', y = 'Price-Catch Cross-Correlation')
+  
+ggplot2::ggsave('price-correlations.png', price_pound_corr_plot, width = 25,height = 12, unit = 'in')
+
+
+
+
+
+
+
+```
+
+Maybe 
+
+IMARPE-PANCHPERUNC-1959-2008-HIVELY
+AFSC-POPERCHGA-1959-2010-STACHURA
+
+AFWG-GOLDREDNEAR-1983-2010-NEUBAUER
+
+IMARPE-PANCHPERUNC-1959-2008-HIVELY
+
+NAFO-SC-YELL3LNO-1960-2009-BAUM * good one
+
+NEFSC-HADGB-1931-2010-CHING
+
+NEFSC-HERRNWATLC-1960-2005-OVERHOLTZ
+
+NZMFishLOBSTERWG-RROCKLOBSTERCRA1-1945-2001-JENSEN
+
+NAFO-SC-YELL3LNO-1960-2009-BAUM * very good one
+
+NEFSC-HADGB-1931-2010-CHING
+
+NWWG-CODICE-1952-2012-CHING
+
+NZMFishLOBSTERWG-RROCKLOBSTERCRA1-1945-2001-JENSEN
+
+
+
+ICCAT-BMARLINATL-1956-2010-CHING
+
+
+
+
