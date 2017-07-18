@@ -209,6 +209,7 @@ no_strain <- strain_lbspr(HistoricalF = f)
 
 no_strain$spr_comp_plot
 
+no_strain$fvm_comp_plot
 
 plenty_strain <- strain_lbspr(sigma_recruits = 1.1, ac_recruits = 0.75,
                               HistoricalF = f, sigma_f = 0)
