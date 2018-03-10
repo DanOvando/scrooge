@@ -1,0 +1,35 @@
+---
+title: "scrooge-paper"
+author: "Dan Ovando"
+date: "3/7/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Literature Review
+
+  - @Thorson2013a looks at the ability of effort dynamics to augment catch data for SSCOM. So similar in some sense, but it about actual effort data, and just catch data, not priors. But, does have some interesting thoughts on the functional form to use, i.e. an interpretable open access model 
+
+  - Neilsen 2017 (@Nielsen2017) is that lit review of coupled ecological-economic models. Ah right, these are all MSE style models though, not assessment modules. So, a good reference for ways to model effort dynamics, but not redundant on the effort dynamics. 
+
+  - [@Branch2006] fleet dynamics and management. Right, this thinks about the way that fleet dynamics interact with different kinds of management. Interesting insights on how you want to include this into DLAs, but not much in the direct sense of integration to stock assessment
+  
+  - [@Salas2004] is similar but focuses on small scale fisheries. Interesting stuff but not much on the modeling front. But lots of good content thinking about behavioral dynamics of small scale fisheries that would be valuable to dive into. 
+  
+-[@vanPutten2012] theories and behavioral drivers underlying fleet dynamics. See @Vermard2008 for some modeling examples. Has lots of useful references in here. Random utility models for individual behavior. Basically, has a nice summary of sources for different ways to model and think about behavior. So, you can start with the profit maximizing side of things, but expand that out for different types of fleet dynamics. 
+
+- @Fulton2011 human behavior: the key source of uncertainty. Objectives and uncertainty drive consequences, good source for thinking about this broad problem. 
+
+- @Marchal2013 added value of fleet dynamics in models. This one looks at MSE style problems again, but has aome interesting fleet model specifications that you could steal. Equation 11 is handy, just more justification for change is the effort last year times some factor and profits over the last few years 
+
+- @Clark1990 
+
+- @Hoff2008
+
+
+# Introduction
+
+Effective fisheries management requires that managers and stakeholders have some ability to estimate and react to the abundance of fish in the ocean. The history of fisheries science is largely concerned with developing and improving our ability to accomplish this difficult task, starting from early models of growth overfishing [citation] and leading up to multi-species bio-geo-economic models[e.g. citation some mice model].  While the field has made dramatic advances in our ability to assess fisheries, by and large we have found two solutions to this problem: Fit highly complex integrated statistical models to diverse data streams [cite fancy stock assessment technique], or utilize increasing levels of statistical wizardry to try and squeeze more information out of limited data [what has lately been termed Data Limited Stock Assessments, or DLAs; cite]. The explosion of DLAs has been both promising and concerning. The majority of fisheries in the world lack the resources for fully integrated stock assessments, and so depend on this world of "data limited stock assessment". While there has been tremendous growth in this field, nearly all DLAs rely on the same streams of information that would have been available to a fisheries scientist in the 1800s: lengths [cite], captures [cite], and catch per unit effort[cite].

@@ -79,5 +79,342 @@ You can then work on degrading the data to develop a sense for the minimum amoun
 As a simple one, regress delta F on delta profits, on economic indicators, and use those coefficients to describe coefficients for the prior idea. 
 
 
+# 2017-07 Check in
+
+OK, you really need to make some serious progress on this thing. 
+
+There seem to be a few key things that you need to iron out. 
+
+The first is what you are actually interested in modeling here. Are you trying to estimate F? Effort? Change in F? Actual biomass? SPR?
+
+The cleanest goal still seems to be an informative prior on F based on changes in economic conditions, building off the LIME package. 
+
+But, this should be informed by reading that summary paper that just came out...
+
+Once you have that set out, you need to actually write out the model that you're going to use, how you plan on estimating it, and the theory underpinning it
+
+From there you need data. That will come from two places. A really fast operating model, which I'm thinking needs to be C++ based, since it needs to be able to be spatial, with lots of complex fleet bells and whistles, and I want it to fly. 
+
+You'll also need to try and collect empirical data from some RAM based things
+
+Then test away. 
+
+From there you need to write the model to estimate it
+
+# Paper
+
+Theory + simulation (what you were already pitching)
+
+Theory + emprical (show in a few different places)
+
+Theory: when would the tipping points of value be?
 
 
+# March 2018 launch party
+
+Thorson et al. 2013 seems liek a good starting place, along with Vasconcellos & Cochrane
+
+@Thorson2013 is a decent starting place, but doesn't really give much besides literature for the general idea. But, that functional form isn't all that useful for me
+
+Neilsen 2017 (@Nielsen2017) is that lit review of coupled ecological-economic models. Ah right, these are all MSE style models though, not assessment modules. So, a good reference for ways to model effort dynamics, but not redundant on the effort dynamics. 
+
+So, the tricky part in this is going to be thinking about how to not cheat too much. Obviously if you model effort as a function of price and pass a prior on that the model is going to work pretty damn well. So, to make realistic you need to introduce what, the simplest would just be process error running on up to model error. 
+
+From a starting point, it would be nice to stick with demonstrating with more or less open access dynamics, and messing around with process/observation error around that. 
+
+
+So, step one is writing out your economic model. As an easy starting point, you could with that model write out what dE/Dp/c/q/b is, to think about what the shape of the priors would actually be. 
+
+One nice wrinkle in this would be to have the assessment model assume 
+
+# Structure of F priors
+
+consider something of the form 
+
+$$f_{t+1} = f_{t} + \epsilon{P_{t}}$$
+
+To rearrange that then, we can say that 
+
+$$\Delta^f_{t} = \epsilon{P}_{t}$$
+
+Expanding that out then we get
+
+$$\Delta^f_{t} = \epsilon(p_{t}q_{t}E_{t}b_{t} - cE^{b})$$
+
+And you could start taking derivatives from there... if you want to think about an x unit change in delta F as a function of a Y change in a covariate. 
+
+Or, and this is interesting, you could think about it like elasticities? hmmm
+
+One may to make this a bit more tractable. Suppose that there is some max fleet expansion factor, e.g. 120%, and some min, like 0%. So, in any given year you could either expand f to some max value, or decrease it to zero if you wanted to. Then, what you estimate is the % of this expansion percentage. So a massive increase in prices, decreases in cost, increase in tech, produces a massive/small part of that max change
+
+Make yourself a damn shiny app to think this through. as well, or at least make some plots and see what happens. 
+
+could use `dagR` to draw model graphs
+
+So, a relatively simple step would just be to think about each of the parameters in here as a constant besides the variable that you "have" and take derivatives. 
+
+i.e. the df/dp would be qEb, df/dq would be pEB, df/dc would be -E^b^, etc. 
+
+This has some appeal, the problem though is it's trickier to think about what happens if you have arbitrary numbers and combinations of parameters, e.g. what happens if both p and q are changing? You can certainly look up the math on that one... joint derivative?
+
+An alternative though would be a much more structural approach. 
+
+Suppose that you have t years of length frequency data. Right now, let's think about how LIME/LBSPR wowrks. 
+
+It estimates a vector of recruits and f's and selectivities and then compares the observed vs predicted length distributions. 
+
+Now let's focus on the f priors. Right now, it's just saying that the f in any given year has the f in the last year as a prior. 
+
+Now suppose that instead of that you let f evolve through some bioeconomic driver. 
+
+You start the population at r0. Now, you let the F's evolve according to your open access model, holding constant the things that hold constant, and changing the things you have some prior knowledge of. That now gives you a vector of F's, which combined with your recruitment estimates fives you an expected length distribution. 
+
+Now, you could either treat those F's as priors on the latent F's estimated by the model, or maybe better, estimate F deviates with means based on the economic model!
+
+
+So now, you'd estimate deviates with mean 0 and some standard deviation, around the bioeconomically estimated F's. So in that sense the bioeconomic model is still a prior on the final F... booya? 
+
+The reall nice thing abotu this is that it abstracts to any time series or combination of economic parameters that you have, and any functional form for F that comes in!!!!!!
+
+As a killer extension, you could then repeat the process under alternative model specifications for the bioeconomic side, and pick the model with the most support!. 
+
+Oh I really like this. 
+
+So what needs to happen to make this happen. 
+
+1. You need to modularize the "fleet model" side of things, rather than just if toggles in the code. The end goal is that sim_fishery can now take economic "data" as inputs
+
+2. You need to revisit your length-comps sampling and make sure that that thing works well. 
+
+3. That's the core barrier at this point. Once you have that, you can use spasm to simulate length comps over time given those parameters, and then you pass that on to scrooge
+
+BOOYA. 
+
+
+
+# Sea Grant Abstract Update
+
+Many fisheries around the world require management guidance but lack the robust data that underpin state-of-the-art fisheries management. To resolve this problem, a large and growing suite of "data-limited stock assessments" (DLAs) has emerged, designed to provide management advice using relatively minimal data (but generous assumptions). Interestingly though, nearly all of the quantitative DLAs established rely exclusively on fish-centric data, for example length frequency distributions, catch data, or CPUE trends. While these data are clearly critical to proper understanding of a fishery's status, the economic history of a fishery can also shed light on its current biological status. This project proposes to address this challenge, by developing a quantitative method for integrating economic information into the stock assessment process. Length-based DLAs provide a useful entry point for this process. Length-based DLAs either rely on equilibrium assumptions or are faced with the challenge of disentangling trends in fishing mortality from trends in recruitment. We demonstrate how integration of often available data on the economic history of a fishery, such as prices, costs, and labor, can improve the performance of these length-based DLAs. Our expected result is a user-friendly tool for helping communities utilize length and economic data to better manage their fisheries.
+
+# model development
+
+This section is for sketching out the structure of the scrooge estimation model. Here goes nothing!
+
+We're going to stary by writing out the likelihoods and components for the model, as well as the DAC for the model. 
+
+Once you've got that working, it's off to stan for fitting fun! Once that works you can code up a TMB version as well, but I feel more confident in diagnosing STAN
+
+
+## DAC
+
+## Likelihood
+
+The only true "likelihood" in here is relating the observed vs predicted length frequencies. 
+
+This will likely be some sort of multinomial likelihood. LIME uses Dirichlet-multinomial log-likelihood, think I'll just stick the multinomial for right now to make life a little simpler to start. 
+
+So, this will look like 
+
+$$l_{b,y} \sim multinom(p_{b,t}) $$
+
+where p~b,y~ is the probability of being observed in length bin *b* in time *t*. Stan aslo provides upporto for the dirichelet but let's come to that later. 
+
+So, from there
+
+$$p_{b,y} = \frac{n_{b,t}}{\sum_{1:B}n_{b,t}}$$
+
+
+the number in each length bin is then your growth function
+
+$$ n_{b,t} = g(f_t,r_t,s_b,bio)$$
+Where *bio* is biological data (growth, mortality, etc)
+
+recruitment will be mean BH/ricker, with some sigma
+
+$$r_{t} = bh(ssb_{t}, bio)e^{rdev_t - \sigma_r^2/2} $$
+
+and 
+
+$$ rdev \sim normal(0,\sigma_r)$$
+
+and borrowing from LIME
+
+$$ log(\sigma_r) \sim normal(0.7,0.2)$$
+
+Now, the fun part. estimating F goes actually pretty damn similarly. The current idea is to estiamte F deviates, with the prior being the bioeconomic model. It gets a little tricky thinking about scale here though. 
+
+Suppose that you hold everything constant and just let the bioeconomic model evolve over time. The problem there is that that would require tuning of the qs and things to get the f's in the right units, even if the trend is in the right ballpark. i.e., to say that f is mean bioeconomic f times some deviate, where teh deviate is mean 0, then on avereage the fleet model needs to be getting the scale of the f's correct. 
+
+What if instead you leave the fleet model estimating latent F's, but you put a prior on the change in F based on the economic model. 
+
+Jim does something like 
+
+$$f_t \sim normal(f_{t-1},\sigma_f)$$
+
+Now, suppose that you add in a little wrinkle
+
+
+$$f_t \sim normal(\Delta_{f}f_{t-1},\sigma_f)$$
+
+Where 
+
+$$\Delta_{f} = \frac{\hat{f_t}}{\hat{f_{t-1}}} $$
+
+where 
+
+$$\hat{f_{t}} = q_tE_t$$
+
+and 
+
+$$E_t  = E_{t-1} + \theta\Pi_{t-1}$$
+
+Where finally 
+
+$$\Pi_{t} = p_tq_tE_tb_t - cE_t^\beta $$
+sweeeeet. 
+
+Now, one thing that is a royal pain in the ass in here is $\theta$: Since it scales to profits it's pretty hard to make generic. Do you want a \$1 increase in profits to equal a 1 unit increase in effort? a 1000 increase in effort?
+
+It would be nice to come up with a way to make this a bit cleaner. 
+
+A right, one night thing in here is that because you're dealing with delta effort, you can set the effort itself at some arbitrary level, as well as the r0 so that at least helps you scale things somewhat, given reasonable prices and costs, all of which can be scaled to be relative. 
+
+i.e. you set p,q,E,b,c,beta to baseline levels, and then just amplify those baselines based on data. 
+
+From there you could mess around to set theta at some reasonable level. 
+
+You could also actually think about allowing $\theta$ to be a free parameter with highly informative priors? 
+
+What does sscom do about this?
+
+ah right, they do that by working with biomasses instead of profits, since a given biomass would produce bionomic equilibrium. The problem there though is that that assumes that price etc. are constant, which you implicitly want to change. 
+
+So maybe for now play with what a reasonable level of theta would be such that effort dynamics given yourbase values are somewhat reasonable. 
+
+Use something like ssb0
+
+find $\theta$ such that 
+
+$$1 - \frac{E_{t0 + 1}}{E_{t0}} \sim target \sim 0.25  $$
+
+and 
+
+$$E_{t0 + 1} = E_{t0} + \theta(pqE_{t0}B_{t0} - cE_{t0}^\beta)$$
+
+which would be
+
+$$ target = \theta(pqB_{t0} - cE_{t0}^{\beta - 1})$$
+
+and then 
+
+$$\theta = \frac{target}{(pqB_{t0} - cE_{t0}^{\beta - 1})}$$
+
+```{r}
+p <- 1
+q <- .01
+E <- 100
+b <- 1000
+cost <- 1
+beta <- 1.3
+target <- 0.25
+
+profits <- p*q*E*b - cost * E^beta
+
+theta = target / (p * q * b - cost*E^(beta - 1))
+
+E2 = E + theta * profits
+
+```
+Which works so long as the fishery is profitable at B0, which makes sense, why would you model something that wasn't profitable at the getgo. So, set a stop that would say fishery is unprofitable at virgin biomass if theta comes up nevative. 
+
+You could then either set that theta as data, or let be a parameter with that theta as a highly informative prior. 
+
+Let's go back to spasm and make that adjustment
+
+## test case
+
+
+```{r}
+library(rstan)
+library(FishLife)
+library(spasm)
+library(tidyverse)
+
+fish <- create_fish(query_fishlife = T, mat_mode = "length", max_age = 30, time_step = 0.25)
+
+fleet <- create_fleet(fish = fish)
+
+manager <- create_manager(mpa_size = 0)
+
+fleet <-
+  spasm::update_fleet(
+  fleet = purrr::list_modify(
+  fleet,
+  fleet_model = "open-access",
+  initial_effort = 1,
+  theta = 0.01,
+  cost = 20,
+  price = 1,
+  target_catch = 100,
+  sigma_effort = 0,
+  length_50_sel = 0,
+  theta_tuner = 0.5
+  ),
+  fish = fish
+  )
+
+sim <- spasm::sim_fishery(fish = fish,
+                   fleet = fleet, 
+                   manager = manager,
+                   num_patches = 1,
+                   sim_years = 100,
+                   burn_year = 50,
+                   time_step = fish$time_step)
+
+sim %>% 
+  group_by(year) %>% 
+  summarise(ssb = sum(effort)) %>% 
+  ggplot(aes(year, ssb)) + 
+  geom_line() + 
+  geom_point()
+
+ length_and_age_comps <- sim %>%
+    select(year,patch,age, numbers, numbers_caught) %>%
+    nest(-year,-patch, .key = n_at_age)
+
+  length_and_age_comps <- length_and_age_comps %>%
+    mutate(catch_length = map(n_at_age, ~sample_lengths(n_at_age = .x,
+                                                      cv = fish$cv_len,
+                                                      k = fish$vbk,
+                                                      linf = fish$linf,
+                                                      t0 = fish$t0,
+                                                      sample_type = 'population',
+                                                      percent_sampled = 1,
+                                                      time_step = fish$time_step)))
+  
+    length_and_age_comps <- length_and_age_comps %>%
+    mutate(catch_ages = map(catch_length, ~length_to_age(length_samples = .x,
+                                                     cv = fish$cv_len,
+                                                     k = fish$vbk,
+                                                     linf = fish$linf,
+                                                     t0 = fish$t0,
+                                                     max_age = fish$max_age,
+                                                     min_age = fish$min_age,
+                                                     time_step = fish$time_step)))
+    
+length_and_age_comps %>% 
+  filter(year == max(year)) %>% 
+  select(catch_length) %>% 
+  unnest() %>% 
+  filter(length_bin <150) %>% 
+  ggplot() +
+  geom_col(aes(length_bin, numbers)) +
+  geom_vline(xintercept = fish$linf) +
+  geom_vline(xintercept = fish$length_at_age)
+```
+
+Not bad. Might need to go back and double check some of your aging ideas, but it mostly works. If you were catually that close to the true age structure in real life you'd be very excited. 
+
+Interesting, something is going wrong in the length-to-ages at the far right end. Let's take a brief look at this some more. 
+
+OK fixed somewhat, but going to ignore the problems that persist there since who really cares about age comps for this assessment: it's length based. 
