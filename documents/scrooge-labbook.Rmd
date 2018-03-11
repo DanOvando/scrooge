@@ -340,77 +340,95 @@ library(FishLife)
 library(spasm)
 library(tidyverse)
 
-fish <- create_fish(query_fishlife = T, mat_mode = "length", max_age = 30, time_step = 0.25)
+fish <-
+create_fish(
+query_fishlife = T,
+mat_mode = "length",
+max_age = 30,
+time_step = 1
+)
 
 fleet <- create_fleet(fish = fish)
 
 manager <- create_manager(mpa_size = 0)
 
 fleet <-
-  spasm::update_fleet(
-  fleet = purrr::list_modify(
-  fleet,
-  fleet_model = "open-access",
-  initial_effort = 1,
-  theta = 0.01,
-  cost = 20,
-  price = 1,
-  target_catch = 100,
-  sigma_effort = 0,
-  length_50_sel = 0,
-  theta_tuner = 0.5
-  ),
-  fish = fish
-  )
+spasm::update_fleet(
+fleet = purrr::list_modify(
+fleet,
+fleet_model = "open-access",
+initial_effort = 1,
+theta = 0.01,
+cost = 20,
+price = 1,
+target_catch = 100,
+sigma_effort = 0,
+length_50_sel = 0,
+theta_tuner = 0.5
+),
+fish = fish
+)
 
-sim <- spasm::sim_fishery(fish = fish,
-                   fleet = fleet, 
-                   manager = manager,
-                   num_patches = 1,
-                   sim_years = 100,
-                   burn_year = 50,
-                   time_step = fish$time_step)
+sim <- spasm::sim_fishery(
+fish = fish,
+fleet = fleet,
+manager = manager,
+num_patches = 1,
+sim_years = 100,
+burn_year = 50,
+time_step = fish$time_step
+)
 
-sim %>% 
-  group_by(year) %>% 
-  summarise(ssb = sum(effort)) %>% 
-  ggplot(aes(year, ssb)) + 
-  geom_line() + 
-  geom_point()
+sim %>%
+group_by(year) %>%
+summarise(ssb = sum(effort)) %>%
+ggplot(aes(year, ssb)) +
+geom_line() +
+geom_point()
 
- length_and_age_comps <- sim %>%
-    select(year,patch,age, numbers, numbers_caught) %>%
-    nest(-year,-patch, .key = n_at_age)
+length_and_age_comps <- sim %>%
+select(year, patch, age, numbers, numbers_caught) %>%
+nest(-year, -patch, .key = n_at_age)
 
-  length_and_age_comps <- length_and_age_comps %>%
-    mutate(catch_length = map(n_at_age, ~sample_lengths(n_at_age = .x,
-                                                      cv = fish$cv_len,
-                                                      k = fish$vbk,
-                                                      linf = fish$linf,
-                                                      t0 = fish$t0,
-                                                      sample_type = 'population',
-                                                      percent_sampled = 1,
-                                                      time_step = fish$time_step)))
-  
-    length_and_age_comps <- length_and_age_comps %>%
-    mutate(catch_ages = map(catch_length, ~length_to_age(length_samples = .x,
-                                                     cv = fish$cv_len,
-                                                     k = fish$vbk,
-                                                     linf = fish$linf,
-                                                     t0 = fish$t0,
-                                                     max_age = fish$max_age,
-                                                     min_age = fish$min_age,
-                                                     time_step = fish$time_step)))
-    
-length_and_age_comps %>% 
-  filter(year == max(year)) %>% 
-  select(catch_length) %>% 
-  unnest() %>% 
-  filter(length_bin <150) %>% 
-  ggplot() +
-  geom_col(aes(length_bin, numbers)) +
-  geom_vline(xintercept = fish$linf) +
-  geom_vline(xintercept = fish$length_at_age)
+length_and_age_comps <- length_and_age_comps %>%
+mutate(catch_length = map(
+n_at_age,
+~ sample_lengths(
+n_at_age = .x,
+cv = fish$cv_len,
+k = fish$vbk,
+linf = fish$linf,
+t0 = fish$t0,
+sample_type = 'population',
+percent_sampled = 1,
+time_step = fish$time_step
+)
+))
+
+length_and_age_comps <- length_and_age_comps %>%
+mutate(catch_ages = map(
+catch_length,
+~ length_to_age(
+length_samples = .x,
+cv = fish$cv_len,
+k = fish$vbk,
+linf = fish$linf,
+t0 = fish$t0,
+max_age = fish$max_age,
+min_age = fish$min_age,
+time_step = fish$time_step
+)
+))
+
+length_and_age_comps %>%
+filter(year == max(year)) %>%
+select(catch_length) %>%
+unnest() %>%
+filter(length_bin < 150) %>%
+ggplot() +
+geom_col(aes(length_bin, numbers)) +
+geom_vline(xintercept = fish$linf) +
+geom_vline(xintercept = fish$length_at_age)
 ```
 
 Not bad. Might need to go back and double check some of your aging ideas, but it mostly works. If you were catually that close to the true age structure in real life you'd be very excited. 
@@ -418,3 +436,69 @@ Not bad. Might need to go back and double check some of your aging ideas, but it
 Interesting, something is going wrong in the length-to-ages at the far right end. Let's take a brief look at this some more. 
 
 OK fixed somewhat, but going to ignore the problems that persist there since who really cares about age comps for this assessment: it's length based. 
+
+
+## Testing stan fit
+
+```{r}
+
+scrooge_data <- list(
+  nt = 20,
+  n_ages = fish$max_age + 1,
+  n_lbins = 10,
+  ages = 1:(fish$max_age + 1),
+  mean_selectivity_at_age = fleet$sel_at_age,
+  mean_length_at_age = fish$length_at_age,
+  mean_weight_at_age = fish$weight_at_age,
+  mean_maturity_at_age = fish$maturity_at_age,
+  m = fish$m,
+  h = fish$steepness,
+  r0 = fish$r0,
+  k = fish$vbk,
+  loo = fish$linf,
+  t0 = fish$t0
+)
+
+test_scrooge <- rstan::stan(file = here::here("scripts", "scrooge.stan"), data = scrooge_data, chains = 1)
+
+check<- rstan::extract(test_scrooge)
+
+test_numbers <- array_branch(check$n_ta,1)
+
+test_numbers <- data_frame(thing = map(test_numbers, as_data_frame)) %>% 
+  mutate(iteration = 1:nrow(.)) %>% 
+  unnest()
+
+
+test_numbers <- test_numbers %>% 
+  filter(iteration == 1) %>% 
+  select(-iteration)
+
+test_ssb <- array_branch(check$ssb_ta,1)
+
+test_ssb <- data_frame(thing = map(test_ssb, as_data_frame)) %>% 
+  mutate(iteration = 1:nrow(.)) %>% 
+  unnest()
+
+
+test_ssb <- test_ssb %>% 
+  filter(iteration == 1) %>% 
+  select(-iteration)
+
+
+total_ssb <- rowSums(test_ssb)
+
+recruits <- test_numbers$V1
+
+plot(total_ssb, lead(recruits))
+
+test_numbers %>% 
+  slice(20) %>% 
+  gather(age, numbers) %>% 
+  mutate(age = str_replace_all(age,"\\D","") %>% as.numeric()) %>% 
+  ggplot(aes(age, numbers)) + 
+  geom_col()
+
+```
+
+
