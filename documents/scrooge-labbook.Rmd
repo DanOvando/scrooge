@@ -363,7 +363,7 @@ cost = 20,
 price = 1,
 target_catch = 100,
 sigma_effort = 0,
-length_50_sel = 0,
+length_50_sel = 25,
 theta_tuner = 0.5
 ),
 fish = fish
@@ -389,6 +389,25 @@ geom_point()
 length_and_age_comps <- sim %>%
 select(year, patch, age, numbers, numbers_caught) %>%
 nest(-year, -patch, .key = n_at_age)
+
+
+length_at_age_key <- generate_length_at_age_key(
+  min_age = fish$min_age,
+  max_age = fish$max_age,
+  cv = fish$cv_len,
+  linf = fish$linf,
+  k = fish$vbk,
+  t0 = fish$t0,
+  time_step = fish$time_step,
+  linf_buffer = 2
+)
+
+length_at_age_key <- length_at_age_key %>% 
+  ungroup() %>% 
+  select(age,length_bin, p_bin) %>% 
+  spread(length_bin, p_bin) %>% 
+  select(-age)
+
 
 length_and_age_comps <- length_and_age_comps %>%
 mutate(catch_length = map(
@@ -445,7 +464,7 @@ OK fixed somewhat, but going to ignore the problems that persist there since who
 scrooge_data <- list(
   nt = 20,
   n_ages = fish$max_age + 1,
-  n_lbins = 10,
+  n_lbins = ncol(length_at_age_key),
   ages = 1:(fish$max_age + 1),
   mean_selectivity_at_age = fleet$sel_at_age,
   mean_length_at_age = fish$length_at_age,
@@ -456,7 +475,8 @@ scrooge_data <- list(
   r0 = fish$r0,
   k = fish$vbk,
   loo = fish$linf,
-  t0 = fish$t0
+  t0 = fish$t0,
+  length_at_age_key = as.matrix(length_at_age_key)
 )
 
 test_scrooge <- rstan::stan(file = here::here("scripts", "scrooge.stan"), data = scrooge_data, chains = 1)
@@ -485,6 +505,17 @@ test_ssb <- test_ssb %>%
   filter(iteration == 1) %>% 
   select(-iteration)
 
+test_catch <- array_branch(check$c_ta,1)
+
+test_catch <- data_frame(thing = map(test_catch, as_data_frame)) %>% 
+  mutate(iteration = 1:nrow(.)) %>% 
+  unnest()
+
+
+test_catch <- test_catch %>% 
+  filter(iteration == 1) %>% 
+  select(-iteration)
+
 
 total_ssb <- rowSums(test_ssb)
 
@@ -492,13 +523,63 @@ recruits <- test_numbers$V1
 
 plot(total_ssb, lead(recruits))
 
-test_numbers %>% 
+test_catch %>% 
   slice(20) %>% 
   gather(age, numbers) %>% 
   mutate(age = str_replace_all(age,"\\D","") %>% as.numeric()) %>% 
   ggplot(aes(age, numbers)) + 
   geom_col()
 
+
+test_length <- array_branch(check$n_tl,1)
+
+test_length <- data_frame(thing = map(test_length, as_data_frame)) %>% 
+  mutate(iteration = 1:nrow(.)) %>% 
+  unnest()
+
+
+test_length <- test_length %>% 
+  filter(iteration == 1) %>% 
+  select(-iteration)
+
+test_length %>% 
+  slice(1) %>% 
+  gather(length, numbers) %>% 
+  mutate(length = str_replace_all(length,"\\D","") %>% as.numeric()) %>% 
+  ggplot(aes(length, numbers)) + 
+  geom_col()
+
+
 ```
+
+God damn dude, nicely done. Now, add in generation of length comps. This is going to be fuuuuun. 
+
+### generating length comps
+
+For now, don't worry about survey selectivity of the catch itself. For now, just focus on generating a length distribution from the catch. In theory, you're going to pass samped data, which should be the "true" length distribution of the catch. You're now going to try and match those length comps with the length comps of the catch that would result from your model. 
+
+
+So, the simplest thing to do would be to generate in R a matrix that is rows age, columns probability in each length bin at age. 
+
+Then, you just take the catch at age, and multiply by the proportion in each age at eathc length bin, then sum the columns. 
+
+```{r}
+
+set.seed(42)
+n_at_a <- matrix(rnorm(31,100))
+
+d =  t(n_at_a) %*% (as.matrix(length_at_age_key))
+
+
+b =  t(as.matrix(length_at_age_key)) %*% n_at_a
+
+
+as.matrix(length_at_age_key) %*% t(n_at_a)
+
+```
+
+
+
+
 
 

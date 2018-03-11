@@ -8,7 +8,7 @@ int n_ages; // number of ages
 
 int n_lbins; // number of length bins;
 
-vector[n_ages] ages;
+vector[n_ages] ages; // vector of ages
 
 //// length data ////
 
@@ -25,6 +25,8 @@ vector<lower=0>[n_ages] mean_length_at_age;
 vector<lower=0>[n_ages] mean_weight_at_age;
 
 vector<lower=0, upper=1>[n_ages] mean_maturity_at_age;
+
+matrix[n_ages, n_lbins] length_at_age_key;
 
 real m; //natural mortality
 
@@ -113,10 +115,17 @@ transformed parameters{
 
    c_ta[t - 1, 1:n_ages] = ((f_t[t - 1] * mean_selectivity_at_age) ./ (m + f_t[t - 1] * mean_selectivity_at_age))' .* n_ta[t - 1, 1:n_ages] .* (1 - exp(-(m + f_t[t - 1] * mean_selectivity_at_age)))' .* mean_weight_at_age';
 
+  // sample lengths
+
+  n_tl[t - 1, 1:n_lbins] =  c_ta[t - 1, 1:n_ages] * length_at_age_key;
+
 
   } // close time loop
 
      c_ta[nt, 1:n_ages] = ((f_t[nt] * mean_selectivity_at_age) ./ (m + f_t[nt] * mean_selectivity_at_age))' .* n_ta[nt, 1:n_ages] .* (1 - exp(-(m + f_t[nt] * mean_selectivity_at_age)))' .* mean_weight_at_age';
+
+  n_tl[nt, 1:n_lbins] =  c_ta[nt, 1:n_ages] * length_at_age_key;
+
 
 
 }
