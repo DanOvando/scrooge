@@ -69,6 +69,8 @@ transformed parameters{
 
   matrix[nt, n_ages] c_ta; // catch (biomass) at time and age
 
+  matrix[nt, n_ages] cn_ta; // catch (numbers) at time and age
+
   matrix[nt, n_lbins] n_tl; // numbers at time and length bin
 
   row_vector[n_ages] temp_n_a;
@@ -83,6 +85,8 @@ transformed parameters{
 
   c_ta = rep_matrix(0,nt, n_ages);
 
+  cn_ta = rep_matrix(0,nt, n_ages);
+
   n_tl = rep_matrix(0,nt, n_lbins);
 
   ssb0 = sum((r0 * exp(-m * (ages - 1)))  .* mean_maturity_at_age .* mean_weight_at_age); // virgin ssb
@@ -96,6 +100,8 @@ transformed parameters{
   ssb_ta[1, 1:n_ages] = b_ta[1, 1:n_ages] .* mean_maturity_at_age'; // virgin ssb
 
   // order of events spawn, grow and die, recruit
+
+  // f_t[1] = 0.001;
 
   for (t in 2:nt){
 
@@ -113,18 +119,23 @@ transformed parameters{
 
   ssb_ta[t, 1:n_ages] = b_ta[t, 1:n_ages] .* mean_maturity_at_age'; // virgin ssb
 
-   c_ta[t - 1, 1:n_ages] = ((f_t[t - 1] * mean_selectivity_at_age) ./ (m + f_t[t - 1] * mean_selectivity_at_age))' .* n_ta[t - 1, 1:n_ages] .* (1 - exp(-(m + f_t[t - 1] * mean_selectivity_at_age)))' .* mean_weight_at_age';
+   cn_ta[t - 1, 1:n_ages] = ((f_t[t - 1] * mean_selectivity_at_age) ./ (m + f_t[t - 1] * mean_selectivity_at_age))' .* n_ta[t - 1, 1:n_ages] .* (1 - exp(-(m + f_t[t - 1] * mean_selectivity_at_age)))'; // .* mean_weight_at_age';
+
+   c_ta[t-1, 1:n_ages] = cn_ta[t - 1, 1:n_ages] .* mean_weight_at_age';
 
   // sample lengths
 
-  n_tl[t - 1, 1:n_lbins] =  c_ta[t - 1, 1:n_ages] * length_at_age_key;
+  n_tl[t - 1, 1:n_lbins] =  cn_ta[t - 1, 1:n_ages] * length_at_age_key;
 
 
   } // close time loop
 
-     c_ta[nt, 1:n_ages] = ((f_t[nt] * mean_selectivity_at_age) ./ (m + f_t[nt] * mean_selectivity_at_age))' .* n_ta[nt, 1:n_ages] .* (1 - exp(-(m + f_t[nt] * mean_selectivity_at_age)))' .* mean_weight_at_age';
+     cn_ta[nt, 1:n_ages] = ((f_t[nt] * mean_selectivity_at_age) ./ (m + f_t[nt] * mean_selectivity_at_age))' .* n_ta[nt, 1:n_ages] .* (1 - exp(-(m + f_t[nt] * mean_selectivity_at_age)))';
 
-  n_tl[nt, 1:n_lbins] =  c_ta[nt, 1:n_ages] * length_at_age_key;
+   c_ta[nt, 1:n_ages] = cn_ta[nt, 1:n_ages] .* mean_weight_at_age';
+
+
+    n_tl[nt, 1:n_lbins] =  cn_ta[nt, 1:n_ages] * length_at_age_key;
 
 
 
@@ -132,7 +143,7 @@ transformed parameters{
 
 model{
 
-f_t ~ normal(0, 0.1);
+f_t ~ normal(0.001, 0.0001);
 
 }
 

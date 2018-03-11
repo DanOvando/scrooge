@@ -542,12 +542,26 @@ test_length <- test_length %>%
   filter(iteration == 1) %>% 
   select(-iteration)
 
+
+
+
+a = sim %>% 
+  filter(year == min(year)) %>% 
+  select(age, numbers_caught)
+
+b = t(a$numbers_caught) %*% as.matrix(length_at_age_key)
+
 test_length %>% 
   slice(1) %>% 
   gather(length, numbers) %>% 
+  mutate(true_numbers = b) %>% 
   mutate(length = str_replace_all(length,"\\D","") %>% as.numeric()) %>% 
-  ggplot(aes(length, numbers)) + 
-  geom_col()
+  gather(source, numbers,-length)  %>% 
+  group_by(source) %>% 
+  mutate(snumbers = numbers / sum(numbers)) %>% 
+  ggplot(aes(length, snumbers, fill = source)) + 
+  geom_col(stat = "identity", alpha = 0.5, position = "dodge")
+
 
 
 ```
@@ -577,6 +591,8 @@ b =  t(as.matrix(length_at_age_key)) %*% n_at_a
 as.matrix(length_at_age_key) %*% t(n_at_a)
 
 ```
+
+## Setting up likelihoods
 
 
 
