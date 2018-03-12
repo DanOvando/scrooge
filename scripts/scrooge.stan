@@ -8,14 +8,21 @@ int n_ages; // number of ages
 
 int n_lbins; // number of length bins;
 
+int n_lcomps; // number of timesteps of length comps availabl
+
 vector[n_ages] ages; // vector of ages
 
 //// length data ////
+
+int length_comps[n_lcomps,n_lbins];
+
+int length_comps_years[n_lcomps]; // time steps in which length comps are available
 
 //// economic data ////
 
 vector<lower=0, upper=1>[n_ages] mean_selectivity_at_age;
 
+// vector<lower = 0>[nt] f_t;
 
 //// biology ////
 
@@ -44,6 +51,10 @@ real t0; // t0
 
 transformed data{
 
+  // int n_sampled;
+
+  // n_sampled = 1;
+
 
 }
 
@@ -71,10 +82,11 @@ transformed parameters{
 
   matrix[nt, n_ages] cn_ta; // catch (numbers) at time and age
 
-  matrix[nt, n_lbins] n_tl; // numbers at time and length bin
+  matrix[nt, n_lbins] p_lbin_sampled; // numbers at time and length bin
 
   row_vector[n_ages] temp_n_a;
 
+  row_vector[n_ages] p_age_sampled;
 
   // fill matrices with zeros
   n_ta = rep_matrix(0,nt, n_ages);
@@ -87,7 +99,7 @@ transformed parameters{
 
   cn_ta = rep_matrix(0,nt, n_ages);
 
-  n_tl = rep_matrix(0,nt, n_lbins);
+  p_lbin_sampled = rep_matrix(0,nt, n_lbins);
 
   ssb0 = sum((r0 * exp(-m * (ages - 1)))  .* mean_maturity_at_age .* mean_weight_at_age); // virgin ssb
 
@@ -109,8 +121,6 @@ transformed parameters{
 
     n_ta[t,1] = (0.8 * r0 * h *ssb_temp) / (0.2 * ssb0 * (1 - h) + (h - 0.2) * ssb_temp);
 
-    // n_ta[t,1] = (4 * h * r0 * ssb_temp) / (ssb0 * (1 - h) + ssb_temp * (5*h - h - 1)); // add in recruits
-
     n_ta[t , 2:n_ages] = n_ta[t - 1, 1:(n_ages -1)] .* (exp(-(m + f_t[t - 1] * mean_selectivity_at_age[1:(n_ages - 1)])))'; // grow and die
 
     n_ta[t, n_ages] = n_ta[t - 1, n_ages] .* (exp(-(m + f_t[t - 1] * mean_selectivity_at_age[n_ages])))'; // assign to plus group
@@ -125,8 +135,17 @@ transformed parameters{
 
   // sample lengths
 
-  n_tl[t - 1, 1:n_lbins] =  cn_ta[t - 1, 1:n_ages] * length_at_age_key;
+  p_age_sampled = cn_ta[t - 1, 1:n_ages] / sum(cn_ta[t - 1, 1:n_ages]);
 
+  p_lbin_sampled[t - 1, 1:n_lbins] = (p_age_sampled * length_at_age_key) / sum(p_age_sampled * length_at_age_key);
+
+  // p_lbin_sampled = p_lbin_sampled / sum(p_lbin_sampled);
+
+  // n_sampled = sum(cn_ta[t - 1, 1:n_ages]) * percent_catch_sampled;
+
+  // n_tl[t - 1, 1:n_lbins] = multinomial_rng(to_vector(p_lbin_sampled), sum(length_comps[t - 1, 1:n_lbins]));
+
+  // n_tl[t - 1, 1:n_lbins] =  cn_ta[t - 1, 1:n_ages] * length_at_age_key;
 
   } // close time loop
 
@@ -134,21 +153,50 @@ transformed parameters{
 
    c_ta[nt, 1:n_ages] = cn_ta[nt, 1:n_ages] .* mean_weight_at_age';
 
+  p_age_sampled = cn_ta[nt, 1:n_ages] / sum(cn_ta[nt, 1:n_ages]);
 
-    n_tl[nt, 1:n_lbins] =  cn_ta[nt, 1:n_ages] * length_at_age_key;
+  p_lbin_sampled[nt, 1:n_lbins] = p_age_sampled * length_at_age_key / sum(p_age_sampled * length_at_age_key);
 
-
+    // n_tl[nt, 1:n_lbins] =  cn_ta[nt, 1:n_ages] * length_at_age_key;
 
 }
 
 model{
 
-f_t ~ normal(0.001, 0.0001);
+matrix[n_lcomps, n_lbins] pn_tl; // numbers at time and length bin
 
-}
+int temp_n_tl[n_lbins];
+
+// length comps likelihood
+
+pn_tl = rep_matrix(0,n_lcomps, n_lbins);
+
+for (i in 1:(n_lcomps - 1)){
+
+  length_comps[i, 1:n_lbins] ~ multinomial(to_vector(p_lbin_sampled[length_comps_years[i], 1:n_lbins]));
+
+} // close length likelihood
+
+// f likelihood
+
+f_t[1] ~ normal(0,0.5);
+
+for (t in 2:nt){
+
+f_t[t] ~ normal(f_t[t - 1], sigma_f);
+
+} // close f likelihood
+
+sigma_f ~ normal(.1,3);
+
+} // close model block
 
 generated quantities{
 
+int n_tl[nt, n_lbins];
 
-
+for (t in 1:nt){
+    n_tl[t, 1:n_lbins] = multinomial_rng(to_vector(p_lbin_sampled[t, 1:n_lbins]),100);
 }
+
+} // close generated quantities block
