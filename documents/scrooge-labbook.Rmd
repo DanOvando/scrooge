@@ -789,6 +789,201 @@ length_comparison
 
 hell yes. model now nails F perfectly in a perfect world with perfect data. 
 
+Let's see how much of that was just the warmup...
+
+```{r}
+
+library(rstan)
+library(FishLife)
+library(spasm)
+library(tidyverse)
+
+rstan_options(auto_write = TRUE)
+
+fish <-
+create_fish(
+query_fishlife = T,
+mat_mode = "length",
+max_age = 30,
+time_step = 1
+)
+
+fleet <- create_fleet(fish = fish)
+
+manager <- create_manager(mpa_size = 0)
+
+fleet <-
+  spasm::update_fleet(
+    fleet = purrr::list_modify(
+      fleet,
+      fleet_model = "open-access",
+      initial_effort = 10,
+      cost = 2,
+      price = 1,
+      target_catch = 100,
+      sigma_effort = 0,
+      length_50_sel = 50,
+      theta_tuner = 0.0001
+    ),
+    fish = fish
+  )
+
+sim <- spasm::sim_fishery(
+fish = fish,
+fleet = fleet,
+manager = manager,
+num_patches = 1,
+sim_years = 50,
+burn_year = 50,
+time_step = fish$time_step
+)
+
+
+true_f <- sim %>% 
+  group_by(year) %>% 
+  summarise(true_f = unique(f)) %>% 
+  mutate(year = year - min(year) + 1) %>% 
+  ungroup()
+
+true_f %>% 
+  ggplot(aes(year, true_f)) + 
+  geom_point()
+
+linf_buffer <- 1.5
+
+length_at_age_key <- generate_length_at_age_key(
+  min_age = fish$min_age,
+  max_age = fish$max_age,
+  cv = fish$cv_len,
+  linf = fish$linf,
+  k = fish$vbk,
+  t0 = fish$t0,
+  time_step = fish$time_step,
+  linf_buffer = linf_buffer
+) %>% 
+  ungroup() %>% 
+  select(age,length_bin, p_bin) %>% 
+  spread(length_bin, p_bin) %>% 
+  select(-age)
+
+
+length_comps <- sim %>%
+select(year, patch, age, numbers, numbers_caught) %>%
+nest(-year, -patch, .key = n_at_age) %>% 
+mutate(catch_length = map(
+n_at_age,
+~ sample_lengths(
+n_at_age = .x,
+cv = fish$cv_len,
+k = fish$vbk,
+linf = fish$linf,
+t0 = fish$t0,
+sample_type = 'catch',
+percent_sampled = 1,
+time_step = fish$time_step,
+linf_buffer = linf_buffer
+)
+)) %>% 
+select(year, catch_length ) %>% 
+  unnest() %>% 
+  mutate(numbers = round(numbers)) %>% 
+  spread(length_bin, numbers) %>% 
+  mutate(year = year - min(year) + 1)
+
+scrooge_data <- list(
+  # f_t = true_f$true_f,
+  length_comps = length_comps %>% select(-year),
+  length_comps_years  = length_comps$year,
+  n_lcomps = nrow(length_comps),
+  nt = length(length_comps$year),
+  n_ages = fish$max_age + 1,
+  n_lbins = ncol(length_at_age_key),
+  ages = 1:(fish$max_age + 1),
+  mean_selectivity_at_age = fleet$sel_at_age,
+  mean_length_at_age = fish$length_at_age,
+  mean_weight_at_age = fish$weight_at_age,
+  mean_maturity_at_age = fish$maturity_at_age,
+  m = fish$m,
+  h = fish$steepness,
+  r0 = fish$r0,
+  k = fish$vbk,
+  loo = fish$linf,
+  t0 = fish$t0,
+  length_at_age_key = as.matrix(length_at_age_key)
+) 
+
+set.seed(42)
+test_scrooge <- rstan::stan(file = here::here("scripts", "scrooge.stan"), data = scrooge_data, chains = 1, refresh = 10, cores = 1, iter = 4000, warmup = 2000)
+
+check<- rstan::extract(test_scrooge)
+
+# check f fit
+
+fs <- array_branch(check$f_t,1) 
+
+fs <- data_frame(thing = map(fs, ~as_data_frame(.x) %>% mutate(year = 1:nrow(.)))) %>% 
+  mutate(iteration = 1:nrow(.)) %>% 
+  unnest()
+
+true_f <- sim %>% 
+  group_by(year) %>% 
+  summarise(true_f = unique(f)) %>% 
+  mutate(year = year - min(year) + 1) %>% 
+  ungroup()
+
+fs %>% 
+  ggplot(aes(year,value)) + 
+  geom_smooth() +
+  geom_boxplot(aes(group = year)) +
+  geom_point(data = true_f, aes(year, true_f))
+
+# check length fits
+
+lengths <- array_branch(check$n_tl,1) 
+
+lengths <- data_frame(thing = map(lengths, ~as_data_frame(.x) %>% mutate(year = 1:nrow(.)))) %>% 
+  mutate(iteration = 1:nrow(.)) %>% 
+  unnest()
+
+colnames(lengths) <- c("iteration", colnames(length_at_age_key),"year")
+
+lengths <- lengths %>% 
+  gather(length_bin, number, -iteration,-year)
+
+mean_lengths <- lengths %>% 
+  group_by(year, length_bin) %>% 
+  filter(iteration == 1) %>% 
+  summarise(mean_numbers = mean(number))
+
+
+tidy_length_comps = length_comps %>% 
+  gather(length_bin, mean_numbers, -year) %>% 
+  mutate(length_bin = as.numeric(length_bin)) %>% 
+  mutate(source = "observed")
+
+
+length_comparison <- mean_lengths %>% 
+  ungroup() %>% 
+  mutate(length_bin = as.numeric(length_bin),
+         source = "predicted") %>% 
+  bind_rows(tidy_length_comps) %>% 
+  ungroup() %>% 
+  group_by(year, source) %>% 
+  mutate(mean_numbers = mean_numbers / sum(mean_numbers)) %>% 
+  filter(year %in% c(1,10,24)) %>% 
+  ggplot(aes(length_bin, mean_numbers, fill = source)) + 
+  geom_col(position = "dodge") +
+  # geom_density(stat = "identity", alpha = 0.5) +
+  facet_wrap(~year)
+
+length_comparison
+  
+
+
+
+```
+
+
 IN the meantime, best damn idae I've had in a while: train a model to predict accuracy for F, SPR, trend in F, etc, across the range of scenarios that you try!!!!!
 
 So, you'd plug in your fishery characteristics, and the model would give an idea of how accurate it is likely to be!!
