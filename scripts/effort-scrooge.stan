@@ -168,7 +168,6 @@ transformed parameters{
 
   // order of events spawn, grow and die, recruit
 
-
   for (t in 2:nt){
 
   temp_rec_dev = 1;
@@ -204,6 +203,13 @@ transformed parameters{
   sq_profit_t[t - 1] = price_t[t - 1,2] * c_t[t - 1] - cost_t[t - 1,2] * total_effort_t[t - 1] ^ beta;
 
   profit_shock_t[t - 1] = profit_t[t - 1] - sq_profit_t[t - 1];
+
+
+  // profit_shock[t - 1, 1] = price_t[t - 1, 1] * c_t[t - 1] - cost_t[t - 1]  // note will need to modify this to account for tech changes
+  //
+  //
+  // price[t - 1] * c_t[t - 1];
+
 
   // sample lengths
 
@@ -260,7 +266,7 @@ if (economic_model == 0){
 
 } else if(economic_model == 1){
 
-  economic_prior = profit_shock_t / (sd(profit_shock_t) + 1e-3);
+  economic_prior = profit_shock_t / sd(profit_shock_t);
 
 }
 

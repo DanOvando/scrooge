@@ -25,3 +25,5 @@ vignettes/*.pdf
 *.nb.html
 *.pdf
 *.pages
+*.Rdata
+*.rds

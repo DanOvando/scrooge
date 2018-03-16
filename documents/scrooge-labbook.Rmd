@@ -629,7 +629,7 @@ fleet <-
       target_catch = 100,
       sigma_effort = 0,
       length_50_sel = 50,
-      theta_tuner = 0.0001
+      theta_tuner = 0.25
     ),
     fish = fish
   )
@@ -698,8 +698,8 @@ select(year, catch_length ) %>%
   mutate(year = year - min(year) + 1)
 
 scrooge_data <- list(
-  # f_t = true_f$true_f,
-  length_comps = length_comps %>% select(-year),
+estimate_recruits = 0,
+length_comps = length_comps %>% select(-year),
   length_comps_years  = length_comps$year,
   n_lcomps = nrow(length_comps),
   nt = length(length_comps$year),
@@ -739,9 +739,10 @@ true_f <- sim %>%
 
 fs %>% 
   ggplot(aes(year,value)) + 
-  geom_smooth() +
   geom_boxplot(aes(group = year)) +
-  geom_point(data = true_f, aes(year, true_f))
+  geom_point(data = true_f, aes(year, true_f), color = "red") + 
+  geom_line(data = true_f, aes(year, true_f), color = "red")
+
 
 # check length fits
 
@@ -823,7 +824,7 @@ fleet <-
       target_catch = 100,
       sigma_effort = 0,
       length_50_sel = 50,
-      theta_tuner = 0.0001
+      theta_tuner = 0.25
     ),
     fish = fish
   )
@@ -833,7 +834,7 @@ fish = fish,
 fleet = fleet,
 manager = manager,
 num_patches = 1,
-sim_years = 50,
+sim_years = 25,
 burn_year = 50,
 time_step = fish$time_step
 )
@@ -891,7 +892,7 @@ select(year, catch_length ) %>%
   mutate(year = year - min(year) + 1)
 
 scrooge_data <- list(
-  # f_t = true_f$true_f,
+  estimate_recruits = 0,
   length_comps = length_comps %>% select(-year),
   length_comps_years  = length_comps$year,
   n_lcomps = nrow(length_comps),
@@ -913,8 +914,17 @@ scrooge_data <- list(
 ) 
 
 set.seed(42)
-test_scrooge <- rstan::stan(file = here::here("scripts", "scrooge.stan"), data = scrooge_data, chains = 1, refresh = 10, cores = 1, iter = 4000, warmup = 2000)
-
+test_scrooge <-
+  rstan::stan(
+  file = here::here("scripts", "scrooge.stan"),
+  data = scrooge_data,
+  chains = 1,
+  refresh = 10,
+  cores = 1,
+  iter = 4000,
+  warmup = 2000
+  )
+  
 check<- rstan::extract(test_scrooge)
 
 # check f fit
@@ -933,9 +943,10 @@ true_f <- sim %>%
 
 fs %>% 
   ggplot(aes(year,value)) + 
-  geom_smooth() +
   geom_boxplot(aes(group = year)) +
-  geom_point(data = true_f, aes(year, true_f))
+  geom_point(data = true_f, aes(year, true_f), color = "red") + 
+  geom_line(data = true_f, aes(year, true_f), color = "red")
+
 
 # check length fits
 
@@ -979,8 +990,6 @@ length_comparison <- mean_lengths %>%
 length_comparison
   
 
-
-
 ```
 
 
@@ -990,7 +999,1208 @@ So, you'd plug in your fishery characteristics, and the model would give an idea
 
 Awesome idea. 
 
+## Adding in recruitment estimation
+
+```{r}
+
+library(rstan)
+library(FishLife)
+library(spasm)
+library(tidyverse)
+
+rstan_options(auto_write = TRUE)
+fish <-
+  create_fish(
+    query_fishlife = T,
+    mat_mode = "length",
+    max_age = 30,
+    time_step = 1,
+    sigma_r = 2,
+    price = 1
+  )
 
 
 
+manager <- create_manager(mpa_size = 0)
+
+fleet <- create_fleet(fish = fish, sigma_effort = 0)
+
+fleet <-
+  spasm::update_fleet(
+    fleet = purrr::list_modify(
+      fleet,
+      fleet_model = "open-access",
+      initial_effort = 100,
+      cost = 1,
+      length_50_sel = 50,
+      theta_tuner = 0.1,
+      beta = 1.3
+    ),
+    fish = fish
+  )
+
+
+set.seed(42)
+
+sim <- spasm::sim_fishery(
+  fish = fish,
+  fleet = fleet,
+  manager = manager,
+  num_patches = 1,
+  sim_years = 25,
+  burn_year = 50,
+  time_step = fish$time_step
+)
+
+sim %>% 
+  group_by(year) %>% 
+  summarise(tb = sum(biomass)) %>% 
+  ggplot(aes(year, tb)) + 
+  geom_point()
+
+true_f <- sim %>% 
+  group_by(year) %>% 
+  summarise(true_f = unique(f)) %>% 
+  mutate(year = year - min(year) + 1) %>% 
+  ungroup()
+
+true_f %>% 
+  ggplot(aes(year, true_f)) + 
+  geom_point()
+
+linf_buffer <- 1.5
+
+length_at_age_key <- generate_length_at_age_key(
+  min_age = fish$min_age,
+  max_age = fish$max_age,
+  cv = fish$cv_len,
+  linf = fish$linf,
+  k = fish$vbk,
+  t0 = fish$t0,
+  time_step = fish$time_step,
+  linf_buffer = linf_buffer
+) %>% 
+  ungroup() %>% 
+  select(age,length_bin, p_bin) %>% 
+  spread(length_bin, p_bin) %>% 
+  select(-age)
+
+
+length_comps <- sim %>%
+select(year, patch, age, numbers, numbers_caught) %>%
+nest(-year, -patch, .key = n_at_age) %>% 
+mutate(catch_length = map(
+n_at_age,
+~ sample_lengths(
+n_at_age = .x,
+cv = fish$cv_len,
+k = fish$vbk,
+linf = fish$linf,
+t0 = fish$t0,
+sample_type = 'catch',
+percent_sampled = 1,
+time_step = fish$time_step,
+linf_buffer = linf_buffer
+)
+)) %>% 
+select(year, catch_length ) %>% 
+  unnest() %>% 
+  mutate(numbers = round(numbers)) %>% 
+  spread(length_bin, numbers) %>% 
+  mutate(year = year - min(year) + 1)
+
+scrooge_data <- list(
+  estimate_recruits = 1,
+  length_comps = length_comps %>% select(-year),
+  length_comps_years  = length_comps$year,
+  n_lcomps = nrow(length_comps),
+  nt = length(length_comps$year),
+  n_ages = fish$max_age + 1,
+  n_lbins = ncol(length_at_age_key),
+  ages = 1:(fish$max_age + 1),
+  mean_selectivity_at_age = fleet$sel_at_age,
+  mean_length_at_age = fish$length_at_age,
+  mean_weight_at_age = fish$weight_at_age,
+  mean_maturity_at_age = fish$maturity_at_age,
+  m = fish$m,
+  h = fish$steepness,
+  r0 = fish$r0,
+  k = fish$vbk,
+  loo = fish$linf,
+  t0 = fish$t0,
+  length_at_age_key = as.matrix(length_at_age_key)
+) 
+
+set.seed(42)
+test_scrooge <- rstan::stan(file = here::here("scripts", "scrooge.stan"), data = scrooge_data, chains = 1, refresh = 10, cores = 1, iter = 4000, warmup = 2000)
+
+check<- rstan::extract(test_scrooge)
+
+# check f fit
+
+fs <- array_branch(check$f_t,1) 
+
+fs <- data_frame(thing = map(fs, ~as_data_frame(.x) %>% mutate(year = 1:nrow(.)))) %>% 
+  mutate(iteration = 1:nrow(.)) %>% 
+  unnest()
+
+true_f <- sim %>% 
+  group_by(year) %>% 
+  summarise(true_f = unique(f)) %>% 
+  mutate(year = year - min(year) + 1) %>% 
+  ungroup()
+
+fs %>% 
+  ggplot(aes(year,value)) + 
+  geom_boxplot(aes(group = year), alpha = 0.75) +
+  geom_point(data = true_f, aes(year, true_f), color = "red") + 
+  geom_line(data = true_f, aes(year, true_f), color = "red")
+
+# check length fits
+
+lengths <- array_branch(check$n_tl,1) 
+
+lengths <- data_frame(thing = map(lengths, ~as_data_frame(.x) %>% mutate(year = 1:nrow(.)))) %>% 
+  mutate(iteration = 1:nrow(.)) %>% 
+  unnest()
+
+colnames(lengths) <- c("iteration", colnames(length_at_age_key),"year")
+
+lengths <- lengths %>% 
+  gather(length_bin, number, -iteration,-year)
+
+mean_lengths <- lengths %>% 
+  group_by(year, length_bin) %>% 
+  filter(iteration == 1) %>% 
+  summarise(mean_numbers = mean(number))
+
+
+tidy_length_comps = length_comps %>% 
+  gather(length_bin, mean_numbers, -year) %>% 
+  mutate(length_bin = as.numeric(length_bin)) %>% 
+  mutate(source = "observed")
+
+
+length_comparison <- mean_lengths %>% 
+  ungroup() %>% 
+  mutate(length_bin = as.numeric(length_bin),
+         source = "predicted") %>% 
+  bind_rows(tidy_length_comps) %>% 
+  ungroup() %>% 
+  group_by(year, source) %>% 
+  mutate(mean_numbers = mean_numbers / sum(mean_numbers)) %>% 
+  filter(year %in% c(1,10,24)) %>% 
+  ggplot(aes(length_bin, mean_numbers, fill = source)) + 
+  geom_col(position = "dodge") +
+  # geom_density(stat = "identity", alpha = 0.5) +
+  facet_wrap(~year)
+
+length_comparison
+
+
+
+# recruits comparison
+
+rec_devs <- array_branch(check$rec_dev_t,1) 
+
+rec_devs <- data_frame(thing = map(rec_devs, ~as_data_frame(.x) %>% mutate(year = 1:nrow(.)))) %>% 
+  mutate(iteration = 1:nrow(.)) %>% 
+  unnest()
+
+true_rec_devs <- sim %>% 
+  group_by(year) %>% 
+  summarise(true_value = unique(rec_dev) + fish$sigma_r^2/2) %>% 
+  ungroup() %>% 
+  mutate(year = year - min(year)  + 1 )
+
+rec_devs <- rec_devs #%>% 
+  # left_join(true_rec_devs, by = "year") %>% 
+  # gather(source, value, contains("value"))
+  # 
+  
+rec_devs %>% 
+  ggplot(aes(year, value)) + 
+  geom_hline(aes(yintercept = 0), linetype = 2) +
+  geom_boxplot(aes(group = year)) + 
+  geom_line(data = true_rec_devs, aes(year, true_value), color = "red") +
+  geom_point(data = true_rec_devs, aes(year, true_value), color = "red")
+
+
+
+
+```
+
+
+## adding in econ
+
+OK, here we go. Let's get the econ module up and running. 
+
+Now, one slightly weird thing in here. You need to think about what to do about effort. If you're passing in p,c,q, and taking the catch from the model, profits will then depend on effort....
+
+But you need to rationalize the effort based on the other parameters to prodice the catch. 
+
+So, what if you do something like this. 
+
+Take as your starting point the current model, with no other information. 
+
+With that, the most reasonable prior certainly seems like fishing mortality this year will be similar to fishing mortality last year. 
+
+That seems more reasonable that imposing a random oscilation on it. 
+
+Now, suppose that you had the complete price, cost, and technological history of the fishery in hand, as you do here. What woud your prior be then? In the current case, you could of course feed it in, in which case your prior on the evolution of the fishery would depend on the initial profits, the degree of F, etc. In other words, it seems entirely plausible that if you just feed in a bioeconomic model, your prior could very easily be off sync with the truth, e.g. if you catch the fishery on a downswing in profits but you start it assuming an upswing?
+
+But let's follow that thought exercise, what would it look like?
+
+if you have p,c,q over time (and assume for now they are constant), is there value in making the prior the bioeconomic delta? to get the whole cycle going, you need to make some judgement about initial profits. If you assume zero profits from the getto, then the delta is 1, and your prior is back to the current prior (f is just f last year). 
+
+If you assume some positive initial profits, then the cycle can get going until it hits equilibrium. 
+
+So, the question of what those initial profits are is of course critical: are they going up or down? If ther are profits, then you predict fishing pressure to go up next year. if negative, you expect fishing pressure to decline. 
+
+Under your old idea, you would pick a totally arbitrary effort level and stick with that, with the idea being that you're only focusing on the change in fishing mortality. But, that still requires an assumption about how profitable things are. 
+
+one idea there would be to pick a totally arbitrary effort level, apply your data, and calculate catch and profits based on the biomass from the model and those thing. So, in that world, the effort (and f) is independent of the f's estimated by the model. 
+
+Which is actually better right? Otherwise it's a little weird, your effort is now coming from your latent variable, not vice versa, i.e. f is a prior on itself. Which is actually what you're already doing, but with more of a functional form. 
+
+Another idea would be to assumine something about intiial profitability, say by profits/effort, where we call effort a day of fishing or something. 
+
+You could divie across, to get p/e, and then solve for e such that p/e is some number that you like. In that world you'd get p/e, price for a given unit of catch, cost per day of fishing, q.... which no one would be able to tell you q, so you'd have to be back to f....  you could play with it. 
+
+A third idea is to make everything in terms of deltas: your prior is that f is last years f unless something changes in p,q, or c, or E. Under that model, you'd calculate the effort in a given time step using the last time steps p,q,c,E, and then calculate it using the changed p,q,c,E, and apply that change to f (up by 10%, down by 25%, etc.)
+
+To summarize: 
+
+1. Take your "data" on p,q,c, along with a random effort, and project the evolution of effort using the biomass from the model, and use the deltas from this to inform your prior on f. has the appeal of being more independent of f, though not totally through the biomass link, and makes it pretty robust to just plugging and chugging: add your timeseries of "data" and let it go to down
+
+2. Bring the f's a bit more specifically into the equation. Assuming something about q, find the E that at least gives you the observed catch. Hmm though by that logic E is just a linear transformation of F in each time step, and as such is useless. You could "seed" the system there to get the scale right and then let it evolve? COuld also sove for profits per unit effort, instead of catch
+
+3. Make it all about change: your prior is the default prior unless there is a shock to prices, q, or c. i.e. if price doubles youd expect effort to double relative to what it would have been without the price increase. This seems like the cleanest idea.... you still use the model to get at joint changes and non-linear effects, but you're not assuming much about where you are in the cycle. 
+
+Think of it this way, if I tell you the p, c, q, and they are all constant, and ask me what I think is happening to effort, the honest answer at any given timestep is that I don't know. It could be going up, it could be going down, it could be constant, depending where on the equilibrium path I think I am. The only real "prior" that I have then is that it oscilates, so I could pass those to the bioeconomic model and hope that I get the osscilations right. The only way this really adds value then is with some other piece of information, like an idea of profits per trip. Or, maybe through some linkage through the evolution of the system, but that seems more complicated. 
+
+So, given just that above information, it seems more logical to go with the shock-based prior: If you tell me that price doubled last year, that does give me some idea of what might be happening to effort (though need to think through supply/demand dynamics here). It would be nice to generalize the case here, which actually I think you can do. If you evolve the system and just calculate the counterfactual difference every year, it should be 1 if nothing changes, so your prior defaults back to the basic one, but change when there is a shock. Let's explore this one for the week. To put it more clearly, I think you have a stronger prior on how thins should change in response to schocks than you do on how effort should evolve per-say. 
+
+Suppose you knew nothing else, but that price had doubled. What would you expect to happen?
+
+
+```{r}
+
+library(rstan)
+library(FishLife)
+library(spasm)
+library(tidyverse)
+
+set.seed(42)
+fish <-
+  create_fish(
+    query_fishlife = T,
+    mat_mode = "length",
+    linf = 100,
+    max_age = 30,
+    time_step = 1,
+    sigma_r = 2,
+    price = 1,
+    price_cv = 2,
+    price_ac = 0
+  )
+
+fleet <- create_fleet(
+  fish = fish,
+  cost_cv =  0.75,
+  cost_ac = 0.2,
+  q_cv = .1,
+  q_ac = .85
+)
+
+fleet <-
+  spasm::update_fleet(
+    fleet = purrr::list_modify(
+      fleet,
+      fleet_model = "open-access",
+      initial_effort = 100,
+      cost = 1,
+      price = 1,
+      target_catch = 100,
+      sigma_effort = 0,
+      length_50_sel = 50,
+      theta_tuner = 0.25
+    ),
+    fish = fish
+  )
+
+
+sim <- spasm::sim_fishery(
+  fish = fish,
+  fleet = fleet,
+  manager = create_manager(mpa_size = 0),
+  num_patches = 1,
+  sim_years = 25,
+  burn_year = 50,
+  time_step = fish$time_step
+)
+
+sim %>% 
+  group_by(year) %>% 
+  summarise(thing = unique(f)) %>% 
+  ggplot(aes(year, thing)) + 
+  geom_point()
+
+sim %>% 
+  group_by(year) %>% 
+  summarise(thing = unique(cost)) %>% 
+  ggplot(aes(year, thing)) + 
+  geom_point()
+
+
+true_f <- sim %>% 
+  group_by(year) %>% 
+  summarise(true_f = unique(f)) %>% 
+  mutate(year = year - min(year) + 1) %>% 
+  ungroup()
+
+true_f %>% 
+  ggplot(aes(year, true_f)) + 
+  geom_point()
+
+linf_buffer <- 1.5
+
+length_at_age_key <- generate_length_at_age_key(
+  min_age = fish$min_age,
+  max_age = fish$max_age,
+  cv = fish$cv_len,
+  linf = fish$linf,
+  k = fish$vbk,
+  t0 = fish$t0,
+  time_step = fish$time_step,
+  linf_buffer = linf_buffer
+) %>% 
+  ungroup() %>% 
+  select(age,length_bin, p_bin) %>% 
+  spread(length_bin, p_bin) %>% 
+  select(-age)
+
+
+length_comps <- sim %>%
+select(year, patch, age, numbers, numbers_caught) %>%
+nest(-year, -patch, .key = n_at_age) %>% 
+mutate(catch_length = map(
+n_at_age,
+~ sample_lengths(
+n_at_age = .x,
+cv = fish$cv_len,
+k = fish$vbk,
+linf = fish$linf,
+t0 = fish$t0,
+sample_type = 'catch',
+percent_sampled = 1,
+time_step = fish$time_step,
+linf_buffer = linf_buffer
+)
+)) %>% 
+select(year, catch_length ) %>% 
+  unnest() %>% 
+  mutate(numbers = round(numbers)) %>% 
+  spread(length_bin, numbers) %>% 
+  mutate(year = year - min(year) + 1)
+
+scrooge_data <- list(
+  estimate_recruits = 1,
+  length_comps = length_comps %>% select(-year),
+  length_comps_years  = length_comps$year,
+  n_lcomps = nrow(length_comps),
+  nt = length(length_comps$year),
+  n_ages = fish$max_age + 1,
+  n_lbins = ncol(length_at_age_key),
+  ages = 1:(fish$max_age + 1),
+  mean_selectivity_at_age = fleet$sel_at_age,
+  mean_length_at_age = fish$length_at_age,
+  mean_weight_at_age = fish$weight_at_age,
+  mean_maturity_at_age = fish$maturity_at_age,
+  m = fish$m,
+  h = fish$steepness,
+  r0 = fish$r0,
+  k = fish$vbk,
+  loo = fish$linf,
+  t0 = fish$t0,
+  length_at_age_key = as.matrix(length_at_age_key)
+) 
+
+set.seed(42)
+test_scrooge <- rstan::stan(file = here::here("scripts", "scrooge.stan"), data = scrooge_data, chains = 1, refresh = 10, cores = 1, iter = 4000, warmup = 2000)
+
+check<- rstan::extract(test_scrooge)
+
+# check f fit
+
+fs <- array_branch(check$f_t,1) 
+
+fs <- data_frame(thing = map(fs, ~as_data_frame(.x) %>% mutate(year = 1:nrow(.)))) %>% 
+  mutate(iteration = 1:nrow(.)) %>% 
+  unnest()
+
+true_f <- sim %>% 
+  group_by(year) %>% 
+  summarise(true_f = unique(f)) %>% 
+  mutate(year = year - min(year) + 1) %>% 
+  ungroup()
+
+fs %>% 
+  ggplot(aes(year,value)) + 
+  geom_boxplot(aes(group = year), alpha = 0.75) +
+  geom_point(data = true_f, aes(year, true_f), color = "red") + 
+  geom_line(data = true_f, aes(year, true_f), color = "red")
+
+# check length fits
+
+lengths <- array_branch(check$n_tl,1) 
+
+lengths <- data_frame(thing = map(lengths, ~as_data_frame(.x) %>% mutate(year = 1:nrow(.)))) %>% 
+  mutate(iteration = 1:nrow(.)) %>% 
+  unnest()
+
+colnames(lengths) <- c("iteration", colnames(length_at_age_key),"year")
+
+lengths <- lengths %>% 
+  gather(length_bin, number, -iteration,-year)
+
+mean_lengths <- lengths %>% 
+  group_by(year, length_bin) %>% 
+  filter(iteration == 1) %>% 
+  summarise(mean_numbers = mean(number))
+
+
+tidy_length_comps = length_comps %>% 
+  gather(length_bin, mean_numbers, -year) %>% 
+  mutate(length_bin = as.numeric(length_bin)) %>% 
+  mutate(source = "observed")
+
+
+length_comparison <- mean_lengths %>% 
+  ungroup() %>% 
+  mutate(length_bin = as.numeric(length_bin),
+         source = "predicted") %>% 
+  bind_rows(tidy_length_comps) %>% 
+  ungroup() %>% 
+  group_by(year, source) %>% 
+  mutate(mean_numbers = mean_numbers / sum(mean_numbers)) %>% 
+  filter(year %in% c(1,10,24)) %>% 
+  ggplot(aes(length_bin, mean_numbers, fill = source)) + 
+  geom_col(position = "dodge") +
+  # geom_density(stat = "identity", alpha = 0.5) +
+  facet_wrap(~year)
+
+length_comparison
+
+
+
+# recruits comparison
+
+rec_devs <- array_branch(check$rec_dev_t,1) 
+
+rec_devs <- data_frame(thing = map(rec_devs, ~as_data_frame(.x) %>% mutate(year = 1:nrow(.)))) %>% 
+  mutate(iteration = 1:nrow(.)) %>% 
+  unnest()
+
+true_rec_devs <- sim %>% 
+  group_by(year) %>% 
+  summarise(true_value = unique(rec_dev) + fish$sigma_r^2/2) %>% 
+  ungroup() %>% 
+  mutate(year = year - min(year)  + 1 )
+
+rec_devs <- rec_devs #%>% 
+  # left_join(true_rec_devs, by = "year") %>% 
+  # gather(source, value, contains("value"))
+  # 
+  
+rec_devs %>% 
+  ggplot(aes(year, value)) + 
+  geom_hline(aes(yintercept = 0), linetype = 2) +
+  geom_boxplot(aes(group = year)) + 
+  geom_line(data = true_rec_devs, aes(year, true_value), color = "red") +
+  geom_point(data = true_rec_devs, aes(year, true_value), color = "red")
+
+
+
+
+```
+
+
+booyakasha. So what do to do with this. 
+
+I like the idea of starting with the delta model. So there, you want to quantify the change in F relative to the F that would have been expected if prices/costs hadn't changed. 
+
+How to do that?
+
+In each time step, you're calculating profits in that time step. you could calculate profits in that time step based on the conditions on the current year, and the conditions in the last year. 
+
+When does that affect your prior?
+
+Under the bioeconomic model you're working with, effort in the current year responds to profits in the prior year. Or specifically, $f_{t + 1} = f_t + profits_t$
+
+```{r}
+
+
+```
+
+Right, so this is informative if you have an idea of the effort and biomass. But, if you're going with the shock model, suppose now that you have the case you put above, where things change. How do you incorporate that. I think the answer is now you need three years of data. 
+
+Effort in year t is delta percent different than the delta in year t that would have been expected without the shock. 
+
+$$f_t + 1 \sim normal(f_t * \Delta)$$
+
+
+so what is $\delta$?
+
+delta is new f resulting from the current prices and costs / new f resulting from the last prices and costs. 
+
+
+in practice then. 
+
+$$\frac{f_t + \theta(p_t^sq_tE_tB_t  - c_t^sE_t^\beta)}{f_t + \theta(p_tq_tE_tB_t  - c_tE_t^\beta)}$$
+
+Then $f_t + \theta$ drops out, as does anything els that doesn't change (I think), doesn't really matter, since the nice thing is if things don't change this is 1
+
+So to operationalize this, you need to track changes in the things of interest and calculate two profits in each time step: the profits using the current values and the profits using last time steps values, focusing in on profits and costs at the moment. 
+
+For now, assume a beta of 1, since if you do that then effort drops out, and the change is all dependent 
+
+```{r}
+library(rstan)
+library(FishLife)
+library(spasm)
+library(tidyverse)
+
+set.seed(42)
+fish <-
+  create_fish(
+    query_fishlife = T,
+    mat_mode = "length",
+    linf = 100,
+    max_age = 30,
+    time_step = 1,
+    sigma_r = 2,
+    price = 1,
+    price_cv = 2,
+    price_ac = 0
+  )
+
+fleet <- create_fleet(
+  fish = fish,
+  cost_cv =  0.75,
+  cost_ac = 0.2,
+  q_cv = .1,
+  q_ac = .85
+)
+
+fleet <-
+  spasm::update_fleet(
+    fleet = purrr::list_modify(
+      fleet,
+      fleet_model = "open-access",
+      initial_effort = 100,
+      cost = 1,
+      price = 1,
+      target_catch = 100,
+      sigma_effort = 0,
+      length_50_sel = 50,
+      theta_tuner = 0.25
+    ),
+    fish = fish
+  )
+
+
+sim <- spasm::sim_fishery(
+  fish = fish,
+  fleet = fleet,
+  manager = create_manager(mpa_size = 0),
+  num_patches = 1,
+  sim_years = 25,
+  burn_year = 50,
+  time_step = fish$time_step
+)
+
+sim %>% 
+  group_by(year) %>% 
+  summarise(thing = unique(f)) %>% 
+  ggplot(aes(year, thing)) + 
+  geom_point()
+
+sim %>% 
+  group_by(year) %>% 
+  summarise(thing = unique(cost)) %>% 
+  ggplot(aes(year, thing)) + 
+  geom_point()
+
+
+true_f <- sim %>% 
+  group_by(year) %>% 
+  summarise(true_f = unique(f)) %>% 
+  mutate(year = year - min(year) + 1) %>% 
+  ungroup()
+
+true_f %>% 
+  ggplot(aes(year, true_f)) + 
+  geom_point()
+
+linf_buffer <- 1.5
+
+length_at_age_key <- generate_length_at_age_key(
+  min_age = fish$min_age,
+  max_age = fish$max_age,
+  cv = fish$cv_len,
+  linf = fish$linf,
+  k = fish$vbk,
+  t0 = fish$t0,
+  time_step = fish$time_step,
+  linf_buffer = linf_buffer
+) %>% 
+  ungroup() %>% 
+  select(age,length_bin, p_bin) %>% 
+  spread(length_bin, p_bin) %>% 
+  select(-age)
+
+
+length_comps <- sim %>%
+select(year, patch, age, numbers, numbers_caught) %>%
+nest(-year, -patch, .key = n_at_age) %>% 
+mutate(catch_length = map(
+n_at_age,
+~ sample_lengths(
+n_at_age = .x,
+cv = fish$cv_len,
+k = fish$vbk,
+linf = fish$linf,
+t0 = fish$t0,
+sample_type = 'catch',
+percent_sampled = 1,
+time_step = fish$time_step,
+linf_buffer = linf_buffer
+)
+)) %>% 
+select(year, catch_length ) %>% 
+  unnest() %>% 
+  mutate(numbers = round(numbers)) %>% 
+  spread(length_bin, numbers) %>% 
+  mutate(year = year - min(year) + 1)
+
+price_and_cost_history <- sim %>% 
+  group_by(year) %>% 
+  summarise(price = unique(price),
+            cost = unique(cost)) %>% 
+  gather(variable, value, -year) %>% 
+  group_by(variable) %>% 
+  mutate(lag_value = lag(value,1)) %>% 
+  ungroup() %>% 
+  mutate(lag_value = ifelse(is.na(lag_value), value, lag_value))
+
+price_history <- price_and_cost_history %>% 
+  filter(variable == "price")
+
+cost_history <- price_and_cost_history %>% 
+  filter(variable == "cost")
+
+
+scrooge_data <- list(
+  estimate_recruits = 1,
+  length_comps = length_comps %>% select(-year),
+  length_comps_years  = length_comps$year,
+  price_t = price_history %>% select(value, lag_value),
+  cost_t = cost_history %>% select(value, lag_value),
+  n_lcomps = nrow(length_comps),
+  nt = length(length_comps$year),
+  n_ages = fish$max_age + 1,
+  n_lbins = ncol(length_at_age_key),
+  ages = 1:(fish$max_age + 1),
+  mean_selectivity_at_age = fleet$sel_at_age,
+  mean_length_at_age = fish$length_at_age,
+  mean_weight_at_age = fish$weight_at_age,
+  mean_maturity_at_age = fish$maturity_at_age,
+  m = fish$m,
+  h = fish$steepness,
+  r0 = fish$r0,
+  k = fish$vbk,
+  loo = fish$linf,
+  t0 = fish$t0,
+  length_at_age_key = as.matrix(length_at_age_key)
+) 
+
+set.seed(42)
+test_scrooge <- rstan::stan(file = here::here("scripts", "scrooge.stan"), data = scrooge_data, chains = 1, refresh = 10, cores = 1, iter = 4000, warmup = 2000)
+
+check<- rstan::extract(test_scrooge)
+
+# check f fit
+
+fs <- array_branch(check$f_t,1) 
+
+fs <- data_frame(thing = map(fs, ~as_data_frame(.x) %>% mutate(year = 1:nrow(.)))) %>% 
+  mutate(iteration = 1:nrow(.)) %>% 
+  unnest()
+
+true_f <- sim %>% 
+  group_by(year) %>% 
+  summarise(true_f = unique(f)) %>% 
+  mutate(year = year - min(year) + 1) %>% 
+  ungroup()
+
+fs %>% 
+  ggplot(aes(year,value)) + 
+  geom_boxplot(aes(group = year), alpha = 0.75) +
+  geom_point(data = true_f, aes(year, true_f), color = "red") + 
+  geom_line(data = true_f, aes(year, true_f), color = "red")
+
+# check length fits
+
+lengths <- array_branch(check$n_tl,1) 
+
+lengths <- data_frame(thing = map(lengths, ~as_data_frame(.x) %>% mutate(year = 1:nrow(.)))) %>% 
+  mutate(iteration = 1:nrow(.)) %>% 
+  unnest()
+
+colnames(lengths) <- c("iteration", colnames(length_at_age_key),"year")
+
+lengths <- lengths %>% 
+  gather(length_bin, number, -iteration,-year)
+
+mean_lengths <- lengths %>% 
+  group_by(year, length_bin) %>% 
+  filter(iteration == 1) %>% 
+  summarise(mean_numbers = mean(number))
+
+
+tidy_length_comps = length_comps %>% 
+  gather(length_bin, mean_numbers, -year) %>% 
+  mutate(length_bin = as.numeric(length_bin)) %>% 
+  mutate(source = "observed")
+
+
+length_comparison <- mean_lengths %>% 
+  ungroup() %>% 
+  mutate(length_bin = as.numeric(length_bin),
+         source = "predicted") %>% 
+  bind_rows(tidy_length_comps) %>% 
+  ungroup() %>% 
+  group_by(year, source) %>% 
+  mutate(mean_numbers = mean_numbers / sum(mean_numbers)) %>% 
+  filter(year %in% c(1,10,24)) %>% 
+  ggplot(aes(length_bin, mean_numbers, fill = source)) + 
+  geom_col(position = "dodge") +
+  # geom_density(stat = "identity", alpha = 0.5) +
+  facet_wrap(~year)
+
+length_comparison
+
+
+
+# recruits comparison
+
+rec_devs <- array_branch(check$rec_dev_t,1) 
+
+rec_devs <- data_frame(thing = map(rec_devs, ~as_data_frame(.x) %>% mutate(year = 1:nrow(.)))) %>% 
+  mutate(iteration = 1:nrow(.)) %>% 
+  unnest()
+
+true_rec_devs <- sim %>% 
+  group_by(year) %>% 
+  summarise(true_value = unique(rec_dev) + fish$sigma_r^2/2) %>% 
+  ungroup() %>% 
+  mutate(year = year - min(year)  + 1 )
+
+rec_devs <- rec_devs #%>% 
+  # left_join(true_rec_devs, by = "year") %>% 
+  # gather(source, value, contains("value"))
+  # 
+  
+rec_devs %>% 
+  ggplot(aes(year, value)) + 
+  geom_hline(aes(yintercept = 0), linetype = 2) +
+  geom_boxplot(aes(group = year)) + 
+  geom_line(data = true_rec_devs, aes(year, true_value), color = "red") +
+  geom_point(data = true_rec_devs, aes(year, true_value), color = "red")
+```
+
+```{r}
+
+p1 <-  1
+p2 <- 3.46
+
+c1 <- 1
+c2 <- 1
+
+q <- .0001
+
+beta <- 1.3
+
+
+test <- expand.grid(effort = 1:100, biomass = seq(1000,10000, length.out = 100)) %>% 
+  mutate(prof1 = p1 * q *effort * biomass - c1 * effort ^ beta,
+         prof2 = p2 * q * effort * biomass - c2 * effort ^ beta) %>% 
+  mutate(delta = prof2 - prof1)
+
+
+
+test %>% 
+  ggplot(aes(effort, biomass, fill = delta) ) +
+  geom_raster() + 
+    scale_fill_viridis_c()
+
+```
+
+OK the net different has much better properties than the damn delta percent. So, you're back to to modifying by addition. hooray. take a look back at SSCOM and see how he dealt with that. 
+
+What you can at least do is back out the efforts based on the q... and to some extent this should just give a fucntional form to the evolution. Let's try it and see what happens. Where "it" refers now to a max/min absolute change in f, calculated from the bioeconomic model. 
+
+See how that goes, and if the answer is badly, so be it, back to the drawing board. 
+
+Could think about some kind of distribution to draw from based on plausible states of the world.... ugh. well this is why it hasn't been done!
+
+So, where are we now?
+
+One idea: Start with a seed effort that rationalizes the initial catch (which is made up anyway). 
+
+Now, in one world, you have a sort of "parallel" stock trajectory, where you let effort and F, and subsequently biomass evolve on their own according to the profit function you provide. 
+
+You then calculate the shocks and update your priors on F, which affect the "actual" stock dynamics. 
+
+In the other example, you utilize the estimated F's by the model, and just keep track of the change in F that would have been expected under a shock. So, if in time step 2, price doubled, and you think that means a doubling in F, updating that delta. 
+
+So what that means is that you have a vector of deltas, and in each time step, you're simply estimating that delta. 
+
+That seems like the slightly simpler and approach, and the one that seems less prone to just being way off by virtue of model misspecification. With the other approach, if you're a) adding in a lot of computation time by running a literal parallel population model and b) since all you're utilizing is the shocks,but since the degree of the shock depends on E and B, if your E and B are wildly off from the population model expected E and B
+
+so, the problem now is how to get E to rationalize all this.... 
+
+poop. If you pick a random R, then your catches don't match up. If you stick with F, then you need to translate cost per unit F instead of cost per unit E.
+
+So in a perfect world in every time step you need the E that produces the observed catch... BALLS. Simplest would be a bisection method?
+
+What about estimating Effort and effort devs and translating to F to save time and effort... intereating. 
+
+So what would that look like. THe only reason you're working with F right now is that it makes the search space a bit neater, between 0 and 10. 
+
+What if you worked in raw effort instead. Fiven that you're fixing the size of the population at some arbitraty level, and given that you're going to specify q as well, it wouldn't be that hard to 
+
+So in that world, you estimate effort_t, with lower of 0 and upper of some much bigger number. 
+
+Alternatively, and this would probably be numerically simpler, you estimate a mean effort, and then a vector of effort_dev_t that are deviates from that effort. with mean 0 and some sigma. So you're just shifting the model over to effort based instead of F based. 
+
+So what would that look like
+
+in the simpler case....
+
+ $$effort_t \sim unif(effort^{min}, effort^{max})$$
+ 
+ AHA, no, here's what you do, you keep the uniform multiplier from 0 to like 10, and you just multiply that by your base effort factor, that instead of estimating (for now) you set at some arbitrary level, like the effort that makes f = m, which is just m / q!!!! BOOM. you could make it a free parameter later, but doesn't make a lot of sense since it's just helping scale the system. 
+ 
+ $$ effort_t \sim normal(effort_{t-1}, \sigma_{effort}) $$
+
+
+
+
+If that for some reason doesn't work, then you stick with estimating F's, and have to find the E that produces the catch given the other parameters using probably a bisection method. 
+
+
+```{r}
+library(rstan)
+library(FishLife)
+library(spasm)
+library(tidyverse)
+
+set.seed(42)
+fish <-
+  create_fish(
+    query_fishlife = T,
+    mat_mode = "length",
+    linf = 100,
+    max_age = 30,
+    time_step = 1,
+    sigma_r = 2,
+    price = 1,
+    price_cv = .1,
+    price_ac = 0
+  )
+
+fleet <- create_fleet(
+  fish = fish,
+  cost_cv =  0.75,
+  cost_ac = 0.2,
+  q_cv = .1,
+  q_ac = .85
+)
+
+fleet <-
+  spasm::update_fleet(
+    fleet = purrr::list_modify(
+      fleet,
+      fleet_model = "open-access",
+      initial_effort = 100,
+      cost = 1,
+      target_catch = 100,
+      sigma_effort = 0,
+      length_50_sel = 50,
+      theta_tuner = 0.25
+    ),
+    fish = fish
+  )
+
+
+sim <- spasm::sim_fishery(
+  fish = fish,
+  fleet = fleet,
+  manager = create_manager(mpa_size = 0),
+  num_patches = 1,
+  sim_years = 25,
+  burn_year = 50,
+  time_step = fish$time_step
+)
+
+sim %>% 
+  group_by(year) %>% 
+  summarise(thing = unique(f)) %>% 
+  ggplot(aes(year, thing)) + 
+  geom_point()
+
+sim %>% 
+  group_by(year) %>% 
+  summarise(thing = unique(cost)) %>% 
+  ggplot(aes(year, thing)) + 
+  geom_point()
+
+
+true_f <- sim %>% 
+  group_by(year) %>% 
+  summarise(true_f = unique(f)) %>% 
+  mutate(year = year - min(year) + 1) %>% 
+  ungroup()
+
+true_f %>% 
+  ggplot(aes(year, true_f)) + 
+  geom_point()
+
+linf_buffer <- 1.5
+
+length_at_age_key <- generate_length_at_age_key(
+  min_age = fish$min_age,
+  max_age = fish$max_age,
+  cv = fish$cv_len,
+  linf = fish$linf,
+  k = fish$vbk,
+  t0 = fish$t0,
+  time_step = fish$time_step,
+  linf_buffer = linf_buffer
+) %>% 
+  ungroup() %>% 
+  select(age,length_bin, p_bin) %>% 
+  spread(length_bin, p_bin) %>% 
+  select(-age)
+
+
+length_comps <- sim %>%
+select(year, patch, age, numbers, numbers_caught) %>%
+nest(-year, -patch, .key = n_at_age) %>% 
+mutate(catch_length = map(
+n_at_age,
+~ sample_lengths(
+n_at_age = .x,
+cv = fish$cv_len,
+k = fish$vbk,
+linf = fish$linf,
+t0 = fish$t0,
+sample_type = 'catch',
+percent_sampled = 1,
+time_step = fish$time_step,
+linf_buffer = linf_buffer
+)
+)) %>% 
+select(year, catch_length ) %>% 
+  unnest() %>% 
+  mutate(numbers = round(numbers)) %>% 
+  spread(length_bin, numbers) %>% 
+  mutate(year = year - min(year) + 1)
+
+price_and_cost_history <- sim %>% 
+  group_by(year) %>% 
+  summarise(price = unique(price),
+            cost = unique(cost),
+            q = fleet$q) %>% 
+  gather(variable, value, -year) %>% 
+  group_by(variable) %>% 
+  mutate(lag_value = lag(value,1)) %>% 
+  ungroup() %>% 
+  mutate(lag_value = ifelse(is.na(lag_value), value, lag_value))
+
+price_t <- price_and_cost_history %>% 
+  filter(variable == "price")
+
+cost_t <- price_and_cost_history %>% 
+  filter(variable == "cost")
+
+q_t <- price_and_cost_history %>% 
+  filter(variable == "q")
+
+
+scrooge_data <- list(
+  economic_model = 1,
+  estimate_recruits = 1,
+  length_comps = length_comps %>% select(-year),
+  length_comps_years  = length_comps$year,
+  price_t = price_t %>% select(value, lag_value),
+  cost_t = cost_t %>% select(value, lag_value),
+  q_t = q_t %>% select(value, lag_value),
+  beta = 1.3,
+  base_effort = fish$m / mean(q_t$value),
+  length_50_sel_guess = fish$linf / 2,
+  delta_guess = 2,
+  n_lcomps = nrow(length_comps),
+  nt = length(length_comps$year),
+  n_ages = fish$max_age + 1,
+  n_lbins = ncol(length_at_age_key),
+  ages = 1:(fish$max_age + 1),
+  mean_length_at_age = fish$length_at_age,
+  mean_weight_at_age = fish$weight_at_age,
+  mean_maturity_at_age = fish$maturity_at_age,
+  m = fish$m,
+  h = fish$steepness,
+  r0 = fish$r0,
+  k = fish$vbk,
+  loo = fish$linf,
+  t0 = fish$t0,
+  length_at_age_key = as.matrix(length_at_age_key)
+) 
+
+set.seed(42)
+test_scrooge <- rstan::stan(file = here::here("scripts", "scrooge.stan"), data = scrooge_data, chains = 1, refresh = 10, cores = 1, iter = 4000, warmup = 2000)
+
+check<- rstan::extract(test_scrooge)
+
+# check f fit
+
+fs <- array_branch(check$f_t,1) 
+
+fs <- data_frame(thing = map(fs, ~as_data_frame(.x) %>% mutate(year = 1:nrow(.)))) %>% 
+  mutate(iteration = 1:nrow(.)) %>% 
+  unnest()
+
+true_f <- sim %>% 
+  group_by(year) %>% 
+  summarise(true_f = unique(f)) %>% 
+  mutate(year = year - min(year) + 1) %>% 
+  ungroup()
+
+econ_fplot <- fs %>% 
+  ggplot(aes(year,value)) + 
+  geom_boxplot(aes(group = year), alpha = 0.75) +
+  geom_point(data = true_f, aes(year, true_f), color = "red") + 
+  geom_line(data = true_f, aes(year, true_f), color = "red")
+
+# check length fits
+
+lengths <- array_branch(check$n_tl,1) 
+
+lengths <- data_frame(thing = map(lengths, ~as_data_frame(.x) %>% mutate(year = 1:nrow(.)))) %>% 
+  mutate(iteration = 1:nrow(.)) %>% 
+  unnest()
+
+colnames(lengths) <- c("iteration", colnames(length_at_age_key),"year")
+
+lengths <- lengths %>% 
+  gather(length_bin, number, -iteration,-year)
+
+mean_lengths <- lengths %>% 
+  group_by(year, length_bin) %>% 
+  filter(iteration == 1) %>% 
+  summarise(mean_numbers = mean(number))
+
+
+tidy_length_comps = length_comps %>% 
+  gather(length_bin, mean_numbers, -year) %>% 
+  mutate(length_bin = as.numeric(length_bin)) %>% 
+  mutate(source = "observed")
+
+
+length_comparison <- mean_lengths %>% 
+  ungroup() %>% 
+  mutate(length_bin = as.numeric(length_bin),
+         source = "predicted") %>% 
+  bind_rows(tidy_length_comps) %>% 
+  ungroup() %>% 
+  group_by(year, source) %>% 
+  mutate(mean_numbers = mean_numbers / sum(mean_numbers)) %>% 
+  filter(year %in% c(1,10,24)) %>% 
+  ggplot(aes(length_bin, mean_numbers, fill = source)) + 
+  geom_col(position = "dodge") +
+  # geom_density(stat = "identity", alpha = 0.5) +
+  facet_wrap(~year)
+
+length_comparison
+
+
+
+# recruits comparison
+
+rec_devs <- array_branch(check$rec_dev_t,1) 
+
+rec_devs <- data_frame(thing = map(rec_devs, ~as_data_frame(.x) %>% mutate(year = 1:nrow(.)))) %>% 
+  mutate(iteration = 1:nrow(.)) %>% 
+  unnest()
+
+true_rec_devs <- sim %>% 
+  group_by(year) %>% 
+  summarise(true_value = unique(rec_dev) + fish$sigma_r^2/2) %>% 
+  ungroup() %>% 
+  mutate(year = year - min(year)  + 1 )
+
+rec_devs <- rec_devs #%>% 
+  # left_join(true_rec_devs, by = "year") %>% 
+  # gather(source, value, contains("value"))
+  # 
+  
+rec_devs %>% 
+  ggplot(aes(year, value)) + 
+  geom_hline(aes(yintercept = 0), linetype = 2) +
+  geom_boxplot(aes(group = year)) + 
+  geom_line(data = true_rec_devs, aes(year, true_value), color = "red") +
+  geom_point(data = true_rec_devs, aes(year, true_value), color = "red")
+
+profit_shocks <- array_branch(check$profit_shock_t,1) 
+
+total_effort <- array_branch(check$total_effort_t,1) 
+
+
+profit_shocks <- data_frame(thing = map(profit_shocks, ~as_data_frame(.x) %>% mutate(year = 1:nrow(.)))) %>% 
+  mutate(iteration = 1:nrow(.)) %>% 
+  unnest() %>% 
+  mutate(type = "profits")
+
+total_effort <- data_frame(thing = map(total_effort, ~as_data_frame(.x) %>% mutate(year = 1:nrow(.)))) %>% 
+  mutate(iteration = 1:nrow(.)) %>% 
+  unnest() %>% 
+  mutate(type = "effort")
+
+thing <- profit_shocks %>% 
+  bind_rows(total_effort) %>% 
+  spread(type, value) %>% 
+  mutate(relative_thing = profits / effort)
+
+thing %>% 
+  ggplot(aes(x = year,y = profits / sd(profits))) +
+  geom_point()
+
+
+
+
+```
+
+OK! Time to set this thing up, concept is up and running. 
+
+# check in with Jason
+
+Damn good point, this thing actually provides estimated catch histories based on the lengths. Catch-only model actually estimates SPR (simple stock synthesis, since it's age structured catch dynamics), but SPR doesn't provide catch
+
+measure performance as a function of bias (i.e. identify probability of estimating F that's waaaay too low)
+
+fold LIME into SS, a future thing would be to take this concept and fold into SS
+
+Check with an economist or two on the shock idea 
 
