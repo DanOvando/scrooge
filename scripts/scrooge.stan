@@ -283,9 +283,9 @@ sigma_r ~ normal(0.7, 0.2);
 
 //// selectivity likelihood ////
 
-length_50_sel ~ normal(length_50_sel_guess, .2 * loo);
+length_50_sel ~ normal(length_50_sel_guess, .1 * loo);
 
-sel_delta ~ normal(delta_guess, .1 * loo);
+sel_delta ~ normal(delta_guess, .01 * loo);
 
 
 } // close model block

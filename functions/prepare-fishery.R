@@ -11,11 +11,11 @@ prepare_fishery <-
            q_cv = 0,
            q_ac = 0,
            time_step = 1,
-           price = 1,
-           initial_effort = 100,
+           price = 2,
+           initial_effort = 1000,
            cost = 1,
            percnt_loo_selected = 0.5,
-           sim_years = 10,
+           sim_years = 15,
            burn_years = 10,
            linf_buffer = 1.5,
            num_patches = 1,
@@ -35,7 +35,8 @@ prepare_fishery <-
         sigma_r = sigma_r,
         price = price,
         price_cv = price_cv,
-        price_ac = price_ac
+        price_ac = price_ac,
+        r0 = 100000
       )
 
     if (fleet_model == "constant-catch"){
@@ -208,7 +209,9 @@ prepare_fishery <-
 
     out <- list(simed_fishery = sim,
                 length_comps = length_comps,
-                scrooge_data = scrooge_data)
+                scrooge_data = scrooge_data,
+                fish = fish,
+                fleet = fleet)
 
     return(out)
 

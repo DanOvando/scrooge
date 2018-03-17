@@ -15,7 +15,7 @@ library(spasm) # personal fishery simulator, will post public github link
 library(patchwork)
 library(hrbrthemes)
 library(tidyverse)
-rstan::rstan_options(auto_write = TRUE)
+rstan::rstan_options(auto_write = FALSE)
 
 functions <- list.files(here::here("functions"))
 
@@ -37,7 +37,7 @@ theme_set(scrooge_theme)
 
 # run options -------------------------------------------------------------
 
-sim_fisheries <- F
+sim_fisheries <- T
 
 fit_models <- T
 
@@ -81,15 +81,15 @@ if (sim_fisheries == T)
 
 fisheries_sandbox <-
   purrr::cross_df(list(
-    sci_name = c("Atractoscion nobilis", "Sebastes mystinus"),
+    sci_name = c("Atractoscion nobilis"),# "Sebastes mystinus"),
     fleet_model = c(
       "constant-catch",
       "constant-effort",
       "supplied-catch",
       "open-access"
     ),
-    sigma_r = c(0,2),
-    sigma_effort = c(0,2),
+    sigma_r = c(0,1),
+    sigma_effort = c(0,1),
     price_cv = c(0,0.2),
     cost_cv = c(0, 0.2),
     price_ac = 0.25,
@@ -151,6 +151,140 @@ fleet_params = list(
 
 # apply candidate assessment models ---------------------------------------
 
+# test three simple cases to verify core model performance
+
+# perfecto open access
+
+pfo <- fisheries_sandbox %>%
+  filter(fleet_model == "open-access", sigma_r == 0, sigma_effort == 0, price_cv == 0, cost_cv == 0) %>%
+  slice(1) %>%
+  mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery)) %>%
+  mutate(scrooge_fit = map(prepped_fishery, ~fit_scrooge(data = .x$scrooge_data, iter = 10000, warmup = 4000)))
+
+pfo$summary_plot[[1]]
+
+pfo$prepped_fishery[[1]]$length_comps %>%
+  gather(age, numbers, -year) %>%
+  mutate(age = as.numeric(age)) %>%
+  group_by(year) %>%
+  summarise(ncaught = sum(numbers)) %>%
+  ggplot(aes(year, ncaught)) +
+  geom_point()
+
+pfo <- pfo %>%
+  mutate(processed_scrooge = map(scrooge_fit, process_scrooge)) %>%
+  mutate(observed = map(prepped_fishery, "simed_fishery")) %>%
+  mutate(scrooge_performance = pmap(list(
+    observed = observed,
+    predicted = processed_scrooge
+  ), judge_performance)) %>%
+  mutate(rmse = map_dbl(scrooge_performance, ~.x$comparison_summary$rmse),
+         bias =  map_dbl(scrooge_performance, ~.x$comparison_summary$bias)) %>%
+  arrange(rmse)
+
+pfo$scrooge_performance[[1]]$comparison_plot
+
+# variable open access
+#
+vfo <- fisheries_sandbox %>%
+  filter(
+    fleet_model == "open-access",
+    sigma_r == max(sigma_r),
+    sigma_effort == max(sigma_effort),
+    price_cv == 0,
+    cost_cv == 0
+  ) %>%
+  slice(1) %>%
+  mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery)) %>%
+  mutate(scrooge_fit = map(
+    prepped_fishery,
+    ~ fit_scrooge(
+      data = .x$scrooge_data,
+      iter = 10000,
+      warmup = 4000
+    )
+  ))
+
+vfo$summary_plot[[1]]
+
+vfo$prepped_fishery[[1]]$length_comps %>%
+  gather(age, numbers, -year) %>%
+  mutate(age = as.numeric(age)) %>%
+  group_by(year) %>%
+  summarise(ncaught = sum(numbers)) %>%
+  ggplot(aes(year, ncaught)) +
+  geom_point()
+
+vfo <- vfo %>%
+  mutate(processed_scrooge = map(scrooge_fit, process_scrooge)) %>%
+  mutate(observed = map(prepped_fishery, "simed_fishery")) %>%
+  mutate(scrooge_rec_performance = pmap(list(
+    observed = observed,
+    predicted = processed_scrooge
+  ), judge_performance, observed_variable = rec_dev, predicted_variable = "rec_dev_t")) %>%
+  mutate(scrooge_performance = pmap(list(
+    observed = observed,
+    predicted = processed_scrooge
+  ), judge_performance)) %>%
+  mutate(rmse = map_dbl(scrooge_performance, ~.x$comparison_summary$rmse),
+         bias =  map_dbl(scrooge_performance, ~.x$comparison_summary$bias)) %>%
+  arrange(rmse)
+
+vfo$scrooge_performance[[1]]$comparison_plot
+
+
+# constant and medium f
+
+
+cfo <- fisheries_sandbox %>%
+  filter(
+    fleet_model == "constant-effort",
+    sigma_r == max(sigma_r),
+    sigma_effort == max(sigma_effort),
+    price_cv == 0,
+    cost_cv == 0
+  ) %>%
+  slice(1) %>%
+  mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery)) %>%
+  mutate(scrooge_fit = map(
+    prepped_fishery,
+    ~ fit_scrooge(
+      data = .x$scrooge_data,
+      iter = 10000,
+      warmup = 4000
+    )
+  ))
+
+cfo$summary_plot[[1]]
+
+cfo$prepped_fishery[[1]]$length_comps %>%
+  gather(age, numbers, -year) %>%
+  mutate(age = as.numeric(age)) %>%
+  group_by(year) %>%
+  summarise(ncaught = sum(numbers)) %>%
+  ggplot(aes(year, ncaught)) +
+  geom_point()
+
+cfo <- cfo %>%
+  mutate(processed_scrooge = map(scrooge_fit, process_scrooge)) %>%
+  mutate(observed = map(prepped_fishery, "simed_fishery")) %>%
+  mutate(scrooge_rec_performance = pmap(list(
+    observed = observed,
+    predicted = processed_scrooge
+  ), judge_performance, observed_variable = rec_dev, predicted_variable = "rec_dev_t")) %>%
+  mutate(scrooge_performance = pmap(list(
+    observed = observed,
+    predicted = processed_scrooge
+  ), judge_performance)) %>%
+  mutate(rmse = map_dbl(scrooge_performance, ~.x$comparison_summary$rmse),
+         bias =  map_dbl(scrooge_performance, ~.x$comparison_summary$bias)) %>%
+  arrange(rmse)
+
+cfo$scrooge_performance[[1]]$comparison_plot
+
+cfo$scrooge_rec_performance[[1]]$comparison_plot
+
+
 if (fit_models == T){
 
   sfs <- safely(fit_scrooge)
@@ -171,13 +305,24 @@ if (fit_models == T){
 
 # process fits
 
-fisheries_sandbox2 <- fisheries_sandbox %>%
+fisheries_sandbox <- fisheries_sandbox %>%
+  mutate(scrooge_error = map(fisheries_sandbox$scrooge_fit,"error")) %>%
+  mutate(scrooge_fit = map(fisheries_sandbox$scrooge_fit,"result")) %>%
+  filter(map_lgl(scrooge_error, is.null)) %>%
   mutate(processed_scrooge = map(scrooge_fit, process_scrooge)) %>%
   mutate(observed = map(prepped_fishery, "simed_fishery")) %>%
   mutate(scrooge_performance = pmap(list(
     observed = observed,
     predicted = processed_scrooge
-  ), judge_performance))
+  ), judge_performance)) %>%
+  mutate(rmse = map_dbl(scrooge_performance, ~.x$comparison_summary$rmse),
+         bias =  map_dbl(scrooge_performance, ~.x$comparison_summary$bias)) %>%
+  arange(rmse)
+
+
+huh <- fisheries_sandbox2 %>%
+  mutate(rmse = map_dbl(scrooge_performance, ~.x$comparison_summary$rmse)) %>%
+  arrange(rmse)
 
 
 # run diagnostics ---------------------------------------------------------

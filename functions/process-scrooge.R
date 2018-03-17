@@ -1,4 +1,4 @@
-process_scrooge <- function(fit, to_tidy = c("f_t", "n_tl", "c_t")) {
+process_scrooge <- function(fit, to_tidy = c("f_t", "n_tl", "c_t","rec_dev_t")) {
   fits <- rstan::extract(fit)
 
   extract_thing <- function(thing, fits) {

@@ -916,7 +916,7 @@ scrooge_data <- list(
 set.seed(42)
 test_scrooge <-
   rstan::stan(
-  file = here::here("scripts", "scrooge.stan"),
+  file = here::here("scripts", "old-scrooge.stan"),
   data = scrooge_data,
   chains = 1,
   refresh = 10,

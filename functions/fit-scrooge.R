@@ -17,4 +17,17 @@ fit_scrooge <- function(data, scrooge_file = "scrooge.stan",
       adapt_delta = adapt_delta
     ))
 
+  # clean up old DLLS per https://github.com/stan-dev/rstan/issues/448
+  loaded_dlls = getLoadedDLLs()
+  loaded_dlls = loaded_dlls[str_detect(names(loaded_dlls), '^file')]
+  if (length(loaded_dlls) > 10) {
+    for (dll in head(loaded_dlls, -10)) {
+      # message("Unloading DLL ", dll[['name']], ": ", dll[['path']])
+      dyn.unload(dll[['path']])
+    }
+  }
+  # message("DLL Count = ", length(getLoadedDLLs()), ": [", str_c(names(loaded_dlls), collapse = ","), "]")
+
+  return(fit)
+
 }
