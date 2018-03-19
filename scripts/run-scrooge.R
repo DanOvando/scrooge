@@ -15,8 +15,9 @@ library(spasm) # personal fishery simulator, will post public github link
 library(patchwork)
 library(hrbrthemes)
 library(tidyverse)
-rstan::rstan_options(auto_write = FALSE)
-
+library(extrafont)
+rstan::rstan_options(auto_write = TRUE)
+extrafont::loadfonts()
 functions <- list.files(here::here("functions"))
 
 walk(functions, ~here::here("functions",.x) %>% source()) # load local functions
@@ -37,9 +38,9 @@ theme_set(scrooge_theme)
 
 # run options -------------------------------------------------------------
 
-sim_fisheries <- T
+sim_fisheries <- F
 
-fit_models <- T
+fit_models <- F
 
 
 # load data ---------------------------------------------------------------
@@ -81,7 +82,7 @@ if (sim_fisheries == T)
 
 fisheries_sandbox <-
   purrr::cross_df(list(
-    sci_name = c("Atractoscion nobilis"),# "Sebastes mystinus"),
+    sci_name = c("Atractoscion nobilis", "Sebastes mystinus"),
     fleet_model = c(
       "constant-catch",
       "constant-effort",
@@ -159,17 +160,17 @@ pfo <- fisheries_sandbox %>%
   filter(fleet_model == "open-access", sigma_r == 0, sigma_effort == 0, price_cv == 0, cost_cv == 0) %>%
   slice(1) %>%
   mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery)) %>%
-  mutate(scrooge_fit = map(prepped_fishery, ~fit_scrooge(data = .x$scrooge_data, iter = 10000, warmup = 4000)))
+  mutate(scrooge_fit = map(prepped_fishery, ~fit_scrooge(data = .x$scrooge_data, iter = 4000, warmup = 2000)))
 
-pfo$summary_plot[[1]]
+# pfo$summary_plot[[1]]
 
-pfo$prepped_fishery[[1]]$length_comps %>%
-  gather(age, numbers, -year) %>%
-  mutate(age = as.numeric(age)) %>%
-  group_by(year) %>%
-  summarise(ncaught = sum(numbers)) %>%
-  ggplot(aes(year, ncaught)) +
-  geom_point()
+# pfo$prepped_fishery[[1]]$length_comps %>%
+#   gather(age, numbers, -year) %>%
+#   mutate(age = as.numeric(age)) %>%
+#   group_by(year) %>%
+#   summarise(ncaught = sum(numbers)) %>%
+#   ggplot(aes(year, ncaught)) +
+#   geom_point()
 
 pfo <- pfo %>%
   mutate(processed_scrooge = map(scrooge_fit, process_scrooge)) %>%
@@ -182,7 +183,7 @@ pfo <- pfo %>%
          bias =  map_dbl(scrooge_performance, ~.x$comparison_summary$bias)) %>%
   arrange(rmse)
 
-pfo$scrooge_performance[[1]]$comparison_plot
+# pfo$scrooge_performance[[1]]$comparison_plot
 
 # variable open access
 #
@@ -205,15 +206,15 @@ vfo <- fisheries_sandbox %>%
     )
   ))
 
-vfo$summary_plot[[1]]
+# vfo$summary_plot[[1]]
 
-vfo$prepped_fishery[[1]]$length_comps %>%
-  gather(age, numbers, -year) %>%
-  mutate(age = as.numeric(age)) %>%
-  group_by(year) %>%
-  summarise(ncaught = sum(numbers)) %>%
-  ggplot(aes(year, ncaught)) +
-  geom_point()
+# vfo$prepped_fishery[[1]]$length_comps %>%
+#   gather(age, numbers, -year) %>%
+#   mutate(age = as.numeric(age)) %>%
+#   group_by(year) %>%
+#   summarise(ncaught = sum(numbers)) %>%
+#   ggplot(aes(year, ncaught)) +
+#   geom_point()
 
 vfo <- vfo %>%
   mutate(processed_scrooge = map(scrooge_fit, process_scrooge)) %>%
@@ -230,7 +231,7 @@ vfo <- vfo %>%
          bias =  map_dbl(scrooge_performance, ~.x$comparison_summary$bias)) %>%
   arrange(rmse)
 
-vfo$scrooge_performance[[1]]$comparison_plot
+# vfo$scrooge_performance[[1]]$comparison_plot
 
 
 # constant and medium f
@@ -255,15 +256,15 @@ cfo <- fisheries_sandbox %>%
     )
   ))
 
-cfo$summary_plot[[1]]
+# cfo$summary_plot[[1]]
 
-cfo$prepped_fishery[[1]]$length_comps %>%
-  gather(age, numbers, -year) %>%
-  mutate(age = as.numeric(age)) %>%
-  group_by(year) %>%
-  summarise(ncaught = sum(numbers)) %>%
-  ggplot(aes(year, ncaught)) +
-  geom_point()
+# cfo$prepped_fishery[[1]]$length_comps %>%
+#   gather(age, numbers, -year) %>%
+#   mutate(age = as.numeric(age)) %>%
+#   group_by(year) %>%
+#   summarise(ncaught = sum(numbers)) %>%
+#   ggplot(aes(year, ncaught)) +
+#   geom_point()
 
 cfo <- cfo %>%
   mutate(processed_scrooge = map(scrooge_fit, process_scrooge)) %>%
@@ -279,11 +280,11 @@ cfo <- cfo %>%
   mutate(rmse = map_dbl(scrooge_performance, ~.x$comparison_summary$rmse),
          bias =  map_dbl(scrooge_performance, ~.x$comparison_summary$bias)) %>%
   arrange(rmse)
-
-cfo$scrooge_performance[[1]]$comparison_plot
-
-cfo$scrooge_rec_performance[[1]]$comparison_plot
-
+#
+# cfo$scrooge_performance[[1]]$comparison_plot
+#
+# cfo$scrooge_rec_performance[[1]]$comparison_plot
+#
 
 if (fit_models == T){
 
@@ -315,10 +316,17 @@ fisheries_sandbox <- fisheries_sandbox %>%
     observed = observed,
     predicted = processed_scrooge
   ), judge_performance)) %>%
+  mutate(scrooge_rec_performance = pmap(list(
+    observed = observed,
+    predicted = processed_scrooge
+  ), judge_performance, observed_variable = rec_dev, predicted_variable = "rec_dev_t")) %>%
   mutate(rmse = map_dbl(scrooge_performance, ~.x$comparison_summary$rmse),
          bias =  map_dbl(scrooge_performance, ~.x$comparison_summary$bias)) %>%
-  arange(rmse)
+  arrange(rmse)
 
+
+oa_check <- fisheries_sandbox %>%
+  filter(fleet_model == "open-access")
 
 huh <- fisheries_sandbox2 %>%
   mutate(rmse = map_dbl(scrooge_performance, ~.x$comparison_summary$rmse)) %>%
