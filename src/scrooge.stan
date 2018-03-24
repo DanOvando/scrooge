@@ -34,12 +34,11 @@ matrix[nt,2] q_t;
 
 real beta;
 
-real base_effort; // the base level of effort such that at base effort f ~ m
-
 real length_50_sel_guess;
 
 real delta_guess;
 
+real<lower  = 0> base_effort;
 // vector<lower = 0>[nt] f_t;
 
 //// biology ////
@@ -89,6 +88,9 @@ real<lower = 0> sigma_r; // standard deviation of recruitment deviates
 real<lower = 0> length_50_sel; // length at 50% selectivity
 
 real<lower = 0.001> sel_delta; // difference between length 50% selected and length 95% selected
+
+// real<lower = 1, upper = 4*(m/.001)> base_effort;
+
 
 } // close parameters block
 
@@ -147,7 +149,7 @@ transformed parameters{
   p_lbin_sampled = rep_matrix(0,nt, n_lbins);
 
   // profit_shock = rep_matrix(0, nt, 2);
-
+  // print("wtf")
   mean_selectivity_at_age = 1.0 ./ (1 + exp(-log(19) * ((mean_length_at_age - length_50_sel) / sel_delta))); // selectivity ogive at age
 
   total_effort_t = effort_t * base_effort; // convert effort into correct scale
@@ -296,7 +298,7 @@ generated quantities{
 int n_tl[nt, n_lbins];
 
 for (t in 1:nt){
-    n_tl[t, 1:n_lbins] = multinomial_rng(to_vector(p_lbin_sampled[t, 1:n_lbins]),100); // generate length comp samples
+    n_tl[t, 1:n_lbins] = multinomial_rng(to_vector(p_lbin_sampled[t, 1:n_lbins]),1000); // generate length comp samples
 }
 
 } // close generated quantities block

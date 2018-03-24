@@ -47,7 +47,10 @@ prepare_fishery <-
       q_cv = q_cv,
       q_ac = q_cv,
       fleet_model = fleet_model,
-      target_catch = fleet_params$target_catch
+      target_catch = fleet_params$target_catch,
+      cost = cost,
+      sigma_effort = sigma_effort,
+      length_50_sel = percnt_loo_selected * fish$linf
     )
     }
 
@@ -59,7 +62,10 @@ prepare_fishery <-
         q_cv = q_cv,
         q_ac = q_cv,
         fleet_model = fleet_model,
-        initial_effort = fleet_params$initial_effort
+        initial_effort = fleet_params$initial_effort,
+        cost = cost,
+        sigma_effort = sigma_effort,
+        length_50_sel = percnt_loo_selected * fish$linf
       )
     }
 
@@ -71,10 +77,13 @@ prepare_fishery <-
         q_cv = q_cv,
         q_ac = q_cv,
         fleet_model = fleet_model,
-        catches = fleet_params$catches
+        catches = fleet_params$catches,
+        cost = cost,
+        sigma_effort = sigma_effort,
+        length_50_sel = percnt_loo_selected * fish$linf
       )
 
-      fish$r0 <- max(fleet_params$catches) * 1000
+      fish$r0 <- max(fleet_params$catches) * 10
 
       sim_years <- burn_years + length(fleet$catches)
 
@@ -89,22 +98,26 @@ prepare_fishery <-
         q_ac = q_cv,
         fleet_model = fleet_model,
         theta = fleet_params$theta,
-        theta_tuner = fleet_params$theta_tuner
+        theta_tuner = fleet_params$theta_tuner,
+        cost = cost,
+        sigma_effort = sigma_effort,
+        length_50_sel = percnt_loo_selected * fish$linf,
+        initial_effort = fleet_params$initial_effort
       )
     }
 
-    fleet <-
-      spasm::update_fleet(
-        fleet = purrr::list_modify(
-          fleet,
-          cost = cost,
-          price = price,
-          sigma_effort = sigma_effort,
-          length_50_sel = percnt_loo_selected * fish$linf
-        ),
-        fish = fish
-      )
 
+    # fleet <-
+    #   spasm::update_fleet(
+    #     fleet = purrr::list_modify(
+    #       fleet,
+    #       cost = cost,
+    #       price = price,
+    #       sigma_effort = sigma_effort,
+    #       length_50_sel = percnt_loo_selected * fish$linf
+    #     ),
+    #     fish = fish
+    #   )
 
     sim <- spasm::sim_fishery(
       fish = fish,
