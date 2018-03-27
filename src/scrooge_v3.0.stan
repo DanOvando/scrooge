@@ -1,9 +1,10 @@
-/*scrooge_v1.0
+/*scrooge_v3.0
 
-non-centered recruitment, centered effort deviations
+effort prior is open-access dynamics
+
+non-centered recruitment and effort deviations
 
 */
-
 
 
 data{
@@ -46,7 +47,7 @@ real length_50_sel_guess;
 
 real delta_guess;
 
-real<lower  = 0> base_effort;
+// real<lower  = 0> base_effort;
 // vector<lower = 0>[nt] f_t;
 
 //// biology ////
@@ -85,7 +86,9 @@ transformed data{
 
 parameters{
 
-vector<lower = -5, upper = 3>[nt]  log_effort_t; //  base effort multiplier
+real <lower = 0, upper = 10> log_base_effort;
+
+vector<lower = -5, upper = 3>[nt]  uc_effort_t; //  base effort multiplier
 
 real<lower = -5, upper = 1> log_sigma_effort; // standard deviation of effort
 
@@ -97,6 +100,7 @@ real<lower = 0> length_50_sel; // length at 50% selectivity
 
 real<lower = 0.001> sel_delta; // difference between length 50% selected and length 95% selected
 
+real<lower = -15, upper = 1> log_p_response;
 // real<lower = 1, upper = 4*(m/.001)> base_effort;
 
 
@@ -114,7 +118,11 @@ transformed parameters{
 
   real sigma_effort;
 
-  vector[nt]  effort_t; //  base effort multiplier
+  real base_effort;
+
+  real p_response;
+
+  // vector[nt]  effort_t; //  base effort multiplier
 
   vector[nt]  rec_dev_t; //  base effort multiplier
 
@@ -151,13 +159,23 @@ transformed parameters{
 
   row_vector[n_ages] p_age_sampled;
 
+  // real approx_rmsy;
+  //
+  // row_vector[n_ages] approx_nmsy;
+  //
+  // real approx_msy;
+  //
+  // real approx_pmsy;
   // transform parameters
 
   sigma_r = exp(log_sigma_r);
 
   sigma_effort = exp(log_sigma_effort);
 
-  effort_t = exp(log_effort_t);
+  base_effort = exp(log_base_effort);
+
+  p_response = exp(log_p_response);
+  // total_effort_t = base_effort;
 
   rec_dev_t = sigma_r * uc_rec_dev_t;
 
@@ -178,9 +196,18 @@ transformed parameters{
   // print("wtf")
   mean_selectivity_at_age = 1.0 ./ (1 + exp(-log(19) * ((mean_length_at_age - length_50_sel) / sel_delta))); // selectivity ogive at age
 
-  total_effort_t = effort_t * base_effort; // convert effort into correct scale
+  // total_effort_t = effort_t * base_effort; // convert effort into correct scale
 
   ssb0 = sum((r0 * exp(-m * (ages - 1)))  .* mean_maturity_at_age .* mean_weight_at_age); // virgin ssb
+
+  // approx_rmsy = ((0.8 * r0 * h * 0.4 *ssb_temp) / (0.2 * ssb0 * (1 - h) + (h - 0.2) * ssb_temp * 0.4));
+  //
+  // approx_nmsy = approx_rmsy * exp(-2*m * (ages' - 1));
+  //
+  // approx_msy = sum(((m * mean_selectivity_at_age) ./ (m + m * mean_selectivity_at_age))' .* approx_nmsy .* (1 - exp(-(m + m * mean_selectivity_at_age)))' .* mean_weight_at_age'); // .* mean_weight_at_age';
+  //
+  // approx_pmsy = mean(price_t[1:nt,1]) * approx_msy - mean(cost_t[1:nt,1]) * (m / mean(q_t[1:nt,1])) ^ beta;
+
 
   temp_n_a = r0 * exp(-m * (ages' - 1)); // transpose to specify row format
 
@@ -192,7 +219,10 @@ transformed parameters{
 
   ssb_ta[1, 1:n_ages] = b_ta[1, 1:n_ages] .* mean_maturity_at_age'; // virgin ssb
 
-  f_t = total_effort_t .* q_t[1:nt,1];
+  total_effort_t[1] = base_effort;
+
+  f_t[1] = total_effort_t[1] .* q_t[1,1];
+
 
   // order of events spawn, grow and die, recruit
 
@@ -212,6 +242,7 @@ transformed parameters{
 
     ssb_temp =  sum(ssb_ta[t - 1, 1:n_ages]);
 
+
     n_ta[t,1] = ((0.8 * r0 * h *ssb_temp) / (0.2 * ssb0 * (1 - h) + (h - 0.2) * ssb_temp)) * temp_rec_dev; //calculate recruitment
 
     n_ta[t , 2:n_ages] = n_ta[t - 1, 1:(n_ages -1)] .* (exp(-(m + f_t[t - 1] * mean_selectivity_at_age[1:(n_ages - 1)])))'; // grow and die
@@ -228,6 +259,8 @@ transformed parameters{
 
    c_t[t - 1] = sum(c_ta[t-1, 1:n_ages]);
 
+  // print(c_t[t - 1])
+
   // run economic model
 
   profit_t[t - 1] = price_t[t - 1,1] * c_t[t - 1] - cost_t[t - 1,1] * total_effort_t[t - 1] ^ beta;
@@ -235,6 +268,10 @@ transformed parameters{
   sq_profit_t[t - 1] = price_t[t - 1,2] * c_t[t - 1] - cost_t[t - 1,2] * total_effort_t[t - 1] ^ beta;
 
   profit_shock_t[t - 1] = profit_t[t - 1] - sq_profit_t[t - 1];
+
+ total_effort_t[t] = (total_effort_t[t - 1] * exp(p_response * (profit_t[t - 1] / total_effort_t[t - 1]))) * exp(sigma_effort * uc_effort_t[t - 1]);
+
+  f_t[t] = total_effort_t[t] * q_t[t,1];
 
   // sample lengths
 
@@ -285,33 +322,34 @@ for (i in 1:(n_lcomps - 1)){
 
 //// effort prior ////
 
-if (economic_model == 0){
+// if (economic_model == 0){
+//
+//   economic_prior = rep_vector(0, nt);
+//
+// } else if(economic_model == 1){
+//
+//   economic_prior = profit_shock_t / (sd(profit_shock_t) + 1e-3);
+//
+// }
+//
+uc_effort_t ~ normal(0,1);
+//
+// for (t in 2:nt){
+//
+// uc_effort_t[t] ~ normal(economic_prior[t - 1], 1);
+//
+// } // close effort likelihood loop
 
-  economic_prior = rep_vector(0, nt);
+log_sigma_effort ~ normal(0,1);
 
-} else if(economic_model == 1){
-
-  economic_prior = profit_shock_t / (sd(profit_shock_t) + 1e-3);
-
-}
-
-log_effort_t[1] ~ normal(0,2);
-
-for (t in 2:nt){
-
-log_effort_t[t] ~ normal(log_effort_t[t - 1] + economic_prior[t - 1], sigma_effort);
-
-} // close effort likelihood loop
-
-log_sigma_effort ~ normal(0,0.2);
-
+log_base_effort ~ normal(log(m / .001), 1);
 //// recruitment prior ////
 
 uc_rec_dev_t ~ normal(0, 1);
 
 // sigma_r ~ normal(0.7, 0.2);
 
-log_sigma_r ~ normal(0, 0.2);
+log_sigma_r ~ normal(0, 1);
 
 //// selectivity likelihood ////
 

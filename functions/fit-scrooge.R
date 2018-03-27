@@ -1,4 +1,4 @@
-fit_scrooge <- function(data, scrooge_file = "scrooge.stan",
+fit_scrooge <- function(data, scrooge_file = "scrooge",
                         chains = 1, refresh = 25, cores = 1,
                         iter = 4000,
                         warmup = 2000,
@@ -8,9 +8,11 @@ fit_scrooge <- function(data, scrooge_file = "scrooge.stan",
   data <- purrr::list_modify(data,economic_model = economic_model)
   }
 
+inits <- map(1:chains,~list(log_base_effort = log((data$m / mean(data$q_t$value)) *  exp(rnorm(1,0,1)))))
+
   fit <-
     rstan::stan(
-      file = here::here("src", scrooge_file),
+      file = here::here("src", paste0(scrooge_file,".stan")),
       data = data,
       chains = chains,
       refresh = refresh,
@@ -18,7 +20,8 @@ fit_scrooge <- function(data, scrooge_file = "scrooge.stan",
       iter = iter,
       warmup = warmup,
       control = list(
-      adapt_delta = adapt_delta)
+      adapt_delta = adapt_delta),
+      init = inits
     )
 
 # init = list(list(effort_t = true_effort_devs$effort_devs)

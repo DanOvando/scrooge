@@ -11,7 +11,7 @@ prepare_fishery <-
            q_cv = 0,
            q_ac = 0,
            time_step = 1,
-           price = 2,
+           price = 1,
            initial_effort = 1000,
            cost = 1,
            percnt_loo_selected = 0.5,
@@ -83,9 +83,9 @@ prepare_fishery <-
         length_50_sel = percnt_loo_selected * fish$linf
       )
 
-      fish$r0 <- max(fleet_params$catches) * 10
+      fish$r0 <- max(fleet_params$catches)
 
-      sim_years <- burn_years + length(fleet$catches)
+      sim_years <- length(fleet$catches)
 
     }
 
@@ -105,7 +105,6 @@ prepare_fishery <-
         initial_effort = fleet_params$initial_effort
       )
     }
-
 
     # fleet <-
     #   spasm::update_fleet(
@@ -200,7 +199,7 @@ prepare_fishery <-
       cost_t = cost_t %>% select(value, lag_value),
       q_t = q_t %>% select(value, lag_value),
       beta = 1.3,
-      base_effort = fish$m / mean(q_t$value),
+      # base_effort = fish$m / mean(q_t$value),
       length_50_sel_guess = fish$linf / 2,
       delta_guess = 2,
       n_lcomps = nrow(length_comps),

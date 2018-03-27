@@ -45,7 +45,7 @@ sim_fisheries <- T
 
 fit_models <- F
 
-run_tests <- F
+run_tests <- T
 
 # load data ---------------------------------------------------------------
 
@@ -90,19 +90,19 @@ if (sim_fisheries == T)
   fisheries_sandbox <-
     purrr::cross_df(
       list(
-        sci_name = c("Atractoscion nobilis", "Sebastes mystinus"),
+        sci_name = c("Atractoscion nobilis"), #, "Sebastes mystinus"),
         fleet_model = c(
-          "constant-catch",
-          "constant-effort",
-          # "supplied-catch"#,
+          # "constant-catch",
+          # "constant-effort",
+          # "supplied-catch",
           "open-access"
         ),
-        sigma_r = c(0, 0.7),
-        sigma_effort = c(0, 0.7),
-        price_cv = c(0, 0.2),
-        cost_cv = c(0, 0.2),
-        price_ac = 0.25,
-        cost_ac = 0.25
+        sigma_r = c(0, 0.5),
+        sigma_effort = c(0, 0.2),
+        price_cv = c(0, 2),
+        cost_cv = c(0, 2),
+        price_ac = 0,
+        cost_ac = 0
       )
     )
 
@@ -118,7 +118,7 @@ if (sim_fisheries == T)
       list(target_catch = 10000),
       list(initial_effort = 200),
       list(catches = cdfw_catches$catch[cdfw_catches$sci_name == "semicossyphus pulcher"]),
-      list(theta = 0.1, theta_tuner = 0.1, initial_effort = 200)
+      list(theta = 0.1, theta_tuner = 0.25, initial_effort = 400)
     )
   )
 
@@ -138,7 +138,9 @@ if (sim_fisheries == T)
         price_ac = price_ac,
         cost_ac = cost_ac
       ),
-      prepare_fishery
+      prepare_fishery,
+      sim_years = 20,
+      price = 0.1
     ))
 
   save(file = here::here("results", run_name, "fisheries_sandbox.Rdata"),
@@ -185,10 +187,11 @@ if (run_tests == T) {
       prepped_fishery,
       ~ fit_scrooge(
         data = .x$scrooge_data,
-        iter = 2000,
-        warmup = 1000,
+        iter = 4000,
+        warmup = 2000,
         adapt_delta = 0.8,
-        economic_model = 1
+        economic_model = 1,
+        scrooge_file = "scrooge_v3.0"
       )
     ))
 
@@ -225,9 +228,10 @@ if (run_tests == T) {
     ) %>%
     arrange(rmse)
 
-  pfo$scrooge_performance[[1]]$comparison_plot
+  pfo$scrooge_performance[[1]]$comparison_plot +
+    lims(y = c(0,2))
 
-  pfo$scrooge_performance[[1]]$com
+  pfo$scrooge_rec_performance[[1]]$comparison_plot
 
 
   # variable open access
@@ -236,9 +240,11 @@ if (run_tests == T) {
     filter(
       fleet_model == "open-access",
       sigma_r == max(sigma_r),
-      sigma_effort == max(sigma_effort),
-      price_cv == 0,
-      cost_cv == 0
+      sigma_effort == min(sigma_effort),
+      price_cv == max(price_cv),
+      price_ac == max(price_ac),
+      cost_ac == max(cost_ac),
+      cost_cv == max(cost_cv)
     ) %>%
     slice(1) %>%
     mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery)) %>%
@@ -246,8 +252,9 @@ if (run_tests == T) {
       prepped_fishery,
       ~ fit_scrooge(
         data = .x$scrooge_data,
-        iter = 4000,
-        warmup = 2000
+        iter = 8000,
+        warmup = 4000,
+        scrooge_file = "scrooge_v2.0"
       )
     ))
 
@@ -285,6 +292,9 @@ if (run_tests == T) {
     arrange(rmse)
 
     vfo$scrooge_rec_performance[[1]]$comparison_plot
+
+    vfo$scrooge_performance[[1]]$comparison_plot +
+      lims(y = c(0,25))
 
 
   # constant and medium f
