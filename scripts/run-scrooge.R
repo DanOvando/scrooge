@@ -47,9 +47,19 @@ fit_models <- F
 
 run_tests <- T
 
+in_clouds <-  F
+
 # load data ---------------------------------------------------------------
 
-cdfw_data <- read_csv(file = file.path('data', 'cfdw-catches.csv'))
+if (in_clouds == F){
+
+  data_dir <- "data"
+} else{
+
+  data_dir <- "data/google-bucket"
+}
+
+cdfw_data <- read_csv(file = file.path(data_dir, 'cfdw-catches.csv'))
 
 
 has_timeseries <- cdfw_data %>%
@@ -140,7 +150,7 @@ if (sim_fisheries == T)
       ),
       prepare_fishery,
       sim_years = 20,
-      price = 0.1
+      price = 0.15
     ))
 
   save(file = here::here("results", run_name, "fisheries_sandbox.Rdata"),
@@ -294,7 +304,7 @@ if (run_tests == T) {
     vfo$scrooge_rec_performance[[1]]$comparison_plot
 
     vfo$scrooge_performance[[1]]$comparison_plot +
-      lims(y = c(0,25))
+      lims(y = c(0,5))
 
 
   # constant and medium f
