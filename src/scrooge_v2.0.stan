@@ -316,7 +316,7 @@ uc_rec_dev_t ~ normal(0, 1);
 
 // sigma_r ~ normal(0.7, 0.2);
 
-log_sigma_r ~ normal(0, 0.2);
+log_sigma_r ~ normal(0, 0.3);
 
 //// selectivity likelihood ////
 

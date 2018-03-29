@@ -47,6 +47,8 @@ real length_50_sel_guess;
 
 real delta_guess;
 
+// real max_change;
+
 // real<lower  = 0> base_effort;
 // vector<lower = 0>[nt] f_t;
 
@@ -152,6 +154,7 @@ transformed parameters{
 
   vector[n_ages] mean_selectivity_at_age; // mean selectivity at age
 
+  vector[nt] effort_expansion;
 
   // vector[nt] delta_f; // expected change in f from profit shock
 
@@ -269,6 +272,11 @@ transformed parameters{
 
   profit_shock_t[t - 1] = profit_t[t - 1] - sq_profit_t[t - 1];
 
+// print(exp(p_response * (profit_t[t - 1] / total_effort_t[t - 1])))
+
+
+effort_expansion[t - 1]  = fabs(exp(p_response * (profit_t[t - 1] / total_effort_t[t - 1])) - 1);
+
  total_effort_t[t] = (total_effort_t[t - 1] * exp(p_response * (profit_t[t - 1] / total_effort_t[t - 1]))) * exp(sigma_effort * uc_effort_t[t - 1]);
 
   f_t[t] = total_effort_t[t] * q_t[t,1];
@@ -299,6 +307,9 @@ transformed parameters{
   p_age_sampled = cn_ta[nt, 1:n_ages] / sum(cn_ta[nt, 1:n_ages]);
 
   p_lbin_sampled[nt, 1:n_lbins] = p_age_sampled * length_at_age_key / sum(p_age_sampled * length_at_age_key);
+
+
+  effort_expansion[nt]  = fabs(exp(p_response * (profit_t[nt] / total_effort_t[nt])) - 1);
 
 }
 
@@ -340,16 +351,19 @@ uc_effort_t ~ normal(0,1);
 //
 // } // close effort likelihood loop
 
-log_sigma_effort ~ normal(0,1);
+log_sigma_effort ~ normal(0,0.3);
 
 log_base_effort ~ normal(log(m / .001), 1);
+
+max(effort_expansion) ~ normal(.25, .1);
+
 //// recruitment prior ////
 
 uc_rec_dev_t ~ normal(0, 1);
 
 // sigma_r ~ normal(0.7, 0.2);
 
-log_sigma_r ~ normal(0, 1);
+log_sigma_r ~ normal(0, 0.3);
 
 //// selectivity likelihood ////
 

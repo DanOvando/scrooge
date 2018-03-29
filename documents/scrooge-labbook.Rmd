@@ -2240,9 +2240,9 @@ from lime::LIME_example.R
 ```{r}
 library(LIME)
 
-fish <- v3$prepped_fishery[[1]]$fish
+fish <- vfo$prepped_fishery[[1]]$fish
 
-fleet <- v3$prepped_fishery[[1]]$fleet
+fleet <- vfo$prepped_fishery[[1]]$fleet
 
 scrooge_lh <- create_lh_list(vbk= fish$vbk,
 					 linf= fish$linf,
@@ -2266,10 +2266,21 @@ scrooge_lh <- create_lh_list(vbk= fish$vbk,
 					 R0= fish$r0,
 					 qcoef=1e-5,
 					 start_ages=0,
-					 rho=0.43,
+					 rho=0,
 					 nseasons=1)
 
-temp_LF_matrix <- v3$prepped_fishery[[1]]$length_comps
+true <- generate_data(modpath=NULL,
+					  itervec=1,
+					  Fdynamics="Endogenous",
+					  Rdynamics="BH",
+					  lh=scrooge_lh,
+					  Nyears=20,
+					  Nyears_comp=20,
+					  comp_sample=200,
+					  init_depl=0.5,
+					  seed=123)
+
+temp_LF_matrix <- vfo$prepped_fishery[[1]]$length_comps
 
 
 LF_matrix <- temp_LF_matrix %>% 
@@ -2324,7 +2335,7 @@ plot_LCfits(LFlist=list("LF"=LF_matrix),
 #             plot=c("Fish","Rec","SPR","ML","SB","Selex"),
 #             set_ylim=list("Fish" = c(0,1), "SPR" = c(0,1)))
 
-true_f <- v3$prepped_fishery[[1]]$simed_fishery %>% 
+true_f <- vfo$prepped_fishery[[1]]$simed_fishery %>% 
   group_by(year) %>% 
   summarise(f = unique(f))
 
@@ -2339,7 +2350,7 @@ predicted_f <- data_frame(f = Report$F_y)
 true_f %>% 
   ggplot() +
   geom_point(aes(year,f,color = "True")) + 
-  geom_line(aes(year, predicted_f,color = "Predicted"))
+  geom_line(aes(year, (predicted_f),color = "Predicted"))
 
 temp_LF_matrix %>% 
   gather(length, numbers, -year) %>% 
@@ -2348,54 +2359,10 @@ temp_LF_matrix %>%
   geom_density(stat = "identity", alpha = 0.5)
 ```
 
-Innnnteresting that doesn't work well at all. Let's try and flip it around and use LIME to predict F from LIME
+Innnnteresting that doesn't work well at all. Let's try and flip it around and use LIME to predict F from SCROOGE
 
 
 ```{r}
-
-
-lh <- create_lh_list(vbk=0.21,
-					 linf=65,
-					 t0=-0.01,
-					 lwa=0.0245,
-					 lwb=2.79,
-					 S50=20,
-					 S95=26,
-					 selex_input="length",
-					 selex_type=c("logistic"),
-					 M50=34,
-					 M95=NULL,
-					 maturity_input="length",
-					 M=0.27,
-					 binwidth=1,
-					 CVlen=0.1,
-					 SigmaR=0.7,
-					 SigmaF=0.1,
-					 SigmaC=0.2,
-					 SigmaI=0.2,
-					 R0=1,
-					 qcoef=1e-5,
-					 start_ages=0,
-					 rho=0.43,
-					 nseasons=1)
-
-true <- generate_data(modpath=NULL,
-					  itervec=1,
-					  Fdynamics="Endogenous",
-					  Rdynamics="Constant",
-					  lh=lh,
-					  Nyears=20,
-					  Nyears_comp=20,
-					  comp_sample=200,
-					  init_depl=0.5,
-					  seed=123)
-
-plot(true$F_t)
-
-LF_matrix <- true$LF
-
-## example with length data only
-data_LF <- list("years"=1:true$Nyears, "LF"=LF_matrix)
 
 
 lh <- create_lh_list(vbk=0.21,
@@ -2414,19 +2381,19 @@ lh <- create_lh_list(vbk=0.21,
                      binwidth=1,
                      CVlen=0.1,
                      SigmaR=0.7,
-                     SigmaF=0.1,
+                     SigmaF=0.25,
                      SigmaC=0.2,
                      SigmaI=0.2,
                      R0=1,
                      qcoef=1e-5,
                      start_ages=0,
-                     rho=0.43,
+                     rho=0,
                      nseasons=1)
 
 true <- generate_data(modpath=NULL,
 					  itervec=1,
 					  Fdynamics="Endogenous",
-					  Rdynamics="Constant",
+					  Rdynamics="BH",
 					  lh=lh,
 					  Nyears=20,
 					  Nyears_comp=20,
@@ -2435,6 +2402,19 @@ true <- generate_data(modpath=NULL,
 					  seed=123)
 
 LF_matrix <- true$LF
+
+data_LF <- list("years"=1:true$Nyears, "LF"=LF_matrix)
+
+
+start <- Sys.time()
+res <- run_LIME(modpath=NULL,
+				lh=lh,
+				input_data=data_LF,
+				est_sigma=c("log_sigma_R"),
+				data_avail="LC",
+				newtonsteps=3)
+end <- Sys.time() - start
+
 
 fish <-
   create_fish(
@@ -2514,7 +2494,6 @@ scrooge_data <- list(
       cost_t = cost_t %>% select(value, lag_value),
       q_t = q_t %>% select(value, lag_value),
       beta = 1.3,
-      base_effort = fish$m / mean(q_t$value),
       length_50_sel_guess = fish$linf / 2,
       delta_guess = 2,
       n_lcomps = nrow(length_comps),
@@ -2536,13 +2515,13 @@ scrooge_data <- list(
 
   fit <-
     rstan::stan(
-      file = here::here("src", "scrooge_v2.0.stan"),
+      file = here::here("src", "scrooge_v3.0.stan"),
       data = scrooge_data,
       chains = 1,
       refresh = 25,
       cores = 1,
-      iter = 2000,
-      warmup = 1000,
+      iter = 4000,
+      warmup = 2000,
       control = list(
       adapt_delta = 0.8
     ))
@@ -2720,3 +2699,32 @@ which one is in the drivers seat: effort or recruitment. So, add in to your simu
 estimate rho (autocorrelation in recruitment)
 
 address szuwalski & thorson 2017
+
+# What's the end game with scrooge?
+
+So, you know you need to run lots of versions, but it's going to be an expensive run so let's think about it carefully. 
+
+Before hitting massive go I'd like the model to be a bit better at dealing with both recruitment and economic noise. 
+
+The most obvious solution to that is this idea of a prior on the ratio of the recruitment to effort variation. It makes intuitive sense on some levels, but would depend a lot on how sensitive it is to model specification. 
+
+Talk with jim tomorrow about the idea and see where he would push back, and how far you can push this thing. The goal should be a full run setup for the weekend, at the very least s
+
+# culprits of spasm and lime divergence
+
+- Recruitment variation
+
+- initial depletion
+
+- problem with length-at-age
+  - Its not that, you generate identical length at age keys, unless you're sampling from them incorrectly?
+
+- burn-in problems
+
+# solving the fleet expansion
+
+The only reasonable thing is a prior on the % change in effort in any one year. So, I want to put a prior on that, but then tune theta to achieve that. Can you calculate the mean/max effort change and use that somehow?
+
+You need some mechanism for translating that change into a prior 
+
+here's an idea. store the profit driven change in effort. Calculate max (absolute change - 1). Say that that comes from a distribution with mean mean_max_change and some low sigma. 

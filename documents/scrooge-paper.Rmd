@@ -2,16 +2,35 @@
 title: "scrooge-paper"
 author: "Dan Ovando"
 date: "3/7/2018"
-output: html_document
+output: bookdown::html_document2
+linkcolor: blue
+bibliography: dissertation.bib
+biblio-style: apalike
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Literature Review
 
-  - @Thorson2013a looks at the ability of effort dynamics to augment catch data for SSCOM. So similar in some sense, but it about actual effort data, and just catch data, not priors. But, does have some interesting thoughts on the functional form to use, i.e. an interpretable open access model 
+
+# Introduction
+
+
+## General fisheries stuff
+
+
+Effective fisheries management requires that managers and stakeholders have some ability to estimate and react to the abundance of fish in the ocean. The history of fisheries science is largely concerned with developing and improving our ability to accomplish this difficult task, starting from early models of growth overfishing [citation] and leading up to multi-species bio-geo-economic models[e.g. citation some mice model].  While the field has made dramatic advances in our ability to assess fisheries, by and large we have found two solutions to this problem: Fit highly complex integrated statistical models to diverse data streams [cite fancy stock assessment technique], or utilize increasing levels of statistical wizardry to try and squeeze more information out of limited data [what has lately been termed Data Limited Stock Assessments, or DLAs; cite]. The explosion of DLAs has been both promising and concerning. The majority of fisheries in the world lack the resources for fully integrated stock assessments, and so depend on this world of "data limited stock assessment". While there has been tremendous growth in this field, nearly all DLAs rely on the same streams of information that would have been available to a fisheries scientist in the 1800s: lengths [cite], captures [cite], and catch per unit effort[cite].
+
+## DLAs
+
+what they are, how do they usually work
+
+@Dowling2014, @Dowling2015, @Dowling2016, @Carruthers2014, and @Prince2003
+
+## Why integrate economic data?
+
+[@Gordon1954; @Szuwalski; @Thorson2013a]
 
   - Neilsen 2017 (@Nielsen2017) is that lit review of coupled ecological-economic models. Ah right, these are all MSE style models though, not assessment modules. So, a good reference for ways to model effort dynamics, but not redundant on the effort dynamics. 
 
@@ -29,7 +48,113 @@ knitr::opts_chunk$set(echo = TRUE)
 
 - @Hoff2008
 
+general intro to economic dynamics
 
-# Introduction
+availability of economic data
 
-Effective fisheries management requires that managers and stakeholders have some ability to estimate and react to the abundance of fish in the ocean. The history of fisheries science is largely concerned with developing and improving our ability to accomplish this difficult task, starting from early models of growth overfishing [citation] and leading up to multi-species bio-geo-economic models[e.g. citation some mice model].  While the field has made dramatic advances in our ability to assess fisheries, by and large we have found two solutions to this problem: Fit highly complex integrated statistical models to diverse data streams [cite fancy stock assessment technique], or utilize increasing levels of statistical wizardry to try and squeeze more information out of limited data [what has lately been termed Data Limited Stock Assessments, or DLAs; cite]. The explosion of DLAs has been both promising and concerning. The majority of fisheries in the world lack the resources for fully integrated stock assessments, and so depend on this world of "data limited stock assessment". While there has been tremendous growth in this field, nearly all DLAs rely on the same streams of information that would have been available to a fisheries scientist in the 1800s: lengths [cite], captures [cite], and catch per unit effort[cite].
+separation of recruitment from F
+
+## Why Bayes?
+
+A general argument for informative priors in data limited assessment
+
+statistical rethinking, 
+
+@McElreath2016
+
+@Hobbs2015
+
+@Thorson2017a
+
+@Jiao2011
+
+@Monnahan2016
+
+@Karnauskas2011
+
+@Myers2002
+
+@McAllister1998
+
+@Punt1997 (IMPORTANT TO INCLUDE)
+
+## Research statement
+
+This paper explores the ability of informative Bayesian priors built off of economic histories to improve data-limited stock assessment. 
+
+# Methods
+
+## Overview
+
+Utilize SPASM to simulate true states of the world
+
+Fit alternative models
+
+scrooge-lite
+
+scrooge
+
+LIME
+
+LBSPR
+
+compare fit and bias
+
+## SPASM
+
+explanation of the model itself @Ovando2016, age structured model, sampling length comps, fleet models, error
+
+## Other assessments
+
+Explanation of 
+
+@Rudd2017
+
+@Hordyk2014
+
+## SCROOGE
+
+concept, likelihood, options, etc. 
+
+economic shock explanation and illustration
+
+# Results
+
+## Case Studies
+
+all with the same fishus idealus 
+
+Compare assessments under
+
+no recruitment, constant f, equilibrium
+
+stochastic, environmental, and structural economic noise
+
+stochastic, environmental, and non-structural economic noise (pull from @Szuwalski)
+
+
+## Broader performance stats
+
+PCA/regression/machine learning style exploration of what drives RMSE/BIAS/whatever it is. 
+
+
+## Application to PISCO data
+
+show assessment results for PISCO data
+
+# Discussion
+
+Why is this the most groundbreaking thing ever
+
+Highlight some commonly available economic data for places
+
+Discuss in context of channel islands: what does predictive model say should be performance under those circumstances, relative to other assessment methods
+
+recommend ensemble approach 
+
+tease next steps, economic only model other kinds of models, etc. 
+
+# Works Cited
+
+
+

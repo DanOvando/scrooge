@@ -41,7 +41,7 @@ theme_set(scrooge_theme)
 
 # run options -------------------------------------------------------------
 
-sim_fisheries <- T
+sim_fisheries <- F
 
 fit_models <- F
 
@@ -100,17 +100,17 @@ if (sim_fisheries == T)
   fisheries_sandbox <-
     purrr::cross_df(
       list(
-        sci_name = c("Atractoscion nobilis"), #, "Sebastes mystinus"),
+        sci_name = c("Atractoscion nobilis"), # "Scomber japonicus"),
         fleet_model = c(
-          # "constant-catch",
-          # "constant-effort",
-          # "supplied-catch",
+          "constant-catch",
+          "constant-effort",
+          "supplied-catch",
           "open-access"
         ),
-        sigma_r = c(0, 0.5),
-        sigma_effort = c(0, 0.2),
-        price_cv = c(0, 2),
-        cost_cv = c(0, 2),
+        sigma_r = c(0,0.1),
+        sigma_effort = c(0, 0.1),
+        price_cv = c(0, 0.5),
+        cost_cv = c(0, 0.5),
         price_ac = 0,
         cost_ac = 0
       )
@@ -150,7 +150,8 @@ if (sim_fisheries == T)
       ),
       prepare_fishery,
       sim_years = 20,
-      price = 0.15
+      burn_years = 50,
+      price = 0.5
     ))
 
   save(file = here::here("results", run_name, "fisheries_sandbox.Rdata"),
@@ -264,7 +265,8 @@ if (run_tests == T) {
         data = .x$scrooge_data,
         iter = 8000,
         warmup = 4000,
-        scrooge_file = "scrooge_v2.0"
+        scrooge_file = "scrooge_v3.0",
+        adapt_delta = 0.8
       )
     ))
 
@@ -304,7 +306,7 @@ if (run_tests == T) {
     vfo$scrooge_rec_performance[[1]]$comparison_plot
 
     vfo$scrooge_performance[[1]]$comparison_plot +
-      lims(y = c(0,5))
+      lims(y = c(0,1))
 
 
   # constant and medium f
