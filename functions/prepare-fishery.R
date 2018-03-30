@@ -11,10 +11,10 @@ prepare_fishery <-
            q_cv = 0,
            q_ac = 0,
            time_step = 1,
-           price = 2,
+           price = 1,
            initial_effort = 1000,
            cost = 1,
-           percnt_loo_selected = 0.5,
+           percnt_loo_selected = 0.25,
            sim_years = 15,
            burn_years = 10,
            linf_buffer = 1.5,
@@ -47,7 +47,10 @@ prepare_fishery <-
       q_cv = q_cv,
       q_ac = q_cv,
       fleet_model = fleet_model,
-      target_catch = fleet_params$target_catch
+      target_catch = fleet_params$target_catch,
+      cost = cost,
+      sigma_effort = sigma_effort,
+      length_50_sel = percnt_loo_selected * fish$linf
     )
     }
 
@@ -59,7 +62,10 @@ prepare_fishery <-
         q_cv = q_cv,
         q_ac = q_cv,
         fleet_model = fleet_model,
-        initial_effort = fleet_params$initial_effort
+        initial_effort = fleet_params$initial_effort,
+        cost = cost,
+        sigma_effort = sigma_effort,
+        length_50_sel = percnt_loo_selected * fish$linf
       )
     }
 
@@ -71,12 +77,15 @@ prepare_fishery <-
         q_cv = q_cv,
         q_ac = q_cv,
         fleet_model = fleet_model,
-        catches = fleet_params$catches
+        catches = fleet_params$catches,
+        cost = cost,
+        sigma_effort = sigma_effort,
+        length_50_sel = percnt_loo_selected * fish$linf
       )
 
-      fish$r0 <- max(fleet_params$catches) * 1000
+      fish$r0 <- max(fleet_params$catches)
 
-      sim_years <- burn_years + length(fleet$catches)
+      sim_years <- length(fleet$catches)
 
     }
 
@@ -89,22 +98,25 @@ prepare_fishery <-
         q_ac = q_cv,
         fleet_model = fleet_model,
         theta = fleet_params$theta,
-        theta_tuner = fleet_params$theta_tuner
+        theta_tuner = fleet_params$theta_tuner,
+        cost = cost,
+        sigma_effort = sigma_effort,
+        length_50_sel = percnt_loo_selected * fish$linf,
+        initial_effort = fleet_params$initial_effort
       )
     }
 
-    fleet <-
-      spasm::update_fleet(
-        fleet = purrr::list_modify(
-          fleet,
-          cost = cost,
-          price = price,
-          sigma_effort = sigma_effort,
-          length_50_sel = percnt_loo_selected * fish$linf
-        ),
-        fish = fish
-      )
-
+    # fleet <-
+    #   spasm::update_fleet(
+    #     fleet = purrr::list_modify(
+    #       fleet,
+    #       cost = cost,
+    #       price = price,
+    #       sigma_effort = sigma_effort,
+    #       length_50_sel = percnt_loo_selected * fish$linf
+    #     ),
+    #     fish = fish
+    #   )
 
     sim <- spasm::sim_fishery(
       fish = fish,
@@ -187,7 +199,7 @@ prepare_fishery <-
       cost_t = cost_t %>% select(value, lag_value),
       q_t = q_t %>% select(value, lag_value),
       beta = 1.3,
-      base_effort = fish$m / mean(q_t$value),
+      # base_effort = fish$m / mean(q_t$value),
       length_50_sel_guess = fish$linf / 2,
       delta_guess = 2,
       n_lcomps = nrow(length_comps),

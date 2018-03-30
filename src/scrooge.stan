@@ -1,3 +1,11 @@
+/*scrooge_v1.0
+
+non-centered recruitment, centered effort deviations
+
+*/
+
+
+
 data{
 
 //// run parameters ////
@@ -34,12 +42,11 @@ matrix[nt,2] q_t;
 
 real beta;
 
-real base_effort; // the base level of effort such that at base effort f ~ m
-
 real length_50_sel_guess;
 
 real delta_guess;
 
+real<lower  = 0> base_effort;
 // vector<lower = 0>[nt] f_t;
 
 //// biology ////
@@ -78,17 +85,20 @@ transformed data{
 
 parameters{
 
-vector<lower = 0, upper = 10>[nt]  effort_t; //  base effort multiplier
+vector<lower = -5, upper = 3>[nt]  log_effort_t; //  base effort multiplier
 
-real<lower = 0> sigma_effort; // standard deviation of effort
+real<lower = -5, upper = 1> log_sigma_effort; // standard deviation of effort
 
-vector[nt]  rec_dev_t; //  recruitment deviates
+vector[nt]  uc_rec_dev_t; //  recruitment deviates
 
-real<lower = 0> sigma_r; // standard deviation of recruitment deviates
+real<lower = -5, upper = 1> log_sigma_r; // standard deviation of recruitment deviates
 
 real<lower = 0> length_50_sel; // length at 50% selectivity
 
 real<lower = 0.001> sel_delta; // difference between length 50% selected and length 95% selected
+
+// real<lower = 1, upper = 4*(m/.001)> base_effort;
+
 
 } // close parameters block
 
@@ -99,6 +109,14 @@ transformed parameters{
   real ssb_temp;
 
   real temp_rec_dev;
+
+  real sigma_r;
+
+  real sigma_effort;
+
+  vector[nt]  effort_t; //  base effort multiplier
+
+  vector[nt]  rec_dev_t; //  base effort multiplier
 
   matrix[nt, n_ages] n_ta; // numbers at time and age
 
@@ -133,6 +151,16 @@ transformed parameters{
 
   row_vector[n_ages] p_age_sampled;
 
+  // transform parameters
+
+  sigma_r = exp(log_sigma_r);
+
+  sigma_effort = exp(log_sigma_effort);
+
+  effort_t = exp(log_effort_t);
+
+  rec_dev_t = sigma_r * uc_rec_dev_t;
+
   // fill matrices with zeros
   n_ta = rep_matrix(0,nt, n_ages);
 
@@ -147,7 +175,7 @@ transformed parameters{
   p_lbin_sampled = rep_matrix(0,nt, n_lbins);
 
   // profit_shock = rep_matrix(0, nt, 2);
-
+  // print("wtf")
   mean_selectivity_at_age = 1.0 ./ (1 + exp(-log(19) * ((mean_length_at_age - length_50_sel) / sel_delta))); // selectivity ogive at age
 
   total_effort_t = effort_t * base_effort; // convert effort into correct scale
@@ -175,7 +203,10 @@ transformed parameters{
 
   if (estimate_recruits == 1){
 
-    temp_rec_dev = exp(rec_dev_t[t] - sigma_r^2/2);
+    temp_rec_dev = exp(rec_dev_t[t]);
+
+    // temp_rec_dev = exp(rec_dev_t[t] - sigma_r^2/2);
+
 
   } // close estimate recruits
 
@@ -264,22 +295,23 @@ if (economic_model == 0){
 
 }
 
-effort_t[1] ~ normal(0,1);
+log_effort_t[1] ~ normal(0,2);
 
 for (t in 2:nt){
 
-effort_t[t] ~ normal(effort_t[t - 1] + economic_prior[t - 1], sigma_effort);
+log_effort_t[t] ~ normal(log_effort_t[t - 1] + economic_prior[t - 1], sigma_effort);
 
 } // close effort likelihood loop
 
-sigma_effort ~ normal(0.7,0.2);
-
+log_sigma_effort ~ normal(0,0.2);
 
 //// recruitment prior ////
 
-rec_dev_t ~ normal(0, sigma_r);
+uc_rec_dev_t ~ normal(0, 1);
 
-sigma_r ~ normal(0.7, 0.2);
+// sigma_r ~ normal(0.7, 0.2);
+
+log_sigma_r ~ normal(0, 0.2);
 
 //// selectivity likelihood ////
 
@@ -296,7 +328,7 @@ generated quantities{
 int n_tl[nt, n_lbins];
 
 for (t in 1:nt){
-    n_tl[t, 1:n_lbins] = multinomial_rng(to_vector(p_lbin_sampled[t, 1:n_lbins]),100); // generate length comp samples
+    n_tl[t, 1:n_lbins] = multinomial_rng(to_vector(p_lbin_sampled[t, 1:n_lbins]),1000); // generate length comp samples
 }
 
 } // close generated quantities block

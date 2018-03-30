@@ -4,7 +4,7 @@ author: "Dan Ovando"
 date: '`r Sys.Date()`'
 output:
   pdf_document: default
-  html_notebook: default
+  html_document: default
 ---
 
 Arlington had radioacoustic tags for CPUE and viability in reserves 
@@ -2204,3 +2204,527 @@ fold LIME into SS, a future thing would be to take this concept and fold into SS
 
 Check with an economist or two on the shock idea 
 
+# check in with merril
+
+Multifleet stuff is the the biggest sticking point so far
+
+Incorporating uncertainty in life history 
+
+Seems like my fits 
+
+# 2018-03-22 Thoughts
+
+SO where to now? You have a model that fits and seems to do pretty well under some circumstances. 
+
+You can obviously tinker till the cows come home, what's an effective strategy to move forward?
+
+
+Jason had two important outputs that would be good to build in: estiamted catch trajectory and bias (how often do you think you're overfishing when you're under, and vice versa)
+
+
+It would be good to have something to benchmark performance against. 
+
+To that end, I think the best option to add in at this point would be scrooge-lite (i.e. knock out the economic prior), LIME, and LBSPR, and measure performance of those and compare. 
+
+That gives you something to push against in terms of performance: If you're already doing way better than the others one no need to go too crazy. 
+
+From there, try and fit your performance model. 
+
+That gives you a nice complete draft of results to work with over the next month. 
+
+
+# Testing LIME
+
+from lime::LIME_example.R
+
+```{r}
+library(LIME)
+
+fish <- vfo$prepped_fishery[[1]]$fish
+
+fleet <- vfo$prepped_fishery[[1]]$fleet
+
+scrooge_lh <- create_lh_list(vbk= fish$vbk,
+					 linf= fish$linf,
+					 t0= fish$t0,
+					 lwa= fish$weight_a,
+					 lwb= fish$weight_b,
+					 S50= fleet$length_50_sel,
+					 S95=fleet$length_95_sel,
+					 selex_input="length",
+					 selex_type=c("logistic"),
+					 M50= fish$length_50_mature,
+					 M95= fish$length_95_mature,
+					 maturity_input="length",
+					 M= fish$m,
+					 binwidth=1,
+					 CVlen= fish$cv_len,
+					 SigmaR= fish$sigma_r + .001,
+					 SigmaF= fleet$sigma_effort + .001,
+					 SigmaC=0.2,
+					 SigmaI=0.2,
+					 R0= fish$r0,
+					 qcoef=1e-5,
+					 start_ages=0,
+					 rho=0,
+					 nseasons=1)
+
+true <- generate_data(modpath=NULL,
+					  itervec=1,
+					  Fdynamics="Endogenous",
+					  Rdynamics="BH",
+					  lh=scrooge_lh,
+					  Nyears=20,
+					  Nyears_comp=20,
+					  comp_sample=200,
+					  init_depl=0.5,
+					  seed=123)
+
+temp_LF_matrix <- vfo$prepped_fishery[[1]]$length_comps
+
+
+LF_matrix <- temp_LF_matrix %>% 
+  as.matrix()
+
+rownames(LF_matrix) <- LF_matrix[,"year"]
+
+
+LF_matrix <- LF_matrix[, -c(1)]
+
+scrooge_data_LF <-
+  list("years" = 1:nrow(LF_matrix), "LF" = LF_matrix)
+  
+
+start <- Sys.time()
+res <- run_LIME(modpath=NULL,
+				lh=scrooge_lh,
+				input_data=scrooge_data_LF,
+				est_sigma="log_sigma_R",
+				data_avail="LC",
+				newtonsteps=3)
+end <- Sys.time() - start
+
+
+check <- res$df
+
+## check for other issues
+issues <- res$issues
+
+## check TMB inputs
+Inputs <- res$Inputs
+
+## Report file
+Report <- res$Report
+
+## Standard error report
+Sdreport <- res$Sdreport
+
+##----------------------------------------------------
+## Step 4: Plot fits
+## ---------------------------------------------------
+## plot length composition data
+plot_LCfits(LFlist=list("LF"=LF_matrix),
+			Inputs=Inputs,
+			Report=Report)
+
+# plot_output(Inputs=Inputs,
+#             Report=Report,
+#             Sdreport=Sdreport,
+#             lh=scrooge_lh,
+#             True=1,
+#             plot=c("Fish","Rec","SPR","ML","SB","Selex"),
+#             set_ylim=list("Fish" = c(0,1), "SPR" = c(0,1)))
+
+true_f <- vfo$prepped_fishery[[1]]$simed_fishery %>% 
+  group_by(year) %>% 
+  summarise(f = unique(f))
+
+true_f$predicted_f <- Report$F_y
+
+# reportnames <- Sdreport$value %>% names()
+
+# Sdreport$sd[str_detect(reportnames,"F_t")]
+
+predicted_f <- data_frame(f = Report$F_y)
+
+true_f %>% 
+  ggplot() +
+  geom_point(aes(year,f,color = "True")) + 
+  geom_line(aes(year, (predicted_f),color = "Predicted"))
+
+temp_LF_matrix %>% 
+  gather(length, numbers, -year) %>% 
+  mutate(length = as.numeric(length)) %>% 
+  ggplot(aes(length, numbers, fill = factor(year))) + 
+  geom_density(stat = "identity", alpha = 0.5)
+```
+
+Innnnteresting that doesn't work well at all. Let's try and flip it around and use LIME to predict F from SCROOGE
+
+
+```{r}
+
+
+lh <- create_lh_list(vbk=0.21,
+                     linf=65,
+                     t0=-0.01,
+                     lwa=0.0245,
+                     lwb=2.79,
+                     S50=20,
+                     S95=26,
+                     selex_input="length",
+                     selex_type=c("logistic"),
+                     M50=34,
+                     M95=NULL,
+                     maturity_input="length",
+                     M=0.27,
+                     binwidth=1,
+                     CVlen=0.1,
+                     SigmaR=0.7,
+                     SigmaF=0.25,
+                     SigmaC=0.2,
+                     SigmaI=0.2,
+                     R0=1,
+                     qcoef=1e-5,
+                     start_ages=0,
+                     rho=0,
+                     nseasons=1)
+
+true <- generate_data(modpath=NULL,
+					  itervec=1,
+					  Fdynamics="Endogenous",
+					  Rdynamics="BH",
+					  lh=lh,
+					  Nyears=20,
+					  Nyears_comp=20,
+					  comp_sample=200,
+					  init_depl=0.5,
+					  seed=123)
+
+LF_matrix <- true$LF
+
+data_LF <- list("years"=1:true$Nyears, "LF"=LF_matrix)
+
+
+start <- Sys.time()
+res <- run_LIME(modpath=NULL,
+				lh=lh,
+				input_data=data_LF,
+				est_sigma=c("log_sigma_R"),
+				data_avail="LC",
+				newtonsteps=3)
+end <- Sys.time() - start
+
+
+fish <-
+  create_fish(
+    scientific_name = NA,
+    min_age = 0,
+    max_age = lh$AgeMax,
+    linf = lh$linf,
+    vbk = lh$vbk,
+    t0 = lh$t0,
+    weight_a = lh$lwa,
+    weight_b = lh$lwb,
+    length_50_mature = 34,
+    length_95_mature = 36,
+    length_mature = 34,
+    m = lh$M,
+    cv_len = lh$CVlen,
+    query_fishlife = F,
+    mat_mode = "length",
+    time_step = 1,
+    sigma_r = lh$SigmaR,
+    price = 1,
+    price_cv = 0,
+    price_ac = 0,
+    r0 = 100000
+  )
+
+fleet <- create_fleet(
+  fish = fish,
+  cost_cv =  0,
+  cost_ac = 0,
+  q_cv = 0,
+  q_ac = 0,
+  fleet_model = 'constant-effort',
+  target_catch = 10,
+  length_50_sel = lh$S50,
+  delta = lh$SL95 - lh$S50
+)
+
+length_at_age_key <- generate_length_at_age_key(
+  min_age = fish$min_age,
+  max_age = fish$max_age,
+  cv = fish$cv_len,
+  linf = fish$linf,
+  k = fish$vbk,
+  t0 = fish$t0,
+  time_step = fish$time_step,
+  linf_buffer = 1.5
+) %>%
+  ungroup() %>%
+  select(age, length_bin, p_bin) %>%
+  spread(length_bin, p_bin) %>%
+  select(-age)
+
+length_comps <- LF_matrix %>% 
+  as.data.frame() %>% 
+  mutate(year = 1:nrow(.)) %>% 
+  select(year, everything())
+
+length_comps %>% 
+  gather(length,numbers, -year) %>% 
+  mutate(length = as.numeric(length)) %>% 
+  ggplot(aes(length,numbers, fill = factor(year))) + 
+  geom_density(stat = "identity", show.legend = F)
+
+price_t = data.frame(value = rep(2,nrow(length_comps)), lag_value = rep(2,nrow(length_comps)))
+  
+cost_t = data.frame(value = rep(1,nrow(length_comps)), lag_value = rep(1,nrow(length_comps)))
+
+q_t <- data.frame(value = rep(0.001,nrow(length_comps)), lag_value = rep(0.001,nrow(length_comps)))
+
+scrooge_data <- list(
+      economic_model = 1,
+      estimate_recruits = 1,
+      length_comps = length_comps %>% select(-year),
+      length_comps_years  = length_comps$year,
+      price_t = price_t %>% select(value, lag_value),
+      cost_t = cost_t %>% select(value, lag_value),
+      q_t = q_t %>% select(value, lag_value),
+      beta = 1.3,
+      length_50_sel_guess = fish$linf / 2,
+      delta_guess = 2,
+      n_lcomps = nrow(length_comps),
+      nt = length(length_comps$year),
+      n_ages = fish$max_age + 1,
+      n_lbins = ncol(length_at_age_key),
+      ages = 1:(fish$max_age + 1),
+      mean_length_at_age = fish$length_at_age,
+      mean_weight_at_age = fish$weight_at_age,
+      mean_maturity_at_age = fish$maturity_at_age,
+      m = fish$m,
+      h = fish$steepness,
+      r0 = fish$r0,
+      k = fish$vbk,
+      loo = fish$linf,
+      t0 = fish$t0,
+      length_at_age_key = as.matrix(length_at_age_key)
+    )
+
+  fit <-
+    rstan::stan(
+      file = here::here("src", "scrooge_v3.0.stan"),
+      data = scrooge_data,
+      chains = 1,
+      refresh = 25,
+      cores = 1,
+      iter = 4000,
+      warmup = 2000,
+      control = list(
+      adapt_delta = 0.8
+    ))
+  
+  processed_fit <- process_scrooge(fit = fit)
+
+  true_f <- data_frame(year = 1:length(true$F_t), true_f = true$F_t)
+  
+processed_fit$f_t %>% 
+  left_join(true_f, by = "year") %>% 
+  ggplot() + 
+  geom_boxplot(aes(year,value, group = year)) +
+  geom_point(aes(year, true_f), color = "red") + 
+  lims(y = c(0,2))
+
+
+```
+
+Hell yes! scrooge predicts LIME. 
+
+# Getting scrooge to work on VFO
+
+OK, so you can see that scrooge works when it works, but gets waaay off track sometimes. 
+
+Taking the VFO example, there's a few telltale signs: the effort distributions are crazy right tailed, but the effor deviations are getting stuck near zero. it's also near efforts of zero where the divergences are happening  
+
+```{r}
+sel_at_age <- vfo$prepped_fishery[[1]]$fleet$sel_at_age 
+
+length_at_age <-  vfo$prepped_fishery[[1]]$fish$length_at_age 
+
+plot(length_at_age, sel_at_age)
+
+```
+
+It's nailing selectivity at least. 
+
+So, there's a few potential culprits here. Easiest answer is that it's the starting guess, and the model would do better if you let it run out longer. 
+
+You could test that by feeding it the "right" starting guess out the bat and see if that gets it. If it does, cool, then you can work on helping the model find that starting guess. 
+
+If that doesn't work, then you need to revisit the model structure itself, maybe by testing estimating F instead of effort madness. 
+```{r}
+
+true_effort_devs <- vfo$prepped_fishery[[1]]$simed_fishery %>% 
+  group_by(year) %>% 
+  summarise(effort = unique(effort))
+
+true_effort_devs %>% 
+  ggplot(aes(year, effort)) + 
+  geom_point()
+
+
+true_effort_devs <- true_effort_devs %>% 
+  mutate(effort_devs = effort / vfo$prepped_fishery[[1]]$scrooge_data$base_effort)
+
+true_effort_devs %>% 
+  ggplot(aes(year, effort_devs)) + 
+  geom_point()
+
+```
+
+One thing I really don't like at this point is that the magnitude of the deviations is tied to the appropriateness of the base effort parameter. Though to some extent that doesn't really matter since it's scaleess, except for the case of the supplied catch. So so long as Emsy is an roughly OK effort, then your multiplier shouldn't be that bad. Could use some improvement but it's not the worst thing. 
+
+
+Another thing you could try: estimate effort deviates in the same manner that you estimate recruitment deviates right now: with mean from the bionomic model and deviations from that. So in that model, you're estimating deviations from bionomic equilibrium, and probably theta as well. You could still update your prior on the deviate by the economic shock. Seems a reasonable defense is that we put a lot of stock in beverton holt with limited evidence, why not this as well?
+
+This seems like a different enough idea that it warrants a separate model... which if you can't fix this one might be the way to go
+
+poop, feeding it the right starting guess doesn't seem to solve it... 
+
+Let's see how good the fit is is to the length comps: if it's getting it pretty close then that means there's something abotu the explanation that is more satisfactory to the model... which poop. 
+
+One possibility, also try really constraining sigma effort a bit more, I wonder if it's too big at the moment. Part of the problem is that the likelihood actually is going up at those crazy low efforts.... 
+
+To an exte
+
+```{r}
+
+a <- vfo$processed_scrooge[[1]]$n_tl
+
+predicted <- a %>% 
+  gather(length,numbers, contains('V')) %>% 
+  mutate(length = str_replace(length,'\\D','') %>% as.numeric()) %>% 
+  group_by(year, length) %>% 
+  summarise(numbers = median(numbers)) %>% 
+  mutate(source = "predicted")
+ 
+
+observed <- vfo$prepped_fishery[[1]]$length_comps %>% 
+  gather(length, numbers, -year) %>% 
+  mutate(length = as.numeric(length)) %>% 
+  mutate(source = "observed")
+
+observed %>% 
+bind_rows(predicted) %>% 
+ ungroup() %>% 
+  group_by(source, year) %>% 
+  mutate(numbers = numbers / sum(numbers)) %>% 
+  ungroup() %>% 
+  ggplot(aes(length,numbers, fill = source)) + 
+  geom_col(position = "dodge") + 
+  facet_wrap(~year) + 
+  theme_minimal()
+
+```
+
+Innnnteresting, those fit's aren't very good at all. Let's inspect the actual likelihood a bit here and make sure there's not just an error in there. 
+
+Aha, sigma effort is part of what' causing such a problem in here
+
+I wonder if the core problem here is that duh, recruitment and F are really hard to tease appart, and so given variation in both, the model prefers to pack the variation into one of the things, like recruitment in thise case
+
+OK, digging into PFO a bit, even there, where the fit is "good", it's not great. I't missing the length comps a decent bit in some years (though you obviuosly also need to burn for a bit). In the PFO example, the likelihood  gets better the lower sigma_r is, which is correct, but divergences also start to pile up the lower sigma R gets. 
+
+Could explore some transformations here: simple one would be to estimate log sigma r / log sigma effort. There's definitely some hierarchichal funneling going on... read up on that some more. As a starting point KISS, let's try log transforming. 
+
+Alternatively, you could estimate one, and estimate and or pass a ratio of the variation in recruitment relative to the variaion in effort
+
+Also see neil's funnel in the stan documentation page 341
+
+Well loggint at least helped with the divergences
+
+With little data (aka here), non-centering can help a lot. Let's think about how to do that in the context of this model 
+
+Starting with the recruitment, you're making a strong assumption that there's no bias in the recruitment, therefore mean_beta is 0. So, in that case you're now estimating sigma_r and a vector of rec_devs ~ normal(0,1)
+
+the actual rec devs in a given time step will then be sigma_r * rec_devs
+
+What about for F? 
+
+Following the example from the stan documentation, the staight forward translation would be
+
+
+effort_devs  = mean_effort + sigma_effort * ed
+
+ed ~ normal(0,1). 
+
+So what if you went off script a bit here on the f's saying that f in the current year is most likely F last year, i'm unclear how that differs from saying that sigma effort should be really small. 
+
+so, you have base effort, and you want to multiply that by a thing with mean 1. 
+
+So, base_effort * exp(deviation)
+
+Where deviation is  mean 0. 
+
+Now, you could say that the deviation in any given time step 
+
+`total_effort_t = base_effort * exp(effort_devs * sigma_effort)`
+
+So how do you build the economic shocks in there?
+
+`effort_devs[t] ~ normal(profit_shocks[t],1)`
+
+where profit_shock is usualyl 0, but sometimes is very positive
+
+
+AHA, wait, I think there's a problem with the low profit shock scenario; Suppose that sd is really low, isn't that going to crazy inflate your effort deviation? Check on this. 
+
+Also, can use this formulation to actually estimate mean effort a bit easier
+
+DOUBLE CHECK that you're not estimating parameters with zero information (i.e. recruitment in the final year)
+
+Given the near fact that the model is working pretty damn well for the simpler cases, I'm wondering if there is something systematically wrong with the way that you're setting up that simulation, or if it's simply that you can't possibly estimate two random processes with the same variance. 
+
+# ideas to improve scrooge
+
+The more I dig into it, it seems likely that the model isn't really capable of dealing 
+substantial variaion in both recruitment and effort dynamics. To an extent that's logical: without a prior 
+
+# check in with cody
+
+which one is in the drivers seat: effort or recruitment. So, add in to your simulation testing steepness of 1 and autocorrelated recruitment variation vs steepness of like 0.6 and effort following that
+
+estimate rho (autocorrelation in recruitment)
+
+address szuwalski & thorson 2017
+
+# What's the end game with scrooge?
+
+So, you know you need to run lots of versions, but it's going to be an expensive run so let's think about it carefully. 
+
+Before hitting massive go I'd like the model to be a bit better at dealing with both recruitment and economic noise. 
+
+The most obvious solution to that is this idea of a prior on the ratio of the recruitment to effort variation. It makes intuitive sense on some levels, but would depend a lot on how sensitive it is to model specification. 
+
+Talk with jim tomorrow about the idea and see where he would push back, and how far you can push this thing. The goal should be a full run setup for the weekend, at the very least s
+
+# culprits of spasm and lime divergence
+
+- Recruitment variation
+
+- initial depletion
+
+- problem with length-at-age
+  - Its not that, you generate identical length at age keys, unless you're sampling from them incorrectly?
+
+- burn-in problems
+
+# solving the fleet expansion
+
+The only reasonable thing is a prior on the % change in effort in any one year. So, I want to put a prior on that, but then tune theta to achieve that. Can you calculate the mean/max effort change and use that somehow?
+
+You need some mechanism for translating that change into a prior 
+
+here's an idea. store the profit driven change in effort. Calculate max (absolute change - 1). Say that that comes from a distribution with mean mean_max_change and some low sigma. 
