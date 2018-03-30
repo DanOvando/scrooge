@@ -14,6 +14,8 @@ library(FishLife)
 library(spasm) # personal fishery simulator, will post public github link
 library(patchwork)
 library(hrbrthemes)
+library(foreach)
+library(doParallel)
 library(tidyverse)
 library(extrafont)
 rstan::rstan_options(auto_write = TRUE)
