@@ -14,7 +14,7 @@ prepare_fishery <-
            price = 1,
            initial_effort = 1000,
            cost = 1,
-           percnt_loo_selected = 0.5,
+           percnt_loo_selected = 0.25,
            sim_years = 15,
            burn_years = 10,
            linf_buffer = 1.5,

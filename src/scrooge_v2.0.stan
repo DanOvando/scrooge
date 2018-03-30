@@ -109,8 +109,6 @@ transformed parameters{
 
   real ssb_temp;
 
-  real temp_rec_dev;
-
   real sigma_r;
 
   real sigma_effort;
@@ -161,9 +159,9 @@ transformed parameters{
 
   base_effort = exp(log_base_effort);
 
-  total_effort_t = base_effort * exp(sigma_effort * uc_effort_t);
+  total_effort_t = base_effort * exp(sigma_effort * uc_effort_t - sigma_effort^2/2);
 
-  rec_dev_t = sigma_r * uc_rec_dev_t;
+  rec_dev_t = exp(sigma_r * uc_rec_dev_t - sigma_r^2/2);
 
   // fill matrices with zeros
   n_ta = rep_matrix(0,nt, n_ages);
@@ -184,9 +182,9 @@ transformed parameters{
 
   // total_effort_t = effort_t * base_effort; // convert effort into correct scale
 
-  ssb0 = sum((r0 * exp(-m * (ages - 1)))  .* mean_maturity_at_age .* mean_weight_at_age); // virgin ssb
+  ssb0 = sum((r0 * rec_dev_t[1] * exp(-m * (ages - 1)))  .* mean_maturity_at_age .* mean_weight_at_age); // virgin ssb
 
-  temp_n_a = r0 * exp(-m * (ages' - 1)); // transpose to specify row format
+  temp_n_a = (r0 *  rec_dev_t[1]) * exp(-m * (ages' - 1)); // transpose to specify row format
 
   n_ta[1, 1:n_ages] = temp_n_a;  // add in virign recruitment to get population moving
 
@@ -203,20 +201,9 @@ transformed parameters{
 
   for (t in 2:nt){
 
-  temp_rec_dev = 1;
-
-  if (estimate_recruits == 1){
-
-    temp_rec_dev = exp(rec_dev_t[t]);
-
-    // temp_rec_dev = exp(rec_dev_t[t] - sigma_r^2/2);
-
-
-  } // close estimate recruits
-
     ssb_temp =  sum(ssb_ta[t - 1, 1:n_ages]);
 
-    n_ta[t,1] = ((0.8 * r0 * h *ssb_temp) / (0.2 * ssb0 * (1 - h) + (h - 0.2) * ssb_temp)) * temp_rec_dev; //calculate recruitment
+    n_ta[t,1] = ((0.8 * r0 * h *ssb_temp) / (0.2 * ssb0 * (1 - h) + (h - 0.2) * ssb_temp)) * rec_dev_t[t]; //calculate recruitment
 
     n_ta[t , 2:n_ages] = n_ta[t - 1, 1:(n_ages -1)] .* (exp(-(m + f_t[t - 1] * mean_selectivity_at_age[1:(n_ages - 1)])))'; // grow and die
 
@@ -303,7 +290,7 @@ uc_effort_t[1] ~ normal(0,1);
 
 for (t in 2:nt){
 
-uc_effort_t[t] ~ normal(economic_prior[t - 1], 1);
+uc_effort_t[t] ~ normal(uc_effort_t[t - 1] + economic_prior[t - 1], 1);
 
 } // close effort likelihood loop
 

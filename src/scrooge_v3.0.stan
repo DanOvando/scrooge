@@ -333,23 +333,7 @@ for (i in 1:(n_lcomps - 1)){
 
 //// effort prior ////
 
-// if (economic_model == 0){
-//
-//   economic_prior = rep_vector(0, nt);
-//
-// } else if(economic_model == 1){
-//
-//   economic_prior = profit_shock_t / (sd(profit_shock_t) + 1e-3);
-//
-// }
-//
 uc_effort_t ~ normal(0,1);
-//
-// for (t in 2:nt){
-//
-// uc_effort_t[t] ~ normal(economic_prior[t - 1], 1);
-//
-// } // close effort likelihood loop
 
 log_sigma_effort ~ normal(0,0.3);
 

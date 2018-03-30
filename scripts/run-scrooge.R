@@ -41,13 +41,15 @@ theme_set(scrooge_theme)
 
 # run options -------------------------------------------------------------
 
-sim_fisheries <- F
+sim_fisheries <- T
 
 fit_models <- F
 
-run_tests <- T
+run_tests <- F
 
 in_clouds <-  F
+
+n_cores <- 1
 
 # load data ---------------------------------------------------------------
 
@@ -102,17 +104,18 @@ if (sim_fisheries == T)
       list(
         sci_name = c("Atractoscion nobilis"), # "Scomber japonicus"),
         fleet_model = c(
-          "constant-catch",
+          # "constant-catch",
           "constant-effort",
-          "supplied-catch",
+          # "supplied-catch",
           "open-access"
         ),
-        sigma_r = c(0,0.1),
+        sigma_r = c(0.1),
         sigma_effort = c(0, 0.1),
         price_cv = c(0, 0.5),
-        cost_cv = c(0, 0.5),
+        cost_cv = c(0),
         price_ac = 0,
-        cost_ac = 0
+        cost_ac = 0,
+        economic_model = c(1,0)
       )
     )
 
@@ -128,7 +131,7 @@ if (sim_fisheries == T)
       list(target_catch = 10000),
       list(initial_effort = 200),
       list(catches = cdfw_catches$catch[cdfw_catches$sci_name == "semicossyphus pulcher"]),
-      list(theta = 0.1, theta_tuner = 0.25, initial_effort = 400)
+      list(theta = 0.1, theta_tuner = 0.05, initial_effort = 200)
     )
   )
 
@@ -151,8 +154,10 @@ if (sim_fisheries == T)
       prepare_fishery,
       sim_years = 20,
       burn_years = 50,
-      price = 0.5
-    ))
+      price = 0.15
+    )) %>%
+    mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery))
+
 
   save(file = here::here("results", run_name, "fisheries_sandbox.Rdata"),
        fisheries_sandbox)
@@ -160,24 +165,6 @@ if (sim_fisheries == T)
 } else{
   load(file = here::here("results", run_name, "fisheries_sandbox.Rdata"))
 }
-
-
-
-# oa <- fisheries_sandbox %>%
-#   filter(fleet_model == "open-access") %>%
-#   slice(10) %>%
-#   mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery)) %>%
-#   mutate(scrooge_fit = map(prepped_fishery, ~fit_scrooge(data = .x$scrooge_data)))
-#
-# oa <- oa %>%
-#   mutate(processed_scrooge = map(scrooge_fit, process_scrooge)) %>%
-#   mutate(observed = map(prepped_fishery, "simed_fishery")) %>%
-#   mutate(scrooge_performance = pmap(list(
-#     observed = observed,
-#     predicted = processed_scrooge
-#   ), judge_performance))
-#
-
 
 # apply candidate assessment models ---------------------------------------
 
@@ -198,13 +185,26 @@ if (run_tests == T) {
       prepped_fishery,
       ~ fit_scrooge(
         data = .x$scrooge_data,
-        iter = 4000,
-        warmup = 2000,
+        iter = 2000,
+        warmup = 1000,
         adapt_delta = 0.8,
         economic_model = 1,
-        scrooge_file = "scrooge_v3.0"
+        scrooge_file = "scrooge_v2.0"
       )
     ))
+
+  fit <-
+    rstan::stan(
+      fit = pfo$scrooge_fit[[1]],
+      data = pfo$prepped_fishery[[1]]$scrooge_data,
+      chains = 1,
+      refresh = 25,
+      cores = 1,
+      iter = 2000,
+      warmup = 1000,
+      control = list(
+        adapt_delta = 0.8)    )
+  pfo$scrooge_fit[[1]] %>% class()
 
   pfo$summary_plot[[1]]
 
@@ -372,11 +372,34 @@ if (run_tests == T) {
 } # close test runs
 
 if (fit_models == T) {
+
+
+
   sfs <- safely(fit_scrooge)
 
-  fisheries_sandbox <- fisheries_sandbox %>%
-    mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery)) %>%
-    mutate(scrooge_fit = map(prepped_fishery, ~ sfs(data = .x$scrooge_data)))
+  doParallel::registerDoParallel(cores = n_cores)
+  foreach::getDoParWorkers()
+
+  fits <- foreach::foreach(i = 1:nrow(fisheries_sandbox)) %dopar% {
+    sfs(
+      data = fisheries_sandbox$prepped_fishery[[i]]$scrooge_data,
+      economic_model = fisheries_sandbox$economic_model[[i]],
+      scrooge_file = "scrooge_v2.0"
+    )
+
+  } # close fitting loop
+
+
+  fisheries_sandbox$scrooge_fit <- fits
+
+  # fisheries_sandbox <- fisheries_sandbox %>%
+  #   slice(1) %>%
+  #   mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery)) %>%
+  #   mutate(scrooge_fit = map2(
+  #     prepped_fishery,
+  #     economic_model,
+  #     ~ sfs(data = .x$scrooge_data, economic_model = .y,scrooge_file = "scrooge_v2.0")
+  #   ))
 
 
   save(
