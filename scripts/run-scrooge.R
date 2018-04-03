@@ -49,7 +49,7 @@ fit_models <- F
 
 run_tests <- F
 
-in_clouds <-  F
+in_clouds <-  T
 
 n_cores <- 1
 
