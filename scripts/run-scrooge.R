@@ -49,7 +49,7 @@ fit_models <- F
 
 run_tests <- F
 
-in_clouds <-  T
+in_clouds <-  F
 
 n_cores <- 1
 
@@ -164,11 +164,11 @@ if (sim_fisheries == T)
     mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery))
 
 
-  save(file = here::here("results", run_name, "fisheries_sandbox.Rdata"),
+  save(file = here::here("processed_data", "fisheries_sandbox.Rdata"),
        fisheries_sandbox)
 
 } else{
-  load(file = here::here("results", run_name, "fisheries_sandbox.Rdata"))
+  load(file = here::here("processed_data", "fisheries_sandbox.Rdata"))
 }
 
 # apply candidate assessment models ---------------------------------------
@@ -385,16 +385,21 @@ if (fit_models == T) {
   sfs <- safely(fit_scrooge)
 
   doParallel::registerDoParallel(cores = n_cores)
+
   foreach::getDoParWorkers()
 
   fits <- foreach::foreach(i = 1:nrow(fisheries_sandbox)) %dopar% {
     sfs(
       data = fisheries_sandbox$prepped_fishery[[i]]$scrooge_data,
       economic_model = fisheries_sandbox$economic_model[[i]],
-      scrooge_file = "scrooge_v2.0"
+      scrooge_file = "shock_scrooge",
+      iter = 8000,
+      warmup = 4000,
+      adapt_delta = 0.8
     )
 
   } # close fitting loop
+
 
 
   fisheries_sandbox$scrooge_fit <- fits

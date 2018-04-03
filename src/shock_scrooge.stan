@@ -289,9 +289,10 @@ if (economic_model == 0){
 
 } else if(economic_model == 1){
 
-  economic_prior = profit_shock_t / (sd(profit_shock_t) + 1e-3);
+  economic_prior = (profit_shock_t)/ (sd(profit_shock_t) + 1e-3);
 
 }
+
 
 // uc_effort_t[1] ~ normal(0,1);
 
