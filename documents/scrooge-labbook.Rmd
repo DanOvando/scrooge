@@ -2728,3 +2728,26 @@ The only reasonable thing is a prior on the % change in effort in any one year. 
 You need some mechanism for translating that change into a prior 
 
 here's an idea. store the profit driven change in effort. Calculate max (absolute change - 1). Say that that comes from a distribution with mean mean_max_change and some low sigma. 
+
+# check in with jason
+
+THey almost never actually estimate sigma r
+
+fix sigma r and depending on life history, 0.5, 0.6 standard deviation in log space 1.2 1.5 for hake
+
+check in with merril on whether sigma_r and sigma_f are actually being estimated
+
+try using a uniform prior on f instead of a centered sigma
+
+check on technical documentation for stock synthesis 
+
+report on estimated catches; compare to catch histories from CDFW
+
+test how thosedynamics that aren't included in other operating models affect how we do business
+
+inducing different relevant dynamics 
+
+we need to be including that type of thought when we. If we have this effort data we can try and recover effort data for use in other assessments. 
+
+So here's a compromise between those: make the priors on sigma_r REALLY tight around the life history for that species, so that the model has a little leeway, but will be pulled towards that. 
+

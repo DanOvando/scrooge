@@ -24,7 +24,7 @@ functions <- list.files(here::here("functions"))
 
 walk(functions, ~ here::here("functions", .x) %>% source()) # load local functions
 
-run_name <- "v1.0"
+run_name <- "scrooge-results"
 
 run_dir <- here::here("results", run_name)
 
@@ -60,7 +60,7 @@ if (in_clouds == F){
   data_dir <- "data"
 } else{
 
-  data_dir <- "data/google-bucket"
+  data_dir <- "data/scrooge-data"
 }
 
 cdfw_data <- read_csv(file = file.path(data_dir, 'cfdw-catches.csv'))
@@ -111,13 +111,14 @@ if (sim_fisheries == T)
           # "supplied-catch",
           "open-access"
         ),
-        sigma_r = c(0.1),
+        sigma_r = c(0.1,0.4),
         sigma_effort = c(0, 0.1),
         price_cv = c(0, 0.5),
-        cost_cv = c(0),
-        price_ac = 0,
-        cost_ac = 0,
-        economic_model = c(1,0)
+        cost_cv = c(0,0.75),
+        price_ac = 0.25,
+        cost_ac = 0.25,
+        economic_model = c(1,0),
+        steepness = c(0.6,0.9)
       )
     )
 
@@ -133,7 +134,7 @@ if (sim_fisheries == T)
       list(target_catch = 10000),
       list(initial_effort = 200),
       list(catches = cdfw_catches$catch[cdfw_catches$sci_name == "semicossyphus pulcher"]),
-      list(theta = 0.1, theta_tuner = 0.05, initial_effort = 200)
+      list(theta = 0.1, theta_tuner = 0.1, initial_effort = 200)
     )
   )
 
@@ -151,12 +152,14 @@ if (sim_fisheries == T)
         price_cv = price_cv,
         cost_cv = cost_cv,
         price_ac = price_ac,
-        cost_ac = cost_ac
+        cost_ac = cost_ac,
+        steepness = steepness
       ),
       prepare_fishery,
       sim_years = 20,
       burn_years = 50,
-      price = 0.15
+      price = 0.15,
+      cost = 3
     )) %>%
     mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery))
 
@@ -177,36 +180,38 @@ if (run_tests == T) {
 
   pfo <- fisheries_sandbox %>%
     filter(fleet_model == "open-access",
-           sigma_r == 0,
-           sigma_effort == 0,
-           price_cv == 0,
-           cost_cv == 0) %>%
+           sigma_r == min(sigma_r),
+           sigma_effort == min(sigma_effort),
+           price_cv == min(price_cv),
+           cost_cv == min(cost_cv)) %>%
     slice(1) %>%
     mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery)) %>%
     mutate(scrooge_fit = map(
       prepped_fishery,
       ~ fit_scrooge(
         data = .x$scrooge_data,
-        iter = 2000,
-        warmup = 1000,
+        iter = 4000,
+        warmup = 2000,
         adapt_delta = 0.8,
         economic_model = 1,
-        scrooge_file = "scrooge_v2.0"
+        scrooge_file = "shock_scrooge"
       )
     ))
 
-  fit <-
-    rstan::stan(
-      fit = pfo$scrooge_fit[[1]],
-      data = pfo$prepped_fishery[[1]]$scrooge_data,
-      chains = 1,
-      refresh = 25,
-      cores = 1,
-      iter = 2000,
-      warmup = 1000,
-      control = list(
-        adapt_delta = 0.8)    )
-  pfo$scrooge_fit[[1]] %>% class()
+  rstan::extract(pfo$scrooge_fit[[1]],"uc_effort_t") ->a
+
+  a$uc_effort_t-> b
+
+  pred = colMeans(b * .1)
+
+  obs <- pfo$prepped_fishery[[1]]$simed_fishery %>% group_by(year) %>% summarise(f = unique(f))
+
+  obs$pred <- pred
+
+  obs %>%
+    ggplot() +
+    geom_point(aes(year, f)) +
+    geom_line(aes(year, pred))
 
   pfo$summary_plot[[1]]
 
@@ -267,7 +272,7 @@ if (run_tests == T) {
         data = .x$scrooge_data,
         iter = 8000,
         warmup = 4000,
-        scrooge_file = "scrooge_v3.0",
+        scrooge_file = "shock_scrooge",
         adapt_delta = 0.8
       )
     ))

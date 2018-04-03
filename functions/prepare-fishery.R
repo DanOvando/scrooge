@@ -21,7 +21,8 @@ prepare_fishery <-
            num_patches = 1,
            sample_type = "catch",
            percent_sampled = 1,
-           economic_model = 1
+           economic_model = 1,
+           steepness = 0.8
            ) {
 
 
@@ -36,6 +37,7 @@ prepare_fishery <-
         price = price,
         price_cv = price_cv,
         price_ac = price_ac,
+        steepness = steepness,
         r0 = 100000
       )
 
@@ -173,7 +175,7 @@ prepare_fishery <-
       group_by(year) %>%
       summarise(price = unique(price),
                 cost = unique(cost),
-                q = fleet$q) %>%
+                q = 0.1) %>%
       gather(variable, value,-year) %>%
       group_by(variable) %>%
       mutate(lag_value = lag(value, 1)) %>%
@@ -200,7 +202,7 @@ prepare_fishery <-
       q_t = q_t %>% select(value, lag_value),
       beta = 1.3,
       # base_effort = fish$m / mean(q_t$value),
-      length_50_sel_guess = fish$linf / 2,
+      length_50_sel_guess = fleet$length_50_sel,
       delta_guess = 2,
       n_lcomps = nrow(length_comps),
       nt = length(length_comps$year),
