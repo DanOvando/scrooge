@@ -101,10 +101,11 @@ cdfw_data$common_name %>% unique()
 
 if (sim_fisheries == T)
 {
+
   fisheries_sandbox <-
     purrr::cross_df(
       list(
-        sci_name = c("Atractoscion nobilis"), # "Scomber japonicus"),
+        sci_name = c("Atractoscion nobilis", "Scomber japonicus","Lutjanus campechanus"),
         fleet_model = c(
           # "constant-catch",
           "constant-effort",
@@ -115,9 +116,9 @@ if (sim_fisheries == T)
         sigma_effort = c(0, 0.1),
         price_cv = c(0, 0.5),
         cost_cv = c(0,0.75),
-        price_ac = 0.25,
-        cost_ac = 0.25,
-        economic_model = c(1,0),
+        price_ac = 0.75,
+        cost_ac = 0.75,
+        # economic_model = c(1,0),
         steepness = c(0.6,0.9)
       )
     )
@@ -134,7 +135,7 @@ if (sim_fisheries == T)
       list(target_catch = 10000),
       list(initial_effort = 200),
       list(catches = cdfw_catches$catch[cdfw_catches$sci_name == "semicossyphus pulcher"]),
-      list(theta = 0.1, theta_tuner = 0.1, initial_effort = 200)
+      list(theta = 0.1, theta_tuner = 1, initial_effort = 10)
     )
   )
 
@@ -155,12 +156,16 @@ if (sim_fisheries == T)
         cost_ac = cost_ac,
         steepness = steepness
       ),
-      prepare_fishery,
-      sim_years = 20,
-      burn_years = 50,
-      price = 0.15,
-      cost = 3
-    )) %>%
+      safely(prepare_fishery),
+      sim_years = 50,
+      burn_years = 25,
+      price = 2,
+      cost = 2
+    ))
+
+
+
+  %>%
     mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery))
 
 
@@ -190,38 +195,31 @@ if (run_tests == T) {
       prepped_fishery,
       ~ fit_scrooge(
         data = .x$scrooge_data,
-        iter = 4000,
-        warmup = 2000,
+        iter = 2000,
+        warmup = 1000,
         adapt_delta = 0.8,
         economic_model = 1,
-        scrooge_file = "shock_scrooge"
+        scrooge_file = "bioeconomic_scrooge_v2"
       )
     ))
 
-  rstan::extract(pfo$scrooge_fit[[1]],"uc_effort_t") ->a
-
-  a$uc_effort_t-> b
-
-  pred = colMeans(b * .1)
-
-  obs <- pfo$prepped_fishery[[1]]$simed_fishery %>% group_by(year) %>% summarise(f = unique(f))
-
-  obs$pred <- pred
-
-  obs %>%
-    ggplot() +
-    geom_point(aes(year, f)) +
-    geom_line(aes(year, pred))
+  # rstan::extract(pfo$scrooge_fit[[1]],"uc_effort_t") ->a
+  #
+  # a$uc_effort_t-> b
+  #
+  # pred = colMeans(b * .1)
+  #
+  # obs <- pfo$prepped_fishery[[1]]$simed_fishery %>% group_by(year) %>% summarise(f = unique(f))
+  #
+  # obs$pred <- pred
+  #
+  # obs %>%
+  #   ggplot() +
+  #   geom_point(aes(year, f)) +
+  #   geom_line(aes(year, pred))
 
   pfo$summary_plot[[1]]
 
-  pfo$prepped_fishery[[1]]$length_comps %>%
-    gather(age, numbers,-year) %>%
-    mutate(age = as.numeric(age)) %>%
-    group_by(year) %>%
-    summarise(ncaught = sum(numbers)) %>%
-    ggplot(aes(year, ncaught)) +
-    geom_point()
 
   pfo <- pfo %>%
     mutate(processed_scrooge = map(scrooge_fit, process_scrooge)) %>%
@@ -239,20 +237,21 @@ if (run_tests == T) {
         observed_variable = rec_dev,
         predicted_variable = "rec_dev_t"
       )
-    ) %>%
+    )  %>%
+    mutate(lcomps = map2(prepped_fishery, processed_scrooge, ~process_lcomps(.x$length_comps, .y$n_tl))) %>%
     mutate(
       rmse = map_dbl(scrooge_performance, ~ .x$comparison_summary$rmse),
       bias =  map_dbl(scrooge_performance, ~ .x$comparison_summary$bias)
     ) %>%
     arrange(rmse)
 
-  pfo$scrooge_performance[[1]]$comparison_plot +
-    lims(y = c(0,2))
+  pfo$scrooge_performance[[1]]$comparison_plot
 
   pfo$scrooge_rec_performance[[1]]$comparison_plot
 
 
   # variable open access
+  #
   #
   vfo <- fisheries_sandbox %>%
     filter(
@@ -270,12 +269,15 @@ if (run_tests == T) {
       prepped_fishery,
       ~ fit_scrooge(
         data = .x$scrooge_data,
-        iter = 8000,
-        warmup = 4000,
-        scrooge_file = "shock_scrooge",
-        adapt_delta = 0.8
+        iter = 10000,
+        warmup = 6000,
+        scrooge_file = "bioeconomic_scrooge_v2",
+        adapt_delta = 0.8,
+        economic_model = 1,
+        max_treedepth = 12
       )
     ))
+
 
   vfo$summary_plot[[1]]
 
@@ -304,17 +306,19 @@ if (run_tests == T) {
            predicted = processed_scrooge),
       judge_performance
     )) %>%
+    mutate(lcomps = map2(prepped_fishery, processed_scrooge, ~process_lcomps(.x$length_comps, .y$n_tl))) %>%
     mutate(
       rmse = map_dbl(scrooge_performance, ~ .x$comparison_summary$rmse),
       bias =  map_dbl(scrooge_performance, ~ .x$comparison_summary$bias)
     ) %>%
     arrange(rmse)
 
-    vfo$scrooge_rec_performance[[1]]$comparison_plot
+    # vfo$scrooge_rec_performance[[1]]$comparison_plot
 
-    vfo$scrooge_performance[[1]]$comparison_plot +
-      lims(y = c(0,1))
+    b = vfo$scrooge_performance[[1]]$comparison_plot +
+      labs(title = "econ")
 
+    save(file = "scrooge_performance.Rdata", pfo, vfo)
 
   # constant and medium f
 

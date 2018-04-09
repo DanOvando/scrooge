@@ -22,10 +22,26 @@ prepare_fishery <-
            sample_type = "catch",
            percent_sampled = 1,
            economic_model = 1,
-           steepness = 0.8
+           steepness = 0.8,
+           profit_lags = 1,
+           rec_ac = 0.25,
+           query_price = T
            ) {
 
+    if (query_price == T) {
+      prices <-
+        read_csv(file = here::here("data", "Exvessel Price Database.csv"))
 
+      this_price <- prices %>%
+        filter(scientific_name %in% sci_name, Year > 2000)
+
+      if (nrow(this_price == 0)) {
+        price = 4
+
+      } else{
+        price <- mean(this_price$exvessel, na.rm = T) * .001
+      }
+    }
 
     fish <-
       create_fish(
@@ -38,7 +54,8 @@ prepare_fishery <-
         price_cv = price_cv,
         price_ac = price_ac,
         steepness = steepness,
-        r0 = 100000
+        r0 = 10000,
+        rec_ac = rec_ac
       )
 
     if (fleet_model == "constant-catch"){
@@ -52,7 +69,8 @@ prepare_fishery <-
       target_catch = fleet_params$target_catch,
       cost = cost,
       sigma_effort = sigma_effort,
-      length_50_sel = percnt_loo_selected * fish$linf
+      length_50_sel = percnt_loo_selected * fish$linf,
+      profit_lags =  profit_lags
     )
     }
 
@@ -104,7 +122,9 @@ prepare_fishery <-
         cost = cost,
         sigma_effort = sigma_effort,
         length_50_sel = percnt_loo_selected * fish$linf,
-        initial_effort = fleet_params$initial_effort
+        initial_effort = fleet_params$initial_effort,
+        profit_lags =  profit_lags
+
       )
     }
 

@@ -2751,3 +2751,139 @@ we need to be including that type of thought when we. If we have this effort dat
 
 So here's a compromise between those: make the priors on sigma_r REALLY tight around the life history for that species, so that the model has a little leeway, but will be pulled towards that. 
 
+```{r}
+library(rstan)
+library(FishLife)
+library(spasm)
+library(tidyverse)
+
+set.seed(42)
+fish <-
+  create_fish(
+    query_fishlife = T,
+    mat_mode = "length",
+    linf = 100,
+    max_age = 30,
+    time_step = 1,
+    sigma_r = 0,
+    price = 1,
+    price_cv = 0.75,
+    price_ac = 0.75,
+    steepness = 0.6
+  )
+
+fleet <- create_fleet(
+  fish = fish,
+  cost = 3,
+  cost_cv =  0.75,
+  cost_ac = 0.75,
+  q_cv = .5,
+  q_ac = .95,
+  profit_lags = 0
+)
+
+fleet <-
+  spasm::update_fleet(
+    fleet = purrr::list_modify(
+      fleet,
+      fleet_model = "open-access",
+      initial_effort = 10,
+      cost = 1,
+      target_catch = 100,
+      sigma_effort = 0,
+      length_50_sel = 50,
+      theta_tuner = .75
+    ),
+    fish = fish
+  )
+
+
+sim <- spasm::sim_fishery(
+  fish = fish,
+  fleet = fleet,
+  manager = create_manager(mpa_size = 0),
+  num_patches = 1,
+  sim_years = 100,
+  burn_year = 50,
+  time_step = fish$time_step
+)
+
+sim %>% 
+  group_by(year) %>% 
+  summarise(ssb = sum(ssb)) %>% 
+  ggplot(aes(year, ssb))  +
+  geom_point()
+
+
+sim %>% 
+  group_by(year) %>% 
+  summarise(effort = mean(effort),
+            price = unique(price),
+            cost = unique(cost),
+            profits = sum(profits),
+            revs = sum(biomass_caught * price)) %>% 
+  ungroup() %>% 
+  mutate(delta_price = price - lag(price),
+         delta_cost = cost - lag(cost)) %>% 
+  gather(variable, value, -year, -effort) %>% 
+  ggplot(aes((value), effort, color = variable)) +
+  geom_point(show.legend = F) +
+  facet_wrap(~variable, scales = "free")
+
+
+```
+
+So that's the problem at it's core. Well not sure if it's a problem, but reality. The relationship between price and profits is only loose. Wonder if part of that is an artifact of fishing down the initial stock...
+
+A little bit, the core fact is tshat price and costs themselves are weak signals of effort, even in this stylized world. This goes back to your original ideas of caculating dE/dprice, and of course realizing that it is completely state dependent. So, it's no surprise that prices and costs themselves are not informative. 
+
+At its core then, I think you need to abandon shock scrooge; it has to have some structural parameters to it... unless you did soemthing interesting like lags of prices and costs... takens theorem? Or should you focus more on integrating effort priors themselves, thinking that prices and costs themselves don't tell you much..., at least if you want to stick with a classic model of open access fisheries, which seems reasonable. 
+
+
+
+
+parameterize price shocks on the scale of Tyler's database!
+
+
+```{r}
+  fish_prices <-
+    readr::read_csv("~/Box Sync/Databases/Exvessel Prices/Exvessel Price Database.csv") 
+
+price_cv <- fish_prices %>% 
+  group_by(scientific_name) %>% 
+  summarise(cv = sd(exvessel, na.rm = T) / mean(exvessel, na.rm = T)) 
+
+price_cv %>% 
+  ggplot(aes(cv)) + 
+  geom_histogram()
+
+```
+
+
+OK, I think shock scrooge is dead; just loooking at the simulated scenario there's not really a good reason to have a particular prior on price, though that does seem a little odd: good thing to talk over with Chris. But for now, seems like you've got bioeconomic scrooge working again. Problem was largely the multiplicative effort deviates. Still similar problem separating out recruitment from effort, and constraining effort enough, but seems like it works-ish at least. 
+
+One problem though is that the model is clearly really good at nailing the length comps, even when the other stuff is off, which duh, there's a lot of ways to get the length comps if you can play with recruitment and with f, and something about the way you have it set up at the moment prefers to use reruitment to dial the noise in. i.e your model isn't broken: you're not getting divergences or treedepth problems anymore, and it actually is pretty close to perfect on the length comps. So the only way to "improve" the fit is to make priors more informative. 
+
+From the effort side, the prior could at least by the year-to-year CV on the effort deviates, and then there's your old friend p_response. 
+
+From there, you need to get the initial depletion thing working. Works!
+
+
+# Pre-meeting activities
+
+I think you may have finally settled on a working version of the model... so what are you rnext steps. 
+
+Week of may 9th: Get a "complete" run working to see the model end-to-end
+
+- Grab the length comps at a few different places in the fishery history: early, middle, late
+
+- try and get a more "economicy" looking period to fit to
+
+- add in LBSPR and LIME fits 
+
+- Add in LIME-lite
+
+
+Week of may 16: Do any new runs that need doing as a result of may 9th
+
+May 23: Write presentation
