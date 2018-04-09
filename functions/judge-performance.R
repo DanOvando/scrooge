@@ -15,11 +15,14 @@ judge_performance <-
       group_by(!!group_level) %>%
       summarise(observed = mean(!!observed_variable)) %>%
       mutate(year = year - min(year) + 1)
-    comparison <- predicted_values %>%
-      left_join(observed_values, by = "year") %>%
+
+
+      comparison <- observed_values %>%
+      left_join(predicted_values, by = "year") %>%
       ungroup() ## fix this later for full flexibility
 
     comparison_summary <- comparison %>%
+      filter(is.na(value) == F) %>%
       summarise(rmse = sqrt(mean((value - observed) ^ 2)),
                 bias = median((value - observed) / observed)) #%>%
 

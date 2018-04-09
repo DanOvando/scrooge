@@ -43,9 +43,9 @@ theme_set(scrooge_theme)
 
 # run options -------------------------------------------------------------
 
-sim_fisheries <- T
+sim_fisheries <- F
 
-fit_models <- F
+fit_models <- T
 
 run_tests <- F
 
@@ -135,7 +135,7 @@ if (sim_fisheries == T)
       list(target_catch = 10000),
       list(initial_effort = 200),
       list(catches = cdfw_catches$catch[cdfw_catches$sci_name == "semicossyphus pulcher"]),
-      list(theta = 0.1, theta_tuner = 1, initial_effort = 10)
+      list(theta = 0.1, theta_tuner = 0.75, initial_effort = 10)
     )
   )
 
@@ -160,12 +160,18 @@ if (sim_fisheries == T)
       sim_years = 50,
       burn_years = 25,
       price = 2,
-      cost = 2
+      cost = 5
     ))
 
 
+  no_error <- map(fisheries_sandbox$prepped_fishery,'error') %>%
+    map_lgl(is.null)
 
-  %>%
+  fisheries_sandbox <- fisheries_sandbox %>%
+    filter(no_error == T)
+
+  fisheries_sandbox <- fisheries_sandbox %>%
+    mutate(prepped_fishery = map(prepped_fishery,"result")) %>%
     mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery))
 
 
@@ -190,7 +196,7 @@ if (run_tests == T) {
            price_cv == min(price_cv),
            cost_cv == min(cost_cv)) %>%
     slice(1) %>%
-    mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery)) %>%
+    mutate(prepped_fishery = map(prepped_fishery, subsample_data, window = 10, period = "end")) %>%
     mutate(scrooge_fit = map(
       prepped_fishery,
       ~ fit_scrooge(
@@ -199,30 +205,20 @@ if (run_tests == T) {
         warmup = 1000,
         adapt_delta = 0.8,
         economic_model = 1,
-        scrooge_file = "bioeconomic_scrooge_v2"
+        scrooge_file = "bioeconomic_scrooge"
       )
     ))
 
-  # rstan::extract(pfo$scrooge_fit[[1]],"uc_effort_t") ->a
-  #
-  # a$uc_effort_t-> b
-  #
-  # pred = colMeans(b * .1)
-  #
-  # obs <- pfo$prepped_fishery[[1]]$simed_fishery %>% group_by(year) %>% summarise(f = unique(f))
-  #
-  # obs$pred <- pred
-  #
-  # obs %>%
-  #   ggplot() +
-  #   geom_point(aes(year, f)) +
-  #   geom_line(aes(year, pred))
 
   pfo$summary_plot[[1]]
 
 
   pfo <- pfo %>%
-    mutate(processed_scrooge = map(scrooge_fit, process_scrooge)) %>%
+    mutate(processed_scrooge = map2(
+      scrooge_fit,
+      map(prepped_fishery, "sampled_years"),
+      process_scrooge
+    )) %>%
     mutate(observed = map(prepped_fishery, "simed_fishery")) %>%
     mutate(scrooge_performance = pmap(
       list(observed = observed,
@@ -253,6 +249,7 @@ if (run_tests == T) {
   # variable open access
   #
   #
+  #
   vfo <- fisheries_sandbox %>%
     filter(
       fleet_model == "open-access",
@@ -264,16 +261,15 @@ if (run_tests == T) {
       cost_cv == max(cost_cv)
     ) %>%
     slice(1) %>%
-    mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery)) %>%
+    mutate(prepped_fishery = map(prepped_fishery, subsample_data, window = 10, period = "end")) %>%
     mutate(scrooge_fit = map(
       prepped_fishery,
       ~ fit_scrooge(
         data = .x$scrooge_data,
-        iter = 10000,
-        warmup = 6000,
-        scrooge_file = "bioeconomic_scrooge_v2",
+        iter = 2000,
+        warmup = 1000,
+        scrooge_file = "bioeconomic_scrooge",
         adapt_delta = 0.8,
-        economic_model = 1,
         max_treedepth = 12
       )
     ))
@@ -281,17 +277,12 @@ if (run_tests == T) {
 
   vfo$summary_plot[[1]]
 
-  vfo$prepped_fishery[[1]]$length_comps %>%
-    gather(age, numbers,-year) %>%
-    mutate(age = as.numeric(age)) %>%
-    group_by(year) %>%
-    summarise(ncaught = sum(numbers)) %>%
-    ggplot(aes(year, ncaught)) +
-    geom_point()
-
   vfo <- vfo %>%
-    mutate(processed_scrooge = map(scrooge_fit, process_scrooge)) %>%
-    mutate(observed = map(prepped_fishery, "simed_fishery")) %>%
+    mutate(processed_scrooge = map2(
+      scrooge_fit,
+      map(prepped_fishery, "sampled_years"),
+      process_scrooge
+    )) %>%    mutate(observed = map(prepped_fishery, "simed_fishery")) %>%
     mutate(
       scrooge_rec_performance = pmap(
         list(observed = observed,
@@ -385,21 +376,25 @@ if (run_tests == T) {
 if (fit_models == T) {
 
 
+  fisheries_sandbox <- fisheries_sandbox %>%
+    slice(sample(1:nrow(fisheries_sandbox),4, replace = F)) %>%
+    mutate(prepped_fishery = map(prepped_fishery, subsample_data, window = 10, period = "end"))
 
   sfs <- safely(fit_scrooge)
 
-  doParallel::registerDoParallel(cores = n_cores)
+  doParallel::registerDoParallel(cores = 4)
 
   foreach::getDoParWorkers()
 
-  fits <- foreach::foreach(i = 1:nrow(fisheries_sandbox)) %dopar% {
-    sfs(
+  fits <- foreach::foreach(i = 1:nrow(fisheries_sandbox)[1]) %dopar% {
+    out <- sfs(
       data = fisheries_sandbox$prepped_fishery[[i]]$scrooge_data,
       economic_model = fisheries_sandbox$economic_model[[i]],
-      scrooge_file = "shock_scrooge",
-      iter = 8000,
-      warmup = 4000,
-      adapt_delta = 0.8
+      scrooge_file = "bioeconomic_scrooge",
+      iter = 2000,
+      warmup = 1000,
+      adapt_delta = 0.8,
+      max_treedepth = 12
     )
 
   } # close fitting loop
@@ -407,16 +402,6 @@ if (fit_models == T) {
 
 
   fisheries_sandbox$scrooge_fit <- fits
-
-  # fisheries_sandbox <- fisheries_sandbox %>%
-  #   slice(1) %>%
-  #   mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery)) %>%
-  #   mutate(scrooge_fit = map2(
-  #     prepped_fishery,
-  #     economic_model,
-  #     ~ sfs(data = .x$scrooge_data, economic_model = .y,scrooge_file = "scrooge_v2.0")
-  #   ))
-
 
   save(
     file = here::here("results", run_name, "fitted_fisheries_sandbox.Rdata"),
@@ -429,13 +414,21 @@ if (fit_models == T) {
 
 }
 
-# process fits
+
+# process_fits ------------------------------------------------------------
+
+
+scrooge_worked <- map(fisheries_sandbox$scrooge_fit,'error') %>% map_lgl(is.null)
+
 
 fisheries_sandbox <- fisheries_sandbox %>%
-  mutate(scrooge_error = map(fisheries_sandbox$scrooge_fit, "error")) %>%
-  mutate(scrooge_fit = map(fisheries_sandbox$scrooge_fit, "result")) %>%
-  filter(map_lgl(scrooge_error, is.null)) %>%
-  mutate(processed_scrooge = map(scrooge_fit, process_scrooge)) %>%
+  filter(scrooge_worked) %>%
+  mutate(scrooge_fit = map(scrooge_fit,"result")) %>%
+  mutate(processed_scrooge = map2(
+    scrooge_fit,
+    map(prepped_fishery, "sampled_years"),
+    process_scrooge
+  )) %>%
   mutate(observed = map(prepped_fishery, "simed_fishery")) %>%
   mutate(scrooge_performance = pmap(
     list(observed = observed,
@@ -450,19 +443,12 @@ fisheries_sandbox <- fisheries_sandbox %>%
       observed_variable = rec_dev,
       predicted_variable = "rec_dev_t"
     )
-  ) %>%
+  )  %>%
+  mutate(lcomps = map2(prepped_fishery, processed_scrooge, ~process_lcomps(.x$length_comps, .y$n_tl))) %>%
   mutate(
     rmse = map_dbl(scrooge_performance, ~ .x$comparison_summary$rmse),
     bias =  map_dbl(scrooge_performance, ~ .x$comparison_summary$bias)
   ) %>%
-  arrange(rmse)
-
-
-oa_check <- fisheries_sandbox %>%
-  filter(fleet_model == "open-access")
-
-huh <- fisheries_sandbox2 %>%
-  mutate(rmse = map_dbl(scrooge_performance, ~ .x$comparison_summary$rmse)) %>%
   arrange(rmse)
 
 

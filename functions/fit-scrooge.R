@@ -2,7 +2,7 @@ fit_scrooge <- function(data, scrooge_file = "scrooge",
                         chains = 1, refresh = 25, cores = 1,
                         iter = 1000,
                         warmup = 2000,
-                        adapt_delta = 0.8, economic_model = NA,
+                        adapt_delta = 0.8, economic_model = 1,
                         model_type = "scrooge",
                         max_treedepth = 10,
                         pmsy_expansion = 0.5){
@@ -10,9 +10,9 @@ fit_scrooge <- function(data, scrooge_file = "scrooge",
 
   if (model_type == "scrooge"){
 
-  if (is.na(economic_model) == F){
-  data <- purrr::list_modify(data,economic_model = economic_model)
-  }
+  # if (is.na(economic_model) == F){
+  # data <- purrr::list_modify(data,economic_model = economic_model)
+  # }
   data$sigma_r_guess <- 0.4
 
   fmsy <- nlminb(data$m, calc_msy, data = data, time = 10, lower = 0, upper = 2)
@@ -22,15 +22,14 @@ fit_scrooge <- function(data, scrooge_file = "scrooge",
   p_expansion = ((fmsy$par / mean(data$q_t$value)) * pmsy_expansion) / pmsy
 
   # data$p_expansion <- p_expansion
-
   inits <-
     map(1:chains,  ~ list(base_effort = 1 *  exp(rnorm(
       1, 0, .1
     )),
     p_length_50_sel = 0.25 *exp(rnorm(
       1, 0, .1
-    ),
-    p_expansion = p_expansion * exp(rnorm(1,0,.1)))))
+    )),
+    p_expansion = p_expansion * exp(rnorm(1,0,.1))))
 
 
 fit <-

@@ -85,11 +85,11 @@ real <lower = 0.001, upper = 10> base_effort;
 
 // vector<lower = -5, upper = 5>[nt - 1]  effort_shock_t; //  base effort multiplier
 
-vector[nt - 1]  effort_shock_t; //  base effort multiplier
+vector[nt]  effort_shock_t; //  base effort multiplier
 
 real<lower = -5, upper = 5> log_sigma_effort; // standard deviation of effort
 
-vector[nt - 1]  uc_rec_dev_t; //  recruitment deviates
+vector[nt]  uc_rec_dev_t; //  recruitment deviates
 
 real<lower = -5, upper = 2> log_sigma_r; // standard deviation of recruitment deviates
 
@@ -97,7 +97,7 @@ real<lower = 0, upper = 1.5> p_length_50_sel; // length at 50% selectivity
 
 real<lower = 1e-3, upper = 2> f_init; // f to get to initial depletion
 
-real<lower = 0, upper = .2> p_expansion;
+// real<lower = 0, upper = .2> p_expansion;
 
 // real<lower = 0, upper = .01> p_expansion;
 
@@ -131,7 +131,7 @@ transformed parameters{
 
   // vector[nt]  effort_t; //  base effort multiplier
 
-  vector[nt - 1]  rec_dev_t; //  base effort multiplier
+  vector[nt]  rec_dev_t; //  base effort multiplier
 
   matrix[nt, n_ages] n_ta; // numbers at time and age
 
@@ -153,13 +153,13 @@ transformed parameters{
 
   vector[nt] profit_t; // profits
 
-  vector[nt] sq_profit_t; // profits under last years price and cost
+  // vector[nt] sq_profit_t; // profits under last years price and cost
 
-  vector[nt] profit_shock_t; // profit shock
+  // vector[nt] profit_shock_t; // profit shock
 
   vector[n_ages] mean_selectivity_at_age; // mean selectivity at age
 
-  vector[nt] profit_per_unit_effort;
+  // vector[nt] profit_per_unit_effort;
 
   // vector[nt] delta_f; // expected change in f from profit shock
 
@@ -235,7 +235,7 @@ transformed parameters{
 
   // temp_n_a = (r0) * exp(-m * (ages' - 1)); // transpose to specify row format
 
-  n_ta[1, 1:n_ages] = n_a_0;  // add in virign recruitment to get population moving
+  n_ta[1, 1:n_ages] = n_a_0 *  rec_dev_t[1];  // add in virign recruitment to get population moving
 
   n_ta[1, n_ages] = n_ta[1, n_ages - 1] * exp(-(m + f_init)) / (1 - exp(-(m + f_init)));  //plus group
 
@@ -243,7 +243,7 @@ transformed parameters{
 
   ssb_ta[1, 1:n_ages] = b_ta[1, 1:n_ages] .* mean_maturity_at_age'; // virgin ssb
 
-  total_effort_t[1] = base_effort;
+  total_effort_t[1] = base_effort + sigma_effort * effort_shock_t[1];
 
   f_t[1] = total_effort_t[1] .* q_t[1,1];
 
@@ -253,7 +253,7 @@ transformed parameters{
 
     ssb_temp =  sum(ssb_ta[t - 1, 1:n_ages]);
 
-    n_ta[t,1] = ((0.8 * r0 * h *ssb_temp) / (0.2 * ssb0 * (1 - h) + (h - 0.2) * ssb_temp)) * rec_dev_t[t -1]; //calculate recruitment
+    n_ta[t,1] = ((0.8 * r0 * h *ssb_temp) / (0.2 * ssb0 * (1 - h) + (h - 0.2) * ssb_temp)) * rec_dev_t[t]; //calculate recruitment
 
     n_ta[t , 2:n_ages] = n_ta[t - 1, 1:(n_ages -1)] .* (exp(-(m + f_t[t - 1] * mean_selectivity_at_age[1:(n_ages - 1)])))'; // grow and die
 
@@ -275,18 +275,14 @@ transformed parameters{
 
   profit_t[t - 1] = price_t[t - 1,1] * c_t[t - 1] - cost_t[t - 1,1] * total_effort_t[t - 1] ^ beta;
 
-  sq_profit_t[t - 1] = price_t[t - 1,2] * c_t[t - 1] - cost_t[t - 1,2] * total_effort_t[t - 1] ^ beta;
+  // sq_profit_t[t - 1] = price_t[t - 1,2] * c_t[t - 1] - cost_t[t - 1,2] * total_effort_t[t - 1] ^ beta;
+  //
+  // profit_shock_t[t - 1] = profit_t[t - 1] - sq_profit_t[t - 1];
+  //
 
-  profit_shock_t[t - 1] = profit_t[t - 1] - sq_profit_t[t - 1];
+// profit_per_unit_effort[t - 1]  = profit_t[t - 1] / total_effort_t[t - 1];
 
-// print(exp(p_response * (profit_t[t - 1] / total_effort_t[t - 1])))
-
-
-// effort_expansion[t - 1]  = fabs(exp(p_response * (profit_t[t - 1] / total_effort_t[t - 1])) - 1);
-
-profit_per_unit_effort[t - 1]  = profit_t[t - 1] / total_effort_t[t - 1];
-
-new_effort = (total_effort_t[t - 1] + p_expansion * (profit_t[t - 1] / (ssb0 * mean_price))) + sigma_effort * effort_shock_t[t - 1];
+new_effort = base_effort + sigma_effort * effort_shock_t[t];
 
 if (new_effort <= 0){
 
@@ -295,10 +291,6 @@ if (new_effort <= 0){
 }
 
  total_effort_t[t] = new_effort; //* exp(sigma_effort * effort_shock_t[t - 1]);
-
- // total_effort_t[t] = (total_effort_t[t - 1] * exp(.001 * (profit_t[t - 1] / (ssb0 * mean_price)))) * exp(sigma_effort * effort_shock_t[t - 1]);
-
- // print(profit_t[t - 1])
 
 
   f_t[t] = total_effort_t[t] * q_t[t,1];
@@ -322,18 +314,16 @@ if (new_effort <= 0){
 
   profit_t[nt] = price_t[nt,1] * c_t[nt] - cost_t[nt,1] * total_effort_t[nt] ^ beta;
 
-  sq_profit_t[nt] = price_t[nt,2] * c_t[nt] - cost_t[nt,2] * total_effort_t[nt] ^ beta;
+  // sq_profit_t[nt] = price_t[nt,2] * c_t[nt] - cost_t[nt,2] * total_effort_t[nt] ^ beta;
 
-  profit_shock_t[nt] = profit_t[nt] - sq_profit_t[nt];
+  // profit_shock_t[nt] = profit_t[nt] - sq_profit_t[nt];
 
   p_age_sampled = cn_ta[nt, 1:n_ages] / sum(cn_ta[nt, 1:n_ages]);
 
   p_lbin_sampled[nt, 1:n_lbins] = p_age_sampled * length_at_age_key / sum(p_age_sampled * length_at_age_key);
 
 
-  profit_per_unit_effort[nt]  = profit_t[nt] / total_effort_t[nt];
-
-  // effort_expansion[nt]  = fabs(exp(p_response * (profit_t[nt] / total_effort_t[nt])) - 1);
+  // profit_per_unit_effort[nt]  = profit_t[nt] / total_effort_t[nt];
 
 }
 
@@ -357,29 +347,25 @@ for (i in 1:(n_lcomps - 1)){
 
 //// effort prior ////
 
-effort_shock_t ~ normal(0,1);
+// effort_shock_t ~ normal(0,1);
+
+for (i in 2:nt){
+
+  effort_shock_t[i] ~ normal(effort_shock_t[i - 1],1);
+
+}
 
 log_sigma_effort ~ normal(0,0.1);
-
-// base_effort ~ normal(log(m / .001), 1);
-
-// p_response ~ normal(0,.1); // constrain p_response
-
-// p_response ~ normal(log(mean_change) / mean(profit_per_unit_effort), .1);
 
 //// recruitment prior ////
 
 uc_rec_dev_t ~ normal(0, 1);
-
-// sigma_r ~ normal(0.7, 0.2);
 
 log_sigma_r ~ normal(log(sigma_r_guess), 0.1);
 
 //// selectivity likelihood ////
 
 p_length_50_sel ~ normal(length_50_sel_guess/loo, .1 * loo);
-
-// sel_delta ~ normal(delta_guess, 2);
 
 
 } // close model block
