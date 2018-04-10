@@ -16,15 +16,17 @@ library(patchwork)
 library(hrbrthemes)
 library(foreach)
 library(doParallel)
-library(tidyverse)
 library(extrafont)
+library(LIME)
+library(methods)
+library(tidyverse)
 rstan::rstan_options(auto_write = TRUE)
 extrafont::loadfonts()
 functions <- list.files(here::here("functions"))
 
 walk(functions, ~ here::here("functions", .x) %>% source()) # load local functions
 
-run_name <- "scrooge-results"
+run_name <- "v1.0"
 
 run_dir <- here::here("results", run_name)
 
@@ -51,7 +53,7 @@ run_tests <- F
 
 in_clouds <-  F
 
-n_cores <- 1
+n_cores <- 4
 
 # load data ---------------------------------------------------------------
 
@@ -377,29 +379,29 @@ if (fit_models == T) {
 
 
   fisheries_sandbox <- fisheries_sandbox %>%
-    slice(sample(1:nrow(fisheries_sandbox),4, replace = F)) %>%
+    slice(sample(1:nrow(fisheries_sandbox),8, replace = F)) %>%
     mutate(prepped_fishery = map(prepped_fishery, subsample_data, window = 10, period = "end"))
 
   sfs <- safely(fit_scrooge)
 
-  doParallel::registerDoParallel(cores = 4)
+  doParallel::registerDoParallel(cores = n_cores)
 
   foreach::getDoParWorkers()
 
-  fits <- foreach::foreach(i = 1:nrow(fisheries_sandbox)[1]) %dopar% {
+  fits <- foreach::foreach(i = 1:nrow(fisheries_sandbox)) %dopar% {
     out <- sfs(
       data = fisheries_sandbox$prepped_fishery[[i]]$scrooge_data,
+      fish = fisheries_sandbox$prepped_fishery[[i]]$fish,
+      fleet = fisheries_sandbox$prepped_fishery[[i]]$fleet,
       economic_model = fisheries_sandbox$economic_model[[i]],
       scrooge_file = "bioeconomic_scrooge",
-      iter = 2000,
-      warmup = 1000,
+      iter = 10000,
+      warmup = 5000,
       adapt_delta = 0.8,
       max_treedepth = 12
     )
 
   } # close fitting loop
-
-
 
   fisheries_sandbox$scrooge_fit <- fits
 
@@ -423,7 +425,9 @@ scrooge_worked <- map(fisheries_sandbox$scrooge_fit,'error') %>% map_lgl(is.null
 
 fisheries_sandbox <- fisheries_sandbox %>%
   filter(scrooge_worked) %>%
-  mutate(scrooge_fit = map(scrooge_fit,"result")) %>%
+  mutate(scrooge_results = map(scrooge_fit,"result")) %>%
+  mutate(lime_fit = map(scrooge_results,"lime_fit")) %>%
+  mutate(scrooge_fit = map(scrooge_results, "scrooge_fit")) %>%
   mutate(processed_scrooge = map2(
     scrooge_fit,
     map(prepped_fishery, "sampled_years"),

@@ -1,4 +1,4 @@
-calc_msy <- function(fmsy,data, time){
+est_msy <- function(fmsy,data, time){
 
   data_frame(n = rep(0, time), catch = rep(0,time))
 
