@@ -67,6 +67,14 @@ if (in_clouds == T){
 
   system("gcsfuse scrooge-results results/scrooge-results")
 
+  system("umount data/scrooge-data")
+
+  system("rm -r data/scrooge-data")
+
+  system("mkdir data/scrooge-data")
+
+  system("gcsfuse scrooge-data data/scrooge-data")
+
   cloud_dir <- here::here("results","scrooge-results",run_name)
 
   if (dir.exists(cloud_dir) == F){
@@ -205,7 +213,14 @@ if (sim_fisheries == T)
        fisheries_sandbox)
 
 } else{
+
+  if (in_clouds == F){
   load(file = here::here("processed_data", "fisheries_sandbox.Rdata"))
+  } else{
+
+    load(file = here::here("data","scrooge-data","fisheries_sandbox.Rdata"))
+
+  }
 }
 
 # apply candidate assessment models ---------------------------------------
