@@ -27,3 +27,4 @@ data/google-bucket/
 *.pages
 *.Rdata
 *.rds
+*.txt

@@ -51,7 +51,7 @@ if (dir.exists(run_dir) == F) {
 run_description <- "Most basic version of results up and running"
 
 write(run_description,
-      file = here::here("results", run_name, "description.txt"))
+      file = glue::glue("{run_dir}/description.txt"))
 
 scrooge_theme <- theme_ipsum(base_size = 14, axis_title_size = 18)
 
