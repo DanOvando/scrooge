@@ -29,7 +29,20 @@ walk(functions, ~ here::here("functions", .x) %>% source()) # load local functio
 
 run_name <- "v1.0"
 
-run_dir <- here::here("results", run_name)
+in_clouds <-  T
+
+local_data <- T
+
+if (in_clouds == F){
+
+  run_dir <- here::here("results", run_name)
+
+} else{
+
+  run_dir <- here::here("results","scrooge-results", run_name)
+
+}
+
 
 if (dir.exists(run_dir) == F) {
   dir.create(run_dir, recursive = T)
@@ -52,9 +65,7 @@ fit_models <- T
 
 run_tests <- F
 
-in_clouds <-  T
 
-local_data <- T
 
 n_cores <- 5
 
@@ -480,13 +491,14 @@ if (fit_models == T) {
 
 
   save(
-    file = here::here("results", run_name, "fitted_fisheries_sandbox.Rdata"),
+    file = glue::glue("{run_dir}/fitted_fisheries_sandbox.Rdata"),
     fisheries_sandbox
   )
 
 
 } else{
-  load(file = here::here("results", run_name, "fitted_fisheries_sandbox.Rdata"))
+
+  load(file = glue::glue("{run_dir}/fitted_fisheries_sandbox.Rdata"))
 
 }
 
