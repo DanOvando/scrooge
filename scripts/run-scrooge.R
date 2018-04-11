@@ -54,6 +54,8 @@ run_tests <- F
 
 in_clouds <-  T
 
+local_data <- T
+
 n_cores <- 5
 
 if (in_clouds == T){
@@ -61,17 +63,26 @@ if (in_clouds == T){
 
   system("umount results/scrooge-results")
 
-  system("rm -r results/scrooge-results")
+  # system("rm -r results/scrooge-results")
 
-  system("mkdir results/scrooge-results")
+  if (dir.exists("results/scroote-results") == F){
+
+     system("mkdir results/scrooge-results")
+
+  }
 
   system("gcsfuse scrooge-results results/scrooge-results")
 
   system("umount data/scrooge-data")
 
-  system("rm -r data/scrooge-data")
+  if (dir.exists("results/scroote-results") == F){
 
-  system("mkdir data/scrooge-data")
+    system("mkdir data/scrooge-data")
+
+  }
+  # system("rm -r data/scrooge-data")
+
+  # system("mkdir data/scrooge-data")
 
   system("gcsfuse scrooge-data data/scrooge-data")
 
@@ -87,7 +98,7 @@ if (in_clouds == T){
 
 # load data ---------------------------------------------------------------
 
-if (in_clouds == F){
+if (in_clouds == F | local_data == T){
 
   data_dir <- "data"
 } else{
@@ -214,7 +225,7 @@ if (sim_fisheries == T)
 
 } else{
 
-  if (in_clouds == F){
+  if (in_clouds == F | local_data == T){
   load(file = here::here("processed_data", "fisheries_sandbox.Rdata"))
   } else{
 
