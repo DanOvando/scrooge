@@ -19,7 +19,6 @@ library(doParallel)
 library(extrafont)
 library(LIME)
 library(LBSPR)
-library(methods)
 library(tidyverse)
 rstan::rstan_options(auto_write = TRUE)
 extrafont::loadfonts()
@@ -27,7 +26,7 @@ functions <- list.files(here::here("functions"))
 
 walk(functions, ~ here::here("functions", .x) %>% source()) # load local functions
 
-run_name <- "v1.0"
+run_name <- "v1.2"
 
 in_clouds <-  T
 
@@ -50,8 +49,6 @@ if (dir.exists(run_dir) == F) {
 
 run_description <- "Most basic version of results up and running"
 
-write(run_description,
-      file = glue::glue("{run_dir}/description.txt"))
 
 scrooge_theme <- theme_ipsum(base_size = 14, axis_title_size = 18)
 
@@ -74,7 +71,7 @@ if (in_clouds == T){
 
   system("umount results/scrooge-results")
 
-  # system("rm -r results/scrooge-results")
+  system("rm -r results/scrooge-results")
 
   if (dir.exists("results/scroote-results") == F){
 
@@ -86,12 +83,13 @@ if (in_clouds == T){
 
   system("umount data/scrooge-data")
 
-  if (dir.exists("results/scroote-results") == F){
+  system("rm -r data/scrooge-data")
+
+  if (dir.exists("results/scroote-data") == F){
 
     system("mkdir data/scrooge-data")
 
   }
-  # system("rm -r data/scrooge-data")
 
   # system("mkdir data/scrooge-data")
 
@@ -106,6 +104,9 @@ if (in_clouds == T){
   }
 
 }
+
+write(run_description,
+      file = glue::glue("{run_dir}/description.txt"))
 
 # load data ---------------------------------------------------------------
 
