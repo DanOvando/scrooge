@@ -18,6 +18,7 @@ library(foreach)
 library(doParallel)
 library(extrafont)
 library(LIME)
+library(LBSPR)
 library(methods)
 library(tidyverse)
 rstan::rstan_options(auto_write = TRUE)
@@ -53,7 +54,7 @@ run_tests <- F
 
 in_clouds <-  F
 
-n_cores <- 4
+n_cores <- 5
 
 # load data ---------------------------------------------------------------
 
@@ -121,7 +122,8 @@ if (sim_fisheries == T)
         price_ac = 0.75,
         cost_ac = 0.75,
         # economic_model = c(1,0),
-        steepness = c(0.6,0.9)
+        steepness = c(0.6,0.9),
+        obs_error = c(0,0.2)
       )
     )
 
@@ -156,7 +158,8 @@ if (sim_fisheries == T)
         cost_cv = cost_cv,
         price_ac = price_ac,
         cost_ac = cost_ac,
-        steepness = steepness
+        steepness = steepness,
+        obs_error = obs_error
       ),
       safely(prepare_fishery),
       sim_years = 50,
@@ -249,11 +252,9 @@ if (run_tests == T) {
 
 
   # variable open access
-  #
-  #
-  #
+
   vfo <- fisheries_sandbox %>%
-    filter(
+    dplyr::filter(
       fleet_model == "open-access",
       sigma_r == max(sigma_r),
       sigma_effort == min(sigma_effort),
@@ -378,9 +379,26 @@ if (run_tests == T) {
 if (fit_models == T) {
 
 
+  experiments <- expand.grid(period = c("beginning", "middle","end"), window = c(2,5,10),
+                             fishery = 1:nrow(fisheries_sandbox), stringsAsFactors = F)
+
   fisheries_sandbox <- fisheries_sandbox %>%
-    slice(sample(1:nrow(fisheries_sandbox),8, replace = F)) %>%
-    mutate(prepped_fishery = map(prepped_fishery, subsample_data, window = 10, period = "end"))
+    mutate(fishery = 1:nrow(.)) %>%
+    left_join(experiments, by = "fishery") %>%
+    # slice(sample(1:nrow(fisheries_sandbox),2, replace = F)) %>%
+    mutate(prepped_fishery = pmap(list(
+      prepped_fishery = prepped_fishery,
+      window = window,
+      period = period), subsample_data))
+
+  # fit lbspr
+
+  # fisheries_sandbox <- fisheries_sandbox %>%
+  #   mutate(lbspr_fit = pmap(list(
+  #     data = map(prepped_fishery, "scrooge_data"),
+  #     fish = map(prepped_fishery, "fish"),
+  #     fleet = map(prepped_fishery, "fleet")
+  #   ), fit_lbspr))
 
   sfs <- safely(fit_scrooge)
 
@@ -393,10 +411,9 @@ if (fit_models == T) {
       data = fisheries_sandbox$prepped_fishery[[i]]$scrooge_data,
       fish = fisheries_sandbox$prepped_fishery[[i]]$fish,
       fleet = fisheries_sandbox$prepped_fishery[[i]]$fleet,
-      economic_model = fisheries_sandbox$economic_model[[i]],
       scrooge_file = "bioeconomic_scrooge",
-      iter = 10000,
-      warmup = 5000,
+      iter = 2000,
+      warmup = 1000,
       adapt_delta = 0.8,
       max_treedepth = 12
     )
@@ -425,9 +442,7 @@ scrooge_worked <- map(fisheries_sandbox$scrooge_fit,'error') %>% map_lgl(is.null
 
 fisheries_sandbox <- fisheries_sandbox %>%
   filter(scrooge_worked) %>%
-  mutate(scrooge_results = map(scrooge_fit,"result")) %>%
-  mutate(lime_fit = map(scrooge_results,"lime_fit")) %>%
-  mutate(scrooge_fit = map(scrooge_results, "scrooge_fit")) %>%
+  mutate(scrooge_fit = map(scrooge_fit,"result")) %>%
   mutate(processed_scrooge = map2(
     scrooge_fit,
     map(prepped_fishery, "sampled_years"),

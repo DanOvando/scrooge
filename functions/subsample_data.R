@@ -26,9 +26,9 @@ subsample_data <- function(prepped_fishery, period = "beginning", window = 5){
 
   prepped_fishery$scrooge_data$length_comps_years <- 1:length(sampled_years)
 
-  prepped_fishery$scrooge_data$n_lcomps <- length(sampled_years)
+  prepped_fishery$scrooge_data$n_lcomps <- ifelse(length(sampled_years) > 1, length(sampled_years), array(1, dim = 1))
 
-  prepped_fishery$scrooge_data$nt <- length(sampled_years)
+  prepped_fishery$scrooge_data$nt <- ifelse(length(sampled_years) > 1, length(sampled_years), array(1, dim = 1))
 
   prepped_fishery$scrooge_data$price_t <- prepped_fishery$scrooge_data$price_t %>%
     slice(sampled_years)

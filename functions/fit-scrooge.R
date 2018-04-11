@@ -9,7 +9,6 @@ fit_scrooge <- function(data,fish, fleet,scrooge_file = "scrooge",
 
 
   data$sigma_r_guess <- 0.4
-
   fmsy <- nlminb(data$m, est_msy, data = data, time = 10, lower = 0, upper = 2)
 
   pmsy <- mean(data$price_t$value) * -fmsy$objective - mean(data$cost_t$value) * (fmsy$par / mean(data$q_t$value)) ^ data$beta
@@ -44,67 +43,21 @@ fit <-
 
 
   # clean up old DLLS per https://github.com/stan-dev/rstan/issues/448
-  loaded_dlls = getLoadedDLLs()
-  loaded_dlls = loaded_dlls[str_detect(names(loaded_dlls), '^file')]
-  if (length(loaded_dlls) > 10) {
-    for (dll in head(loaded_dlls, -10)) {
-      # message("Unloading DLL ", dll[['name']], ": ", dll[['path']])
-      dyn.unload(dll[['path']])
+
+    loaded_dlls = getLoadedDLLs()
+
+    loaded_dlls = loaded_dlls[str_detect(names(loaded_dlls), '^file')]
+    if (length(loaded_dlls) > 25) {
+      for (dll in head(loaded_dlls, -15)) {
+        # message("Unloading DLL ", dll[['name']], ": ", dll[['path']])
+        dyn.unload(dll[['path']])
+      }
     }
-  }
-  # message("DLL Count = ", length(getLoadedDLLs()), ": [", str_c(names(loaded_dlls), collapse = ","), "]")
 
+    out <- fit
 
-
-    scrooge_lh <- LIME::create_lh_list(vbk= fish$vbk,
-                                 linf= fish$linf,
-                                 t0= fish$t0,
-                                 lwa= fish$weight_a,
-                                 lwb= fish$weight_b,
-                                 S50= fleet$length_50_sel,
-                                 S95=fleet$length_95_sel,
-                                 selex_input="length",
-                                 selex_type=c("logistic"),
-                                 M50= fish$length_50_mature,
-                                 M95= fish$length_95_mature,
-                                 maturity_input="length",
-                                 M= fish$m,
-                                 binwidth=1,
-                                 CVlen= fish$cv_len,
-                                 SigmaR= fish$sigma_r + .001,
-                                 SigmaF= fleet$sigma_effort + .001,
-                                 SigmaC=0.2,
-                                 SigmaI=0.2,
-                                 R0= fish$r0,
-                                 qcoef=1e-5,
-                                 start_ages=0,
-                                 rho=0,
-                                 nseasons=1)
-
-    temp_LF_matrix <- data$length_comps
-
-
-    LF_matrix <- temp_LF_matrix %>%
-      as.matrix()
-
-    rownames(LF_matrix) <- 1:nrow(LF_matrix)
-
-
-    scrooge_data_LF <-
-      list("years" = 1:nrow(LF_matrix), "LF" = LF_matrix)
-
-
-    # start <- Sys.time()
-    res <- LIME::run_LIME(modpath=NULL,
-                    lh=scrooge_lh,
-                    input_data=scrooge_data_LF,
-                    est_sigma="log_sigma_R",
-                    data_avail="LC",
-                    newtonsteps=3)
-    # end <- Sys.time() - start
-
- out <-  list(scrooge_fit = fit,
-       lime_fit = res)
+  # out <-  list(scrooge_fit = fit,
+  #      lime_fit = res)
 
   return(out)
 

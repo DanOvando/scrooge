@@ -25,7 +25,9 @@ prepare_fishery <-
            steepness = 0.8,
            profit_lags = 1,
            rec_ac = 0.25,
-           query_price = T
+           query_price = T,
+           bias = 0,
+           obs_error = 0
            ) {
 
     if (query_price == T) {
@@ -152,6 +154,42 @@ prepare_fishery <-
 
     linf_buffer <- linf_buffer
 
+    # add in observation error
+    true_min <- fish$min_age
+
+    true_max <- fish$max_age
+
+    time_step <- fish$time_step
+
+    fish <- map_if(fish, is.numeric, ~.x * exp(rnorm(1, rnorm(1,0, bias), obs_error)))
+
+    fish$min_age <- true_min
+
+    fish$max_age <- true_max
+
+    fish$time_step <- time_step
+
+    fish$length_at_age <-   fish$linf * (1 - exp(- fish$vbk * (seq(fish$min_age,fish$max_age, by = fish$time_step) -  fish$t0)))
+
+    fish$weight_at_age <-  fish$weight_a * fish$length_at_age ^ fish$weight_b
+
+    fish$maturity_at_age <-
+      ((1 / (1 + exp(-log(
+        19
+      ) * ((seq(fish$min_age, fish$max_age, by = fish$time_step) - fish$age_50_mature) / pmax(0.01,fish$age_95_mature - fish$age_50_mature)
+      )))))
+
+    fleet <- map_if(fleet, is.numeric, ~.x * exp(rnorm(1, rnorm(1,0, bias), obs_error)))
+
+    fleet$length_95_sel <- fleet$length_50_sel + fleet$delta
+
+    fleet$sel_at_age <-
+      ((1 / (1 + exp(-log(
+        19
+      ) * ((fish$length_at_age - fleet$length_50_sel) / pmax(0.01,fleet$length_95_sel - fleet$length_50_sel)
+      )))))
+
+
     length_at_age_key <- generate_length_at_age_key(
       min_age = fish$min_age,
       max_age = fish$max_age,
@@ -173,7 +211,7 @@ prepare_fishery <-
       nest(-year,-patch, .key = n_at_age) %>%
       mutate(catch_length = map(
         n_at_age,
-        ~ sample_lengths(
+        ~ spasm::sample_lengths(
           n_at_age = .x,
           cv = fish$cv_len,
           k = fish$vbk,
@@ -197,6 +235,8 @@ prepare_fishery <-
                 cost = unique(cost),
                 q = 0.1) %>%
       gather(variable, value,-year) %>%
+      ungroup() %>%
+      mutate(value = value * exp(rnorm(nrow(.), rnorm(nrow(.),0, bias), obs_error))) %>%
       group_by(variable) %>%
       mutate(lag_value = lag(value, 1)) %>%
       ungroup() %>%
@@ -211,7 +251,6 @@ prepare_fishery <-
     q_t <- price_and_cost_history %>%
       filter(variable == "q")
 
-
     scrooge_data <- list(
       economic_model = economic_model,
       estimate_recruits = 1,
@@ -222,24 +261,25 @@ prepare_fishery <-
       q_t = q_t %>% select(value, lag_value),
       beta = 1.3,
       # base_effort = fish$m / mean(q_t$value),
-      length_50_sel_guess = fleet$length_50_sel,
+      length_50_sel_guess = fleet$length_50_sel * exp(rnorm(1, rnorm(1,0, bias), obs_error)),
       delta_guess = 2,
       n_lcomps = nrow(length_comps),
       nt = length(length_comps$year),
       n_ages = fish$max_age + 1,
       n_lbins = ncol(length_at_age_key),
       ages = 1:(fish$max_age + 1),
-      mean_length_at_age = fish$length_at_age,
-      mean_weight_at_age = fish$weight_at_age,
-      mean_maturity_at_age = fish$maturity_at_age,
       m = fish$m,
       h = fish$steepness,
       r0 = fish$r0,
       k = fish$vbk,
       loo = fish$linf,
       t0 = fish$t0,
-      length_at_age_key = as.matrix(length_at_age_key)
+      length_at_age_key = as.matrix(length_at_age_key),
+      mean_length_at_age = fish$length_at_age,
+      mean_weight_at_age = fish$weight_at_age,
+      mean_maturity_at_age = fish$maturity_at_age
     )
+
 
     out <- list(simed_fishery = sim,
                 length_comps = length_comps,

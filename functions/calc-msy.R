@@ -1,6 +1,5 @@
 est_msy <- function(fmsy,data, time){
 
-  data_frame(n = rep(0, time), catch = rep(0,time))
 
   nframe <- matrix(NA, nrow = time, ncol = data$n_ages)
 
@@ -11,7 +10,6 @@ est_msy <- function(fmsy,data, time){
   ssbtemp <- NA
 
   selguess <- as.numeric(data$mean_length_at_age > data$length_50_sel_guess)
-
   for (i in 2:10){
 
     ssbtemp = sum(nframe[i - 1,] * data$mean_weight_at_age * data$mean_maturity_at_age)
