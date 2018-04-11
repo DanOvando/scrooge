@@ -1,0 +1,8 @@
+umount results/scrooge-results
+
+rm -r results/scrooge-results
+
+mkdir results/scrooge-results
+
+gcsfuse scrooge-results results/scrooge-results
+

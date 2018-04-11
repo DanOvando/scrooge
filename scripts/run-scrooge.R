@@ -52,9 +52,30 @@ fit_models <- T
 
 run_tests <- F
 
-in_clouds <-  F
+in_clouds <-  T
 
 n_cores <- 5
+
+if (in_clouds == T){
+
+
+  system("umount results/scrooge-results")
+
+  system("rm -r results/scrooge-results")
+
+  system("mkdir results/scrooge-results")
+
+  system("gcsfuse scrooge-results results/scrooge-results")
+
+  cloud_dir <- here::here("results","scrooge-results",run_name)
+
+  if (dir.exists(cloud_dir) == F){
+
+  dir.create(cloud_dir)
+
+  }
+
+}
 
 # load data ---------------------------------------------------------------
 
@@ -202,7 +223,7 @@ if (run_tests == T) {
            cost_cv == min(cost_cv)) %>%
     slice(1) %>%
     mutate(prepped_fishery = map(prepped_fishery, subsample_data, window = 10, period = "end")) %>%
-    mutate(scrooge_fit = map(
+    mutate(scrooge_fit = map2(
       prepped_fishery,
       ~ fit_scrooge(
         data = .x$scrooge_data,
@@ -210,7 +231,8 @@ if (run_tests == T) {
         warmup = 1000,
         adapt_delta = 0.8,
         economic_model = 1,
-        scrooge_file = "bioeconomic_scrooge"
+        scrooge_file = "bioeconomic_scrooge",
+        in_clouds = in_clouds
       )
     ))
 
@@ -376,16 +398,20 @@ if (run_tests == T) {
 
 } # close test runs
 
+
+
+
+
 if (fit_models == T) {
 
 
   experiments <- expand.grid(period = c("beginning", "middle","end"), window = c(2,5,10),
-                             fishery = 1:nrow(fisheries_sandbox), stringsAsFactors = F)
+                             experiment = 1:nrow(fisheries_sandbox), stringsAsFactors = F)
 
   fisheries_sandbox <- fisheries_sandbox %>%
-    mutate(fishery = 1:nrow(.)) %>%
-    left_join(experiments, by = "fishery") %>%
-    # slice(sample(1:nrow(fisheries_sandbox),2, replace = F)) %>%
+    mutate(experiment = 1:nrow(.)) %>%
+    left_join(experiments, by = "experiment") %>%
+    slice(sample(1:nrow(fisheries_sandbox),4, replace = F)) %>%
     mutate(prepped_fishery = pmap(list(
       prepped_fishery = prepped_fishery,
       window = window,
@@ -411,16 +437,21 @@ if (fit_models == T) {
       data = fisheries_sandbox$prepped_fishery[[i]]$scrooge_data,
       fish = fisheries_sandbox$prepped_fishery[[i]]$fish,
       fleet = fisheries_sandbox$prepped_fishery[[i]]$fleet,
+      experiment = fisheries_sandbox$experiment[i],
       scrooge_file = "bioeconomic_scrooge",
       iter = 2000,
       warmup = 1000,
       adapt_delta = 0.8,
-      max_treedepth = 12
+      max_treedepth = 12,
+      in_clouds = in_clouds,
+      cloud_dir = cloud_dir
     )
 
   } # close fitting loop
 
   fisheries_sandbox$scrooge_fit <- fits
+
+
 
   save(
     file = here::here("results", run_name, "fitted_fisheries_sandbox.Rdata"),
@@ -439,10 +470,23 @@ if (fit_models == T) {
 
 scrooge_worked <- map(fisheries_sandbox$scrooge_fit,'error') %>% map_lgl(is.null)
 
-
 fisheries_sandbox <- fisheries_sandbox %>%
   filter(scrooge_worked) %>%
-  mutate(scrooge_fit = map(scrooge_fit,"result")) %>%
+  mutate(scrooge_fit = map(scrooge_fit,"result"))
+
+
+if(in_clouds == T){
+
+  loadfoo <- function(experiment, cloud_dir){
+    readRDS(glue::glue("{cloud_dir}/{experiment}"))
+  }
+
+  fisheries_sandbox <- fisheries_sandbox %>%
+    mutate(scrooge_fit = map(scrooge_fit, loadfoo, cloud_dir = cloud_dir))
+
+}
+
+fisheries_sandbox <-  fisheries_sandbox%>%
   mutate(processed_scrooge = map2(
     scrooge_fit,
     map(prepped_fishery, "sampled_years"),

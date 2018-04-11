@@ -1,11 +1,13 @@
-fit_scrooge <- function(data,fish, fleet,scrooge_file = "scrooge",
+fit_scrooge <- function(data,fish, fleet,experiment,scrooge_file = "scrooge",
                         chains = 1, refresh = 25, cores = 1,
                         iter = 1000,
                         warmup = 2000,
                         adapt_delta = 0.8, economic_model = 1,
                         model_type = "scrooge",
                         max_treedepth = 10,
-                        pmsy_expansion = 0.5){
+                        pmsy_expansion = 0.5,
+                        in_clouds = F,
+                        cloud_dir = "results/scrooge_results"){
 
 
   data$sigma_r_guess <- 0.4
@@ -54,10 +56,22 @@ fit <-
       }
     }
 
+
+
+    if (in_clouds == T){
+
+      filename <- glue::glue("experiment_{experiment}.rds")
+
+      saveRDS(fit, file = glue::glue("{cloud_dir}/{filename}"))
+
+      rm(fit)
+
+      fit <-  filename
+
+    }
+
     out <- fit
 
-  # out <-  list(scrooge_fit = fit,
-  #      lime_fit = res)
 
   return(out)
 
