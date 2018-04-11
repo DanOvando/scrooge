@@ -26,9 +26,10 @@ functions <- list.files(here::here("functions"))
 
 walk(functions, ~ here::here("functions", .x) %>% source()) # load local functions
 
-run_name <- "v1.2"
 
 in_clouds <-  T
+
+run_name <- "v1.2"
 
 local_data <- T
 
@@ -37,6 +38,8 @@ if (in_clouds == F){
   run_dir <- here::here("results", run_name)
 
 } else{
+
+  run_name <- sample(fruit,1)
 
   run_dir <- here::here("results","scrooge-results", run_name)
 
@@ -47,7 +50,7 @@ if (dir.exists(run_dir) == F) {
   dir.create(run_dir, recursive = T)
 }
 
-run_description <- "Most basic version of results up and running"
+run_description <- "abalone run"
 
 
 scrooge_theme <- theme_ipsum(base_size = 14, axis_title_size = 18)
