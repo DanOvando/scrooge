@@ -1,9 +1,11 @@
 process_scrooge <-
   function(fit, sampled_years,to_tidy = c("f_t", "n_tl", "rec_dev_t"
                             )) {
+
     fits <- rstan::extract(fit)
 
     extract_thing <- function(thing, fits, sampled_years) {
+
       tidy_thing <- purrr::array_branch(purrr::pluck(fits, thing), 1)
 
       tidy_thing <-

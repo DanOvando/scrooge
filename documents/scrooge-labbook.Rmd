@@ -2887,3 +2887,52 @@ Week of may 9th: Get a "complete" run working to see the model end-to-end
 Week of may 16: Do any new runs that need doing as a result of may 9th
 
 May 23: Write presentation
+
+# meeting with chris
+
+endogenous vs exogenous shocks
+
+diffuse price 
+
+if you don't have any information 
+
+unemployment, labor 
+
+if profit goes up by 10%, by what percent does effort go up
+
+look at data from ram what's the biggest increase in F/Fmsy that we ever see 
+
+then, calculate thetat as the thing that prodiuces that change in f/fmsy at b/bmsy = 1
+
+So the two to-do's on this. First, you need to tune the "default" price and cost parameters to something sane, such that at EQ the population is at let's say 0.5 B/Bmsy. 
+
+Second, make theta in units of p/pmsy.  you also need to build it into scrooge for the simulation generation step of things. Set price at someting, find costs that get you to open access level of fishing given theta.
+
+The assumption here is that profits will increase the most when profits are at their highest, so this should be the biggest change in F/Fmsy that we would reasonably expect
+
+```{r}
+ram <- read_csv(here::here("processed_data","ram_data.csv"))
+
+delta_f_v_fmsy = ram %>% 
+  filter(is.na(udivumsypref) == F,udivumsypref < 4) %>%  
+  select(stockid, year, udivumsypref) %>% 
+  arrange(stockid, year) %>% 
+  group_by(stockid) %>% 
+  mutate(delta_year = year - lag(year),
+         delta_u = udivumsypref - lag(udivumsypref)) %>% 
+  ungroup() %>% 
+  filter(delta_year == 1, is.na(delta_u) == F, delta_u > 0)
+
+max_delta_u <- delta_f_v_fmsy %>% 
+  group_by(stockid) %>% 
+  summarise(max_delta_u = max(delta_u))
+  
+mean(max_delta_u$max_delta_u)
+
+max_delta_u %>% 
+ggplot(aes(max_delta_u)) +
+  geom_histogram()
+
+
+```
+

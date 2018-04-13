@@ -9,7 +9,6 @@ judge_performance <-
     observed_variable = enquo(observed_variable)
 
     predicted_values <- purrr::pluck(predicted, predicted_variable)
-
     observed_values <- observed %>%
       select(!!group_level,!!observed_variable) %>%
       group_by(!!group_level) %>%

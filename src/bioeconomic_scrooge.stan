@@ -45,6 +45,12 @@ real length_50_sel_guess;
 
 real delta_guess;
 
+real<lower = 0> p_expansion;
+
+real<lower = 0> p_msy;
+
+real<lower = 0> e_msy;
+
 
 //// biology ////
 
@@ -96,8 +102,6 @@ real<lower = -5, upper = 2> log_sigma_r; // standard deviation of recruitment de
 real<lower = 0, upper = 1.5> p_length_50_sel; // length at 50% selectivity
 
 real<lower = 1e-3, upper = 2> f_init; // f to get to initial depletion
-
-real<lower = 0, upper = .2> p_expansion;
 
 // real<lower = 0, upper = .01> p_expansion;
 
@@ -261,18 +265,11 @@ transformed parameters{
 
   profit_t[t - 1] = price_t[t - 1,1] * c_t[t - 1] - cost_t[t - 1,1] * total_effort_t[t - 1] ^ beta;
 
-  // sq_profit_t[t - 1] = price_t[t - 1,2] * c_t[t - 1] - cost_t[t - 1,2] * total_effort_t[t - 1] ^ beta;
 
-  // profit_shock_t[t - 1] = profit_t[t - 1] - sq_profit_t[t - 1];
-
-// print(exp(p_response * (profit_t[t - 1] / total_effort_t[t - 1])))
+new_effort = total_effort_t[t - 1] + e_msy * (p_expansion * (profit_t[t - 1] / p_msy)) + sigma_effort * effort_shock_t[t - 1];
 
 
-// effort_expansion[t - 1]  = fabs(exp(p_response * (profit_t[t - 1] / total_effort_t[t - 1])) - 1);
-
-// profit_per_unit_effort[t - 1]  = profit_t[t - 1] / total_effort_t[t - 1];
-
-new_effort = (total_effort_t[t - 1] + p_expansion * (profit_t[t - 1] / (ssb0 * mean_price))) + sigma_effort * effort_shock_t[t - 1];
+// new_effort = (total_effort_t[t - 1] + p_expansion * (profit_t[t - 1] / (ssb0 * mean_price))) + sigma_effort * effort_shock_t[t - 1];
 
 if (new_effort <= 0){
 
@@ -345,7 +342,7 @@ for (i in 1:(n_lcomps - 1)){
 
 effort_shock_t ~ normal(0,1);
 
-log_sigma_effort ~ normal(0,0.1);
+log_sigma_effort ~ normal(0,4);
 
 // base_effort ~ normal(log(m / .001), 1);
 
