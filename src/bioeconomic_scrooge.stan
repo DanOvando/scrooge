@@ -45,7 +45,7 @@ real length_50_sel_guess;
 
 real delta_guess;
 
-real<lower = 0> p_expansion;
+real<lower = 0> p_response_guess;
 
 real<lower = 0> p_msy;
 
@@ -103,7 +103,7 @@ real<lower = 0, upper = 1.5> p_length_50_sel; // length at 50% selectivity
 
 real<lower = 1e-3, upper = 2> f_init; // f to get to initial depletion
 
-// real<lower = 0, upper = .01> p_expansion;
+real<lower = 0, upper = 1> p_response;
 
 // real<lower = 0.001> sel_delta; // difference between length 50% selected and length 95% selected
 
@@ -266,10 +266,8 @@ transformed parameters{
   profit_t[t - 1] = price_t[t - 1,1] * c_t[t - 1] - cost_t[t - 1,1] * total_effort_t[t - 1] ^ beta;
 
 
-new_effort = total_effort_t[t - 1] + e_msy * (p_expansion * (profit_t[t - 1] / p_msy)) + sigma_effort * effort_shock_t[t - 1];
+new_effort = total_effort_t[t - 1] + e_msy * (p_response * (profit_t[t - 1] / p_msy)) + sigma_effort * effort_shock_t[t - 1];
 
-
-// new_effort = (total_effort_t[t - 1] + p_expansion * (profit_t[t - 1] / (ssb0 * mean_price))) + sigma_effort * effort_shock_t[t - 1];
 
 if (new_effort <= 0){
 
@@ -346,7 +344,7 @@ log_sigma_effort ~ normal(0,4);
 
 // base_effort ~ normal(log(m / .001), 1);
 
-// p_response ~ normal(0,.1); // constrain p_response
+p_response ~ normal(p_response_guess,.1); // constrain p_response
 
 // p_response ~ normal(log(mean_change) / mean(profit_per_unit_effort), .1);
 

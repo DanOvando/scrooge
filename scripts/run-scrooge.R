@@ -364,7 +364,7 @@ if (run_tests == T) {
       scrooge_file = "bioeconomic_scrooge",
       in_clouds = F,
       experiment = "vfo",
-      max_f_v_fmsy_increase = 0.5
+      max_f_v_fmsy_increase = 0.1
 
     )
     )

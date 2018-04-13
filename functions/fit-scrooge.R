@@ -22,7 +22,7 @@ fit_scrooge <-
 
     data$r0 <- 100
 
-    p_expansion = max_f_v_fmsy_increase
+    p_response = max_f_v_fmsy_increase
 
     f_msy <-
       nlminb(
@@ -60,7 +60,7 @@ fit_scrooge <-
         data = data,
         time = 1000,
         lower = 0,
-        p_expansion = p_expansion,
+        p_response = p_response,
         b_v_bmsy_target = 0.5,
         msy = msy,
         e_msy = e_msy,
@@ -90,14 +90,16 @@ fit_scrooge <-
 
     data$e_msy <- e_msy
 
-    data$p_expansion <- p_expansion
+    data$p_response_guess <- p_response
 
     inits <-
       map(
         1:chains,
         ~ list(
           base_effort = 1 *  exp(rnorm(1, 0, .1)),
-          p_length_50_sel = 0.25 * exp(rnorm(1, 0, .1)))
+          p_length_50_sel = 0.25 * exp(rnorm(1, 0, .1)),
+          p_response = p_response * exp(rnorm(1, 0, .1))
+        )
       )
 
     # inits <-

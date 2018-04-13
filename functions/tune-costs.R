@@ -5,7 +5,7 @@ tune_costs <-
            b_msy,
            data,
            time,
-           p_expansion,
+           p_response,
            price,
            b_v_bmsy_target = 0.5,
            use = "fit") {
@@ -62,7 +62,7 @@ tune_costs <-
 
     for (i in 2:time) {
       new_effort <-
-        effort[i - 1] + e_msy * (p_expansion * (profits[i - 1] / p_msy))
+        effort[i - 1] + e_msy * (p_response * (profits[i - 1] / p_msy))
 
       if (new_effort <= 0) {
         new_effort = -.01 / (new_effort - 1)
