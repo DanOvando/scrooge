@@ -1,9 +1,5 @@
 est_msy <- function(fmsy, data, time, use = "fit") {
 
-  data$r0 <- 100
-
-  data$price <- 1
-
   nframe <- matrix(NA, nrow = time, ncol = data$n_ages)
 
   nframe[1, ] <- data$r0 * exp(-data$m * 0:(data$n_ages - 1))

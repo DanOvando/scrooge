@@ -238,9 +238,8 @@ prepare_fishery <-
       ungroup() %>%
       mutate(value = value * exp(rnorm(nrow(.), rnorm(nrow(.),0, bias), obs_error))) %>%
       group_by(variable) %>%
-      mutate(lag_value = lag(value, 1)) %>%
-      ungroup() %>%
-      mutate(lag_value = ifelse(is.na(lag_value), value, lag_value))
+      mutate(centered_value = value / mean(value)) %>%
+      ungroup()
 
     price_t <- price_and_cost_history %>%
       filter(variable == "price")
@@ -256,9 +255,9 @@ prepare_fishery <-
       estimate_recruits = 1,
       length_comps = length_comps %>% select(-year),
       length_comps_years  = length_comps$year,
-      price_t = price_t %>% select(value, lag_value),
-      cost_t = cost_t %>% select(value, lag_value),
-      q_t = q_t %>% select(value, lag_value),
+      price_t = price_t$centered_value,
+      cost_t = cost_t$centered_value,
+      q_t = q_t$centered_value,
       beta = 1.3,
       # base_effort = fish$m / mean(q_t$value),
       length_50_sel_guess = fleet$length_50_sel * exp(rnorm(1, rnorm(1,0, bias), obs_error)),

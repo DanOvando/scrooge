@@ -7,6 +7,7 @@ tune_costs <-
            time,
            p_response,
            price,
+           q,
            b_v_bmsy_target = 0.5,
            use = "fit") {
 
@@ -29,11 +30,9 @@ tune_costs <-
     selguess <-
       as.numeric(data$mean_length_at_age > data$length_50_sel_guess)
 
-    mean_q <- mean(data$q_t$value)
-
     effort <- rep(0.001, time)
 
-    f <- effort * mean_q
+    f <- effort * q
 
     profits <- rep(0, time)
 
@@ -72,7 +71,7 @@ tune_costs <-
 
       effort[i] <- new_effort
 
-      f[i] <- new_effort * mean_q
+      f[i] <- new_effort * q
 
       ssb[i] = sum(nframe[i - 1,] * data$mean_weight_at_age * data$mean_maturity_at_age)
 
@@ -103,7 +102,7 @@ tune_costs <-
     if (use == "fit"){
     out <- ((biomass[i] / b_msy) - b_v_bmsy_target) ^ 2
     } else {
-      out <- biomass
+      out <- effort
     }
 
 

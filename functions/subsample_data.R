@@ -30,14 +30,11 @@ subsample_data <- function(prepped_fishery, period = "beginning", window = 5){
 
   prepped_fishery$scrooge_data$nt <- ifelse(length(sampled_years) > 1, length(sampled_years), array(1, dim = 1))
 
-  prepped_fishery$scrooge_data$price_t <- prepped_fishery$scrooge_data$price_t %>%
-    slice(sampled_years)
+  prepped_fishery$scrooge_data$price_t <- prepped_fishery$scrooge_data$price_t[sampled_years]
 
-  prepped_fishery$scrooge_data$q_t <- prepped_fishery$scrooge_data$q_t %>%
- slice(sampled_years)
+  prepped_fishery$scrooge_data$q_t <- prepped_fishery$scrooge_data$q_t[sampled_years]
 
-  prepped_fishery$scrooge_data$cost_t <- prepped_fishery$scrooge_data$cost_t %>%
-    slice(sampled_years)
+  prepped_fishery$scrooge_data$cost_t <- prepped_fishery$scrooge_data$cost_t[sampled_years]
 
   return(prepped_fishery)
 

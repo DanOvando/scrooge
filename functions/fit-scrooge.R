@@ -16,7 +16,11 @@ fit_scrooge <-
            max_f_v_fmsy_increase = 0.5,
            in_clouds = F,
            cloud_dir = "results/scrooge_results",
-           price = 0.1) {
+           price = 1,
+           q = 0.01,
+           r0 = 100) {
+
+    data$economic_model <- economic_model
 
     data$sigma_r_guess <- 0.4
 
@@ -35,6 +39,10 @@ fit_scrooge <-
         use = "fit"
       )
 
+    if (f_msy$convergence != 0){
+      stop("check msy convergence")
+    }
+
     b_msy <- est_msy(f_msy$par,
                      data = data,
                      time = 100,
@@ -48,8 +56,7 @@ fit_scrooge <-
     #
     # }
 
-
-    e_msy <- (f_msy$par / mean(data$q_t$value))
+    e_msy <- (f_msy$par / q)
 
     msy <- -f_msy$objective
 
@@ -58,31 +65,37 @@ fit_scrooge <-
         0.2,
         tune_costs,
         data = data,
-        time = 1000,
+        time = 200,
         lower = 0,
         p_response = p_response,
         b_v_bmsy_target = 0.5,
         msy = msy,
         e_msy = e_msy,
         b_msy = b_msy,
-        price = price
+        price = price,
+        q = q
       )
 
+    if (cost$convergence != 0){
+      stop("check cost convergence")
+    }
 
     # check <- tune_costs(cost$par, data = data,
-    #                     time = 10000,
-    #                     p_expansion = p_expansion,
+    #                     time = 1000,
+    #                     p_response = p_response,
     #                     b_v_bmsy_target = 0.5,
     #                     msy = msy,
     #                     e_msy = e_msy,
     #                     b_msy = b_msy,
     #                     price = price,
+    #                     q = q,
     #                     use = "blah")
 
+    data$cost_t <- cost$par * data$cost_t
 
-    data$cost_t$value <- cost$par
+    data$price_t <- price * data$price_t
 
-    data$price_t$value <- price
+    data$q_t <- q * data$q_t
 
     p_msy <- price*msy - cost$par * e_msy ^ data$beta
 

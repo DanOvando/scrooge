@@ -179,10 +179,12 @@ max_f_v_fmsy_increase <- mean(max_delta_u$max_delta_u)
 if (sim_fisheries == T)
 {
 
+  # sci_name = c("Atractoscion nobilis", "Scomber japonicus","Lutjanus campechanus"),
+
   fisheries_sandbox <-
     purrr::cross_df(
       list(
-        sci_name = c("Atractoscion nobilis", "Scomber japonicus","Lutjanus campechanus"),
+        sci_name = c("Lutjanus campechanus"),
         fleet_model = c(
           # "constant-catch",
           "constant-effort",
@@ -293,7 +295,7 @@ if (run_tests == T) {
         warmup = 1000,
         adapt_delta = 0.8,
         economic_model = 1,
-        scrooge_file = "bioeconomic_scrooge",
+        scrooge_file = "scrooge",
         in_clouds = F,
       experiment = "pfo",
       max_f_v_fmsy_increase = 0.5
@@ -360,11 +362,11 @@ if (run_tests == T) {
       iter = 4000,
       warmup = 2000,
       adapt_delta = 0.8,
-      economic_model = 1,
-      scrooge_file = "bioeconomic_scrooge",
+      economic_model = 0,
+      scrooge_file = "scrooge",
       in_clouds = F,
       experiment = "vfo",
-      max_f_v_fmsy_increase = 0.1
+      max_f_v_fmsy_increase = 0.5
 
     )
     )

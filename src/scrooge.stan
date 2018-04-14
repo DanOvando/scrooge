@@ -31,11 +31,11 @@ int length_comps_years[n_lcomps]; // time steps in which length comps are availa
 
 //// economic data ////
 
-matrix[nt,2] price_t;
+row_vector[nt] price_t;
 
-matrix[nt,2] cost_t;
+row_vector[nt] cost_t;
 
-matrix[nt,2] q_t;
+row_vector[nt] q_t;
 
 real beta;
 
@@ -115,8 +115,6 @@ transformed parameters{
 
   real sigma_effort;
 
-  real mean_price;
-
   real new_effort;
 
   real sel_delta;
@@ -181,8 +179,6 @@ transformed parameters{
 
   ssb0 = sum((r0 * exp(-m * (ages - 1)))  .* mean_maturity_at_age .* mean_weight_at_age); // virgin ssb
 
-  mean_price = mean(price_t[1:nt,1]);
-
   n_a_0[1] = r0;
 
   for (i in 2:n_ages){
@@ -209,7 +205,7 @@ transformed parameters{
 
   }
 
-  f_t[1] = total_effort_t[1] .* q_t[1,1];
+  f_t[1] = total_effort_t[1] .* q_t[1];
 
   // order of events spawn, grow and die, recruit
 
@@ -237,7 +233,7 @@ transformed parameters{
 
   // run economic model
 
-  profit_t[t - 1] = price_t[t - 1,1] * c_t[t - 1] - cost_t[t - 1,1] * total_effort_t[t - 1] ^ beta;
+  profit_t[t - 1] = price_t[t - 1] * c_t[t - 1] - cost_t[t - 1] * total_effort_t[t - 1] ^ beta;
 
 if (economic_model == 1){
 
@@ -258,7 +254,7 @@ if (new_effort <= 0){
 
  total_effort_t[t] = new_effort; //* exp(sigma_effort * effort_shock_t[t - 1]);
 
-  f_t[t] = total_effort_t[t] * q_t[t,1];
+  f_t[t] = total_effort_t[t] * q_t[t];
 
   // sample lengths //
 
@@ -277,11 +273,7 @@ if (new_effort <= 0){
 
    c_t[nt] = sum(c_ta[nt, 1:n_ages]);
 
-  profit_t[nt] = price_t[nt,1] * c_t[nt] - cost_t[nt,1] * total_effort_t[nt] ^ beta;
-
-  // sq_profit_t[nt] = price_t[nt,2] * c_t[nt] - cost_t[nt,2] * total_effort_t[nt] ^ beta;
-
-  // profit_shock_t[nt] = profit_t[nt] - sq_profit_t[nt];
+  profit_t[nt] = price_t[nt] * c_t[nt] - cost_t[nt] * total_effort_t[nt] ^ beta;
 
   p_age_sampled = cn_ta[nt, 1:n_ages] / sum(cn_ta[nt, 1:n_ages]);
 
