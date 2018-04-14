@@ -26,12 +26,13 @@ functions <- list.files(here::here("functions"))
 
 walk(functions, ~ here::here("functions", .x) %>% source()) # load local functions
 
+in_clouds <-  F
 
-in_clouds <-  T
-
-run_name <- "v1.2"
+run_name <- "satsuma"
 
 local_data <- T
+
+new_run <- F
 
 if (in_clouds == F){
 
@@ -39,7 +40,11 @@ if (in_clouds == F){
 
 } else{
 
-  run_name <- sample(fruit,1)
+  if (new_run == T){
+    set.seed(sample(1:200,1))
+    run_name <- sample(fruit,1)
+    set.seed(42)
+  }
 
   run_dir <- here::here("results","scrooge-results", run_name)
 
@@ -61,13 +66,11 @@ theme_set(scrooge_theme)
 
 sim_fisheries <- F
 
-fit_models <- T
+fit_models <- F
 
 run_tests <- F
 
-
-
-n_cores <- 5
+n_cores <- 1
 
 if (in_clouds == T){
 
@@ -152,7 +155,23 @@ cdfw_catches <- cdfw_data %>%
   )) %>%
   unnest()
 
-cdfw_data$common_name %>% unique()
+ram <- read_csv(here::here("processed_data","ram_data.csv"))
+
+delta_f_v_fmsy = ram %>%
+  filter(is.na(udivumsypref) == F,udivumsypref < 4) %>%
+  select(stockid, year, udivumsypref) %>%
+  arrange(stockid, year) %>%
+  group_by(stockid) %>%
+  mutate(delta_year = year - lag(year),
+         delta_u = udivumsypref - lag(udivumsypref)) %>%
+  ungroup() %>%
+  filter(delta_year == 1, is.na(delta_u) == F, delta_u > 0)
+
+max_delta_u <- delta_f_v_fmsy %>%
+  group_by(stockid) %>%
+  summarise(max_delta_u = max(delta_u))
+
+max_f_v_fmsy_increase <- mean(max_delta_u$max_delta_u)
 
 # create simulated fisheries ----------------------------------------------
 
@@ -160,10 +179,12 @@ cdfw_data$common_name %>% unique()
 if (sim_fisheries == T)
 {
 
+  # sci_name = c("Atractoscion nobilis", "Scomber japonicus","Lutjanus campechanus"),
+
   fisheries_sandbox <-
     purrr::cross_df(
       list(
-        sci_name = c("Atractoscion nobilis", "Scomber japonicus","Lutjanus campechanus"),
+        sci_name = c("Lutjanus campechanus"),
         fleet_model = c(
           # "constant-catch",
           "constant-effort",
@@ -264,18 +285,22 @@ if (run_tests == T) {
            cost_cv == min(cost_cv)) %>%
     slice(1) %>%
     mutate(prepped_fishery = map(prepped_fishery, subsample_data, window = 10, period = "end")) %>%
-    mutate(scrooge_fit = map2(
-      prepped_fishery,
-      ~ fit_scrooge(
-        data = .x$scrooge_data,
+    mutate(scrooge_fit = pmap(
+      list(
+      data = map(prepped_fishery, "scrooge_data"),
+      fish = map(prepped_fishery, "fish"),
+      fleet = map(prepped_fishery, "fleet")),
+      fit_scrooge,
         iter = 2000,
         warmup = 1000,
         adapt_delta = 0.8,
         economic_model = 1,
-        scrooge_file = "bioeconomic_scrooge",
-        in_clouds = in_clouds
+        scrooge_file = "scrooge",
+        in_clouds = F,
+      experiment = "pfo",
+      max_f_v_fmsy_increase = 0.5
       )
-    ))
+    )
 
 
   pfo$summary_plot[[1]]
@@ -328,17 +353,23 @@ if (run_tests == T) {
     ) %>%
     slice(1) %>%
     mutate(prepped_fishery = map(prepped_fishery, subsample_data, window = 10, period = "end")) %>%
-    mutate(scrooge_fit = map(
-      prepped_fishery,
-      ~ fit_scrooge(
-        data = .x$scrooge_data,
-        iter = 2000,
-        warmup = 1000,
-        scrooge_file = "bioeconomic_scrooge",
-        adapt_delta = 0.8,
-        max_treedepth = 12
-      )
-    ))
+    mutate(scrooge_fit = pmap(
+      list(
+        data = map(prepped_fishery, "scrooge_data"),
+        fish = map(prepped_fishery, "fish"),
+        fleet = map(prepped_fishery, "fleet")),
+      fit_scrooge,
+      iter = 4000,
+      warmup = 2000,
+      adapt_delta = 0.8,
+      economic_model = 0,
+      scrooge_file = "scrooge",
+      in_clouds = F,
+      experiment = "vfo",
+      max_f_v_fmsy_increase = 0.5
+
+    )
+    )
 
 
   vfo$summary_plot[[1]]
@@ -467,6 +498,8 @@ if (fit_models == T) {
   #     fleet = map(prepped_fishery, "fleet")
   #   ), fit_lbspr))
 
+  fisheries_sandbox$experiment <- 1:nrow(fisheries_sandbox)
+
   sfs <- safely(fit_scrooge)
 
   doParallel::registerDoParallel(cores = n_cores)
@@ -517,18 +550,27 @@ fisheries_sandbox <- fisheries_sandbox %>%
   mutate(scrooge_fit = map(scrooge_fit,"result"))
 
 
+example_sandbox <- fisheries_sandbox %>%
+  slice(sample(1:nrow(.), 5))
+
+
 if(in_clouds == T){
 
   loadfoo <- function(experiment, cloud_dir){
     readRDS(glue::glue("{cloud_dir}/{experiment}"))
   }
 
-  fisheries_sandbox <- fisheries_sandbox %>%
-    mutate(scrooge_fit = map(scrooge_fit, loadfoo, cloud_dir = cloud_dir))
+  example_sandbox <- example_sandbox %>%
+    mutate(scrooge_fit = map(scrooge_fit, safely(loadfoo), cloud_dir = cloud_dir))
 
 }
 
-fisheries_sandbox <-  fisheries_sandbox%>%
+examples_worked <- map(example_sandbox$scrooge_fit,'error') %>% map_lgl(is.null)
+
+a <-  example_sandbox%>%
+  filter(examples_worked) %>%
+  slice(1) %>%
+  mutate(scrooge_fit = map(scrooge_fit,"result")) %>%
   mutate(processed_scrooge = map2(
     scrooge_fit,
     map(prepped_fishery, "sampled_years"),
