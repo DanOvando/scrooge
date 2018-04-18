@@ -10,6 +10,7 @@ prepare_fishery <-
            cost_ac,
            q_cv = 0,
            q_ac = 0,
+           b_v_bmsy_oa = 0.5,
            time_step = 1,
            price = 1,
            initial_effort = 1000,
@@ -27,7 +28,9 @@ prepare_fishery <-
            rec_ac = 0.25,
            query_price = T,
            bias = 0,
-           obs_error = 0
+           obs_error = 0,
+           tune_costs = F,
+           est_msy = F
            ) {
 
     if (query_price == T) {
@@ -120,14 +123,16 @@ prepare_fishery <-
         q_ac = q_cv,
         fleet_model = fleet_model,
         theta = fleet_params$theta,
-        theta_tuner = fleet_params$theta_tuner,
         cost = cost,
         sigma_effort = sigma_effort,
         length_50_sel = percnt_loo_selected * fish$linf,
         initial_effort = fleet_params$initial_effort,
         profit_lags =  profit_lags
-
       )
+
+      tune_costs <- T
+
+      est_msy <- T
     }
 
     # fleet <-
@@ -141,7 +146,6 @@ prepare_fishery <-
     #     ),
     #     fish = fish
     #   )
-
     sim <- spasm::sim_fishery(
       fish = fish,
       fleet = fleet,
@@ -149,7 +153,10 @@ prepare_fishery <-
       num_patches = num_patches,
       sim_years = sim_years,
       burn_year = burn_years,
-      time_step = fish$time_step
+      time_step = fish$time_step,
+      est_msy = est_msy,
+      tune_costs = tune_costs,
+      b_v_bmsy_oa = b_v_bmsy_oa
     )
 
     linf_buffer <- linf_buffer

@@ -18,13 +18,18 @@ fit_scrooge <-
            cloud_dir = "results/scrooge_results",
            price = 1,
            q = 0.01,
-           r0 = 100) {
+           r0 = 100,
+           b_v_bmsy_oa = 0.5,
+           init_f_v_m = 0.8
+           ) {
 
     data$economic_model <- economic_model
 
     data$sigma_r_guess <- 0.4
 
     data$r0 <- 100
+
+    data$f_init_guess <- fish$m * init_f_v_m
 
     p_response = max_f_v_fmsy_increase
 
@@ -68,7 +73,7 @@ fit_scrooge <-
         time = 200,
         lower = 0,
         p_response = p_response,
-        b_v_bmsy_target = 0.5,
+        b_v_bmsy_oa = b_v_bmsy_oa,
         msy = msy,
         e_msy = e_msy,
         b_msy = b_msy,
@@ -109,11 +114,11 @@ fit_scrooge <-
       map(
         1:chains,
         ~ list(
-          base_effort = 1 *  exp(rnorm(1, 0, .1)),
           p_length_50_sel = 0.25 * exp(rnorm(1, 0, .1)),
           p_response = p_response * exp(rnorm(1, 0, .1))
         )
       )
+
 
     # inits <-
     #   map(
@@ -121,9 +126,11 @@ fit_scrooge <-
     #     ~ list(
     #       base_effort = 1 *  exp(rnorm(1, 0, .1)),
     #       p_length_50_sel = 0.25 * exp(rnorm(1, 0, .1)),
-    #       p_expansion = p_expansion * exp(rnorm(1, 0, .1))
+    #       p_response = p_response * exp(rnorm(1, 0, .1))
     #     )
     #   )
+
+
 
     fit <-
       rstan::stan(

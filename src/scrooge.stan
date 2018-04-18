@@ -49,6 +49,7 @@ real<lower = 0> p_msy;
 
 real<lower = 0> e_msy;
 
+real<lower = 0> f_init_guess;
 
 //// biology ////
 
@@ -85,7 +86,7 @@ transformed data{
 
 parameters{
 
-real <lower = 0.001, upper = 10> base_effort;
+// real <lower = -5, upper = 3> log_base_effort;
 
 vector[nt - economic_model]  effort_shock_t; //  base effort multiplier
 
@@ -120,6 +121,8 @@ transformed parameters{
   real sel_delta;
 
   real length_50_sel;
+
+  real base_effort;
 
   vector[nt]  rec_dev_t; //  base effort multiplier
 
@@ -158,6 +161,10 @@ transformed parameters{
   sigma_effort = exp(log_sigma_effort);
 
   rec_dev_t = exp(sigma_r * uc_rec_dev_t - sigma_r^2/2);
+
+  // base_effort = exp(log_base_effort);
+
+  base_effort = f_init / q_t[1];
 
   // fill matrices with zeros //
 
@@ -297,6 +304,10 @@ for (i in 1:(n_lcomps - 1)){
 
 //// effort prior ////
 
+f_init ~ normal(f_init_guess, .25);
+
+// log_base_effort ~ normal(log(f_init / q_t[1]), 1);
+
 if (economic_model == 1) {
 
 effort_shock_t ~ normal(0,1);
@@ -312,7 +323,7 @@ effort_shock_t ~ normal(0,1);
 
 } // close effort loop
 
-log_sigma_effort ~ normal(0,1);
+log_sigma_effort ~ normal(0,0.1);
 
 p_response ~ normal(p_response_guess,.1); // constrain p_response
 
