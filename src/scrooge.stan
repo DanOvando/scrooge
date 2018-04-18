@@ -304,7 +304,7 @@ for (i in 1:(n_lcomps - 1)){
 
 //// effort prior ////
 
-f_init ~ normal(f_init_guess, .25);
+f_init ~ normal(f_init_guess, 1);
 
 // log_base_effort ~ normal(log(f_init / q_t[1]), 1);
 
