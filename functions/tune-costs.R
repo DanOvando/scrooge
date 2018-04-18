@@ -8,7 +8,7 @@ tune_costs <-
            p_response,
            price,
            q,
-           b_v_bmsy_target = 0.5,
+           b_v_bmsy_oa = 0.5,
            use = "fit") {
 
 
@@ -100,7 +100,7 @@ tune_costs <-
     }
 
     if (use == "fit"){
-    out <- ((biomass[i] / b_msy) - b_v_bmsy_target) ^ 2
+    out <- ((biomass[i] / b_msy) - b_v_bmsy_oa) ^ 2
     } else {
       out <- effort
     }
