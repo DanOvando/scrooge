@@ -299,7 +299,7 @@ if (run_tests == T) {
         iter = 8000,
         warmup = 4000,
         adapt_delta = 0.8,
-        economic_model = 1,
+        economic_model = 0,
         scrooge_file = "scrooge",
         in_clouds = F,
       experiment = "pfo",

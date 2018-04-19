@@ -16,7 +16,7 @@ fit_lime <- function(data,fish, fleet){
                                binwidth=1,
                                CVlen= fish$cv_len,
                                SigmaR= fish$sigma_r + .001,
-                               SigmaF= fleet$sigma_effort + .001,
+                               SigmaF= 0.1,
                                SigmaC=0.2,
                                SigmaI=0.2,
                                R0= fish$r0,
