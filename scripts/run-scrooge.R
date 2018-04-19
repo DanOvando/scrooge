@@ -1,274 +1,279 @@
-# run-scrooge -------
-# Author: Dan Ovando
-# Project: scrooge
-# Summary:
-# Scrooge is a model for integrating economic priors into length-based fisheries
-# stock assessment. This script applies scrooge to a range of simulated fisheries and compares
-# performance among scenarios and across alternative assessment methods
+  # run-scrooge -------
+  # Author: Dan Ovando
+  # Project: scrooge
+  # Summary:
+  # Scrooge is a model for integrating economic priors into length-based fisheries
+  # stock assessment. This script applies scrooge to a range of simulated fisheries and compares
+  # performance among scenarios and across alternative assessment methods
 
 
-# setup -------------------------------------------------------------------
-set.seed(42)
-library(rstan)
-library(FishLife)
-library(spasm) # personal fishery simulator, will post public github link
-library(patchwork)
-library(hrbrthemes)
-library(foreach)
-library(doParallel)
-library(extrafont)
-library(LIME)
-library(LBSPR)
-library(tidyverse)
-rstan::rstan_options(auto_write = TRUE)
-extrafont::loadfonts()
-functions <- list.files(here::here("functions"))
+  # setup -------------------------------------------------------------------
+  set.seed(42)
+  library(rstan)
+  library(FishLife)
+  library(spasm) # personal fishery simulator, will post public github link
+  library(patchwork)
+  library(hrbrthemes)
+  library(foreach)
+  library(doParallel)
+  library(extrafont)
+  library(LIME)
+  library(LBSPR)
+  library(tidyverse)
+  rstan::rstan_options(auto_write = TRUE)
+  extrafont::loadfonts()
+  functions <- list.files(here::here("functions"))
 
-walk(functions, ~ here::here("functions", .x) %>% source()) # load local functions
+  walk(functions, ~ here::here("functions", .x) %>% source()) # load local functions
 
-in_clouds <-  F
+  in_clouds <-  F
 
-run_name <- "satsuma"
+  run_name <- "satsuma"
 
-local_data <- T
+  local_data <- T
 
-new_run <- F
+  new_run <- F
 
-if (in_clouds == F){
+  if (in_clouds == F){
 
-  run_dir <- here::here("results", run_name)
+    run_dir <- here::here("results", run_name)
 
-} else{
+  } else{
 
-  if (new_run == T){
-    set.seed(sample(1:200,1))
-    run_name <- sample(fruit,1)
-    set.seed(42)
-  }
+    if (new_run == T){
+      set.seed(sample(1:200,1))
+      run_name <- sample(fruit,1)
+      set.seed(42)
+    }
 
-  run_dir <- here::here("results","scrooge-results", run_name)
-
-}
-
-
-if (dir.exists(run_dir) == F) {
-  dir.create(run_dir, recursive = T)
-}
-
-run_description <- "abalone run"
-
-
-scrooge_theme <- theme_ipsum(base_size = 14, axis_title_size = 18)
-
-theme_set(scrooge_theme)
-
-# run options -------------------------------------------------------------
-
-sim_fisheries <- F
-
-fit_models <- F
-
-run_tests <- F
-
-n_cores <- 1
-
-if (in_clouds == T){
-
-
-  system("umount results/scrooge-results")
-
-  system("rm -r results/scrooge-results")
-
-  if (dir.exists("results/scroote-results") == F){
-
-     system("mkdir results/scrooge-results")
+    run_dir <- here::here("results","scrooge-results", run_name)
 
   }
 
-  system("gcsfuse scrooge-results results/scrooge-results")
 
-  system("umount data/scrooge-data")
+  if (dir.exists(run_dir) == F) {
+    dir.create(run_dir, recursive = T)
+  }
 
-  system("rm -r data/scrooge-data")
+  run_description <- "abalone run"
 
-  if (dir.exists("results/scroote-data") == F){
 
-    system("mkdir data/scrooge-data")
+  scrooge_theme <- theme_ipsum(base_size = 14, axis_title_size = 18)
+
+  theme_set(scrooge_theme)
+
+  # run options -------------------------------------------------------------
+
+  sim_fisheries <- F
+
+  fit_models <- F
+
+  run_tests <- F
+
+  n_cores <- 1
+
+  if (in_clouds == T){
+
+
+    system("umount results/scrooge-results")
+
+    system("rm -r results/scrooge-results")
+
+    if (dir.exists("results/scroote-results") == F){
+
+       system("mkdir results/scrooge-results")
+
+    }
+
+    system("gcsfuse scrooge-results results/scrooge-results")
+
+    system("umount data/scrooge-data")
+
+    system("rm -r data/scrooge-data")
+
+    if (dir.exists("results/scroote-data") == F){
+
+      system("mkdir data/scrooge-data")
+
+    }
+
+    # system("mkdir data/scrooge-data")
+
+    system("gcsfuse scrooge-data data/scrooge-data")
+
+    cloud_dir <- here::here("results","scrooge-results",run_name)
+
+    if (dir.exists(cloud_dir) == F){
+
+    dir.create(cloud_dir)
+
+    }
 
   }
 
-  # system("mkdir data/scrooge-data")
+  write(run_description,
+        file = glue::glue("{run_dir}/description.txt"))
 
-  system("gcsfuse scrooge-data data/scrooge-data")
+  # load data ---------------------------------------------------------------
 
-  cloud_dir <- here::here("results","scrooge-results",run_name)
+  if (in_clouds == F | local_data == T){
 
-  if (dir.exists(cloud_dir) == F){
+    data_dir <- "data"
+  } else{
 
-  dir.create(cloud_dir)
+    data_dir <- "data/scrooge-data"
+  }
+
+  cdfw_data <- read_csv(file = file.path(data_dir, 'cfdw-catches.csv'))
+
+
+  has_timeseries <- cdfw_data %>%
+    group_by(sci_name) %>%
+    summarise(has_catch = min(year) <= 2000 & max(year) == 2015) %>%
+    filter(has_catch == T)
+
+  fill_catches <- function(min_year, max_year, catches) {
+    full_frame <- data_frame(year = min_year:max_year) %>%
+      left_join(catches, by = 'year') %>%
+      mutate(catch = zoo::na.approx(catch_lbs, rule = 2)) %>%
+      select(-catch_lbs)
 
   }
 
-}
+  cdfw_catches <- cdfw_data %>%
+    filter(sci_name %in% unique(has_timeseries$sci_name)) %>%
+    group_by(sci_name, year) %>%
+    summarise(catch_lbs = sum(pounds_caught)) %>%
+    group_by(sci_name) %>%
+    nest(-sci_name, .key = 'catches') %>%
+    filter(is.na(sci_name) == F) %>%
+    mutate(catches = map(
+      catches,
+      fill_catches,
+      min_year = 2000,
+      max_year = 2015
+    )) %>%
+    unnest()
 
-write(run_description,
-      file = glue::glue("{run_dir}/description.txt"))
+  ram <- read_csv(here::here("processed_data","ram_data.csv"))
 
-# load data ---------------------------------------------------------------
+  delta_f_v_fmsy = ram %>%
+    filter(is.na(udivumsypref) == F,udivumsypref < 4) %>%
+    select(stockid, year, udivumsypref) %>%
+    arrange(stockid, year) %>%
+    group_by(stockid) %>%
+    mutate(delta_year = year - lag(year),
+           delta_u = udivumsypref - lag(udivumsypref)) %>%
+    ungroup() %>%
+    filter(delta_year == 1, is.na(delta_u) == F, delta_u > 0)
 
-if (in_clouds == F | local_data == T){
+  max_delta_u <- delta_f_v_fmsy %>%
+    group_by(stockid) %>%
+    summarise(max_delta_u = max(delta_u))
 
-  data_dir <- "data"
-} else{
+  max_f_v_fmsy_increase <- mean(max_delta_u$max_delta_u)
 
-  data_dir <- "data/scrooge-data"
-}
-
-cdfw_data <- read_csv(file = file.path(data_dir, 'cfdw-catches.csv'))
-
-
-has_timeseries <- cdfw_data %>%
-  group_by(sci_name) %>%
-  summarise(has_catch = min(year) <= 2000 & max(year) == 2015) %>%
-  filter(has_catch == T)
-
-fill_catches <- function(min_year, max_year, catches) {
-  full_frame <- data_frame(year = min_year:max_year) %>%
-    left_join(catches, by = 'year') %>%
-    mutate(catch = zoo::na.approx(catch_lbs, rule = 2)) %>%
-    select(-catch_lbs)
-
-}
-
-cdfw_catches <- cdfw_data %>%
-  filter(sci_name %in% unique(has_timeseries$sci_name)) %>%
-  group_by(sci_name, year) %>%
-  summarise(catch_lbs = sum(pounds_caught)) %>%
-  group_by(sci_name) %>%
-  nest(-sci_name, .key = 'catches') %>%
-  filter(is.na(sci_name) == F) %>%
-  mutate(catches = map(
-    catches,
-    fill_catches,
-    min_year = 2000,
-    max_year = 2015
-  )) %>%
-  unnest()
-
-ram <- read_csv(here::here("processed_data","ram_data.csv"))
-
-delta_f_v_fmsy = ram %>%
-  filter(is.na(udivumsypref) == F,udivumsypref < 4) %>%
-  select(stockid, year, udivumsypref) %>%
-  arrange(stockid, year) %>%
-  group_by(stockid) %>%
-  mutate(delta_year = year - lag(year),
-         delta_u = udivumsypref - lag(udivumsypref)) %>%
-  ungroup() %>%
-  filter(delta_year == 1, is.na(delta_u) == F, delta_u > 0)
-
-max_delta_u <- delta_f_v_fmsy %>%
-  group_by(stockid) %>%
-  summarise(max_delta_u = max(delta_u))
-
-max_f_v_fmsy_increase <- mean(max_delta_u$max_delta_u)
-
-# create simulated fisheries ----------------------------------------------
+  # create simulated fisheries ----------------------------------------------
 
 
-if (sim_fisheries == T)
-{
+  if (sim_fisheries == T)
+  {
 
-  # sci_name = c("Atractoscion nobilis", "Scomber japonicus","Lutjanus campechanus"),
+    # sci_name = c("Atractoscion nobilis", "Scomber japonicus","Lutjanus campechanus"),
 
-  fisheries_sandbox <-
-    purrr::cross_df(
-      list(
-        sci_name = c("Lutjanus campechanus"),
-        fleet_model = c(
-          # "constant-catch",
-          "constant-effort",
-          # "supplied-catch",
-          "open-access"
-        ),
-        sigma_r = c(0.1,0.4),
-        sigma_effort = c(0, 0.1),
-        price_cv = c(0, 0.5),
-        cost_cv = c(0,0.75),
-        price_ac = 0.75,
-        cost_ac = 0.75,
-        # economic_model = c(1,0),
-        steepness = c(0.6,0.9),
-        obs_error = c(0,0.2)
+    fisheries_sandbox <-
+      purrr::cross_df(
+        list(
+          sci_name = c("Lutjanus campechanus"),
+          fleet_model = c(
+            # "constant-catch",
+            "constant-effort",
+            # "supplied-catch",
+            "open-access"
+          ),
+          sigma_r = c(0.1,0.4),
+          sigma_effort = c(0, 0.1),
+          price_cv = c(0, 0.5),
+          cost_cv = c(0,0.75),
+          price_ac = 0.75,
+          cost_ac = 0.75,
+          economic_model = c(1,0),
+          steepness = c(0.6,0.9),
+          obs_error = c(0,0.2),
+          b_v_bmsy_oa = c(0.5,1.5)
+        )
+      )
+
+
+    fleet_model_params <- data_frame(
+      fleet_model = c(
+        "constant-catch",
+        "constant-effort",
+        "supplied-catch",
+        "open-access"
+      ),
+      fleet_params = list(
+        list(target_catch = 10000),
+        list(initial_effort = 200),
+        list(catches = cdfw_catches$catch[cdfw_catches$sci_name == "semicossyphus pulcher"]),
+        list(theta = 0.5, initial_effort = 10)
       )
     )
 
-
-  fleet_model_params <- data_frame(
-    fleet_model = c(
-      "constant-catch",
-      "constant-effort",
-      "supplied-catch",
-      "open-access"
-    ),
-    fleet_params = list(
-      list(target_catch = 10000),
-      list(initial_effort = 200),
-      list(catches = cdfw_catches$catch[cdfw_catches$sci_name == "semicossyphus pulcher"]),
-      list(theta = 0.1, theta_tuner = 0.75, initial_effort = 10)
-    )
-  )
-
-  fisheries_sandbox <- fisheries_sandbox %>%
-    left_join(fleet_model_params, by = "fleet_model") %>%
-    # filter(fleet_model == "constant-effort") %>%
-    # slice(1) %>%
-    mutate(prepped_fishery = pmap(
-      list(
-        sci_name = sci_name,
-        fleet_model = fleet_model,
-        fleet_params = fleet_params,
-        sigma_r = sigma_r,
-        sigma_effort = sigma_effort,
-        price_cv = price_cv,
-        cost_cv = cost_cv,
-        price_ac = price_ac,
-        cost_ac = cost_ac,
-        steepness = steepness,
-        obs_error = obs_error
-      ),
-      safely(prepare_fishery),
-      sim_years = 50,
-      burn_years = 25,
-      price = 2,
-      cost = 5
-    ))
+    fisheries_sandbox <- fisheries_sandbox %>%
+      left_join(fleet_model_params, by = "fleet_model") %>%
+      # filter(fleet_model == "open-access", b_v_bmsy_oa == 0.5) %>%
+      # arrange(b_v_bmsy_oa) %>%
+      # slice(1) %>%
+      mutate(prepped_fishery = pmap(
+        list(
+          sci_name = sci_name,
+          fleet_model = fleet_model,
+          fleet_params = fleet_params,
+          sigma_r = sigma_r,
+          sigma_effort = sigma_effort,
+          price_cv = price_cv,
+          cost_cv = cost_cv,
+          price_ac = price_ac,
+          cost_ac = cost_ac,
+          steepness = steepness,
+          obs_error = obs_error,
+          b_v_bmsy_oa = b_v_bmsy_oa
+        ),
+        safely(prepare_fishery),
+        sim_years = 50,
+        burn_years = 25,
+        price = 10,
+        cost = 5,
+        profit_lags = 1,
+        query_price = F
+      ))
 
 
-  no_error <- map(fisheries_sandbox$prepped_fishery,'error') %>%
-    map_lgl(is.null)
+    no_error <- map(fisheries_sandbox$prepped_fishery,'error') %>%
+      map_lgl(is.null)
 
-  fisheries_sandbox <- fisheries_sandbox %>%
-    filter(no_error == T)
+    fisheries_sandbox <- fisheries_sandbox %>%
+      filter(no_error == T)
 
-  fisheries_sandbox <- fisheries_sandbox %>%
-    mutate(prepped_fishery = map(prepped_fishery,"result")) %>%
-    mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery))
+    fisheries_sandbox <- fisheries_sandbox %>%
+      mutate(prepped_fishery = map(prepped_fishery,"result")) %>%
+      mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery))
 
 
-  save(file = here::here("processed_data", "fisheries_sandbox.Rdata"),
-       fisheries_sandbox)
+    save(file = here::here("processed_data", "fisheries_sandbox.Rdata"),
+         fisheries_sandbox)
 
-} else{
-
-  if (in_clouds == F | local_data == T){
-  load(file = here::here("processed_data", "fisheries_sandbox.Rdata"))
   } else{
 
-    load(file = here::here("data","scrooge-data","fisheries_sandbox.Rdata"))
+    if (in_clouds == F | local_data == T){
+    load(file = here::here("processed_data", "fisheries_sandbox.Rdata"))
+    } else{
 
+      load(file = here::here("data","scrooge-data","fisheries_sandbox.Rdata"))
+
+    }
   }
-}
 
 # apply candidate assessment models ---------------------------------------
 
@@ -291,8 +296,8 @@ if (run_tests == T) {
       fish = map(prepped_fishery, "fish"),
       fleet = map(prepped_fishery, "fleet")),
       fit_scrooge,
-        iter = 2000,
-        warmup = 1000,
+        iter = 8000,
+        warmup = 4000,
         adapt_delta = 0.8,
         economic_model = 1,
         scrooge_file = "scrooge",
@@ -349,9 +354,10 @@ if (run_tests == T) {
       price_cv == max(price_cv),
       price_ac == max(price_ac),
       cost_ac == max(cost_ac),
-      cost_cv == max(cost_cv)
+      cost_cv == max(cost_cv),
+      b_v_bmsy_oa == 0.5
     ) %>%
-    slice(1) %>%
+    slice(7) %>%
     mutate(prepped_fishery = map(prepped_fishery, subsample_data, window = 10, period = "end")) %>%
     mutate(scrooge_fit = pmap(
       list(
@@ -361,8 +367,8 @@ if (run_tests == T) {
       fit_scrooge,
       iter = 4000,
       warmup = 2000,
-      adapt_delta = 0.8,
-      economic_model = 0,
+      adapt_delta = 0.9,
+      economic_model = 1,
       scrooge_file = "scrooge",
       in_clouds = F,
       experiment = "vfo",
@@ -371,6 +377,38 @@ if (run_tests == T) {
     )
     )
 
+
+  vfo <- vfo %>%
+    mutate(lime_fit = pmap(list(
+      data = map(prepped_fishery, "scrooge_data"),
+      fish = map(prepped_fishery, "fish"),
+      fleet = map(prepped_fishery, "fleet")
+    ), fit_lime))
+
+  true_f <- vfo$prepped_fishery[[1]]$simed_fishery %>%
+    group_by(year) %>%
+    summarise(f = unique(f)) %>%
+    filter(year >=64)
+
+ a <- vfo$lime_fit[[1]]$Sdreport %>%
+    summary() %>%
+   as.data.frame() %>%
+   mutate(variable = rownames(.)) %>%
+   filter(variable == "lF_y") %>%
+   mutate(mean = exp(Estimate),
+          upper = exp(Estimate + 1.96 * `Std. Error`),
+          lower = exp(Estimate -  1.96 * `Std. Error`)) %>%
+   mutate(year = 1:nrow(.)) %>%
+   ggplot() +
+   geom_pointrange(aes(year, mean, ymin = lower, ymax = upper)) +
+   geom_point(data = true_f, aes(1:11, f), color = "red")
+
+  predicted_f <- data_frame(f = Report$F_y)
+
+  true_f %>%
+    ggplot() +
+    geom_point(aes(year,f,color = "True")) +
+    geom_line(aes(year, predicted_f,color = "Predicted"))
 
   vfo$summary_plot[[1]]
 
@@ -403,7 +441,7 @@ if (run_tests == T) {
 
     # vfo$scrooge_rec_performance[[1]]$comparison_plot
 
-    b = vfo$scrooge_performance[[1]]$comparison_plot +
+     vfo$scrooge_performance[[1]]$comparison_plot +
       labs(title = "econ")
 
     save(file = "scrooge_performance.Rdata", pfo, vfo)
@@ -483,7 +521,9 @@ if (fit_models == T) {
   fisheries_sandbox <- fisheries_sandbox %>%
     mutate(experiment = 1:nrow(.)) %>%
     left_join(experiments, by = "experiment") %>%
-    slice(sample(1:nrow(fisheries_sandbox),4, replace = F)) %>%
+    filter(window == 10, fleet_model == "open-access", b_v_bmsy_oa == 0.5) %>%
+    slice(2) %>%
+    slice(sample(1:nrow(fisheries_sandbox),100, replace = F)) %>%
     mutate(prepped_fishery = pmap(list(
       prepped_fishery = prepped_fishery,
       window = window,
@@ -497,6 +537,16 @@ if (fit_models == T) {
   #     fish = map(prepped_fishery, "fish"),
   #     fleet = map(prepped_fishery, "fleet")
   #   ), fit_lbspr))
+
+  # fit lime
+
+  # fisheries_sandbox <- fisheries_sandbox %>%
+  #   mutate(lime_fit = pmap(list(
+  #     data = map(prepped_fishery, "scrooge_data"),
+  #     fish = map(prepped_fishery, "fish"),
+  #     fleet = map(prepped_fishery, "fleet")
+  #   ), fit_lime))
+
 
   fisheries_sandbox$experiment <- 1:nrow(fisheries_sandbox)
 
@@ -512,9 +562,9 @@ if (fit_models == T) {
       fish = fisheries_sandbox$prepped_fishery[[i]]$fish,
       fleet = fisheries_sandbox$prepped_fishery[[i]]$fleet,
       experiment = fisheries_sandbox$experiment[i],
-      scrooge_file = "bioeconomic_scrooge",
-      iter = 2000,
-      warmup = 1000,
+      scrooge_file = "scrooge",
+      iter = 4000,
+      warmup = 2000,
       adapt_delta = 0.8,
       max_treedepth = 12,
       in_clouds = in_clouds,
@@ -550,8 +600,8 @@ fisheries_sandbox <- fisheries_sandbox %>%
   mutate(scrooge_fit = map(scrooge_fit,"result"))
 
 
-example_sandbox <- fisheries_sandbox %>%
-  slice(sample(1:nrow(.), 5))
+example_sandbox <- fisheries_sandbox #%>%
+  # slice(sample(1:nrow(.), 5))
 
 
 if(in_clouds == T){
@@ -567,10 +617,14 @@ if(in_clouds == T){
 
 examples_worked <- map(example_sandbox$scrooge_fit,'error') %>% map_lgl(is.null)
 
+scrooge_worked <- !(map_dbl(example_sandbox$scrooge_fit,nrow) %>% is.na())
+
+
+
 a <-  example_sandbox%>%
-  filter(examples_worked) %>%
-  slice(1) %>%
-  mutate(scrooge_fit = map(scrooge_fit,"result")) %>%
+  filter(scrooge_worked) %>%
+  # slice(1) %>%
+  # mutate(scrooge_fit = map(scrooge_fit,"result")) %>%
   mutate(processed_scrooge = map2(
     scrooge_fit,
     map(prepped_fishery, "sampled_years"),
@@ -603,3 +657,16 @@ a <-  example_sandbox%>%
 
 
 # make figures ------------------------------------------------------------
+
+
+a %>%
+  ggplot(aes(rmse, fill = economic_model == 1)) +
+  geom_density(alpha = 0.5)
+
+a %>%
+  filter(percent_rank(bias) < 0.8) %>%
+  ggplot(aes(bias, fill = economic_model == 1)) +
+  geom_density(alpha = 0.5)
+
+
+
