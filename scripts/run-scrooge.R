@@ -187,7 +187,7 @@
     fisheries_sandbox <-
       purrr::cross_df(
         list(
-          sci_name = c("Lutjanus campechanus"),
+          sci_name = c("Atractoscion nobilis", "Scomber japonicus","Lutjanus campechanus"),
           fleet_model = c(
             # "constant-catch",
             "constant-effort",
@@ -200,7 +200,7 @@
           cost_cv = c(0,0.75),
           price_ac = 0.75,
           cost_ac = 0.75,
-          economic_model = c(1,0),
+          economic_model = c(1),
           steepness = c(0.6,0.9),
           obs_error = c(0,0.2),
           b_v_bmsy_oa = c(0.5)
@@ -532,15 +532,18 @@ if (run_tests == T) {
 if (fit_models == T) {
 
 
-  experiments <- expand.grid(period = c("beginning", "middle","end"), window = c(2,5,10),
+  experiments <- expand.grid(period = c("beginning","middle"," end"), window = c(2,5,10),
+                             economic_model = c(0,1),
+                             use_effort_data = c(0,1),
                              experiment = 1:nrow(fisheries_sandbox), stringsAsFactors = F)
 
   fisheries_sandbox <- fisheries_sandbox %>%
+    select(-economic_model) %>%
     mutate(experiment = 1:nrow(.)) %>%
     left_join(experiments, by = "experiment") %>%
     # filter(window == 10, fleet_model == "open-access", b_v_bmsy_oa == 0.5) %>%
     # slice(1) %>%
-    slice(sample(1:nrow(fisheries_sandbox),100, replace = F)) %>%
+    slice(sample(1:nrow(fisheries_sandbox),4, replace = F)) %>%
     mutate(prepped_fishery = pmap(list(
       prepped_fishery = prepped_fishery,
       window = window,
@@ -580,6 +583,7 @@ if (fit_models == T) {
       fleet = fisheries_sandbox$prepped_fishery[[i]]$fleet,
       experiment = fisheries_sandbox$experiment[i],
       economic_model = fisheries_sandbox$economic_model[i],
+      use_effort_data = fisheries_sandbox$use_effort_data[i],
       scrooge_file = "scrooge",
       iter = 4000,
       warmup = 2000,
@@ -688,7 +692,7 @@ mutate(processed_scrooge = map2(
          predicted = processed_lime),
     judge_lime
   )) %>%
-  mutate(lcomps = map2(prepped_fishery, processed_scrooge, ~process_lcomps(.x$length_comps, .y$n_tl))) %>%
+  mutate(lcomps = map2(prepped_fishery, processed_scrooge, ~process_lcomps(.x, .y$n_tl))) %>%
   mutate(
     rmse = map_dbl(scrooge_performance, ~ .x$comparison_summary$rmse),
     bias =  map_dbl(scrooge_performance, ~ .x$comparison_summary$bias)
@@ -702,11 +706,11 @@ mutate(processed_scrooge = map2(
 # make figures ------------------------------------------------------------
 
 
-a %>%
+processed_sandbox %>%
   ggplot(aes(rmse, fill = economic_model == 1)) +
   geom_density(alpha = 0.5)
 
-a %>%
+processed_sandbox %>%
   filter(percent_rank(bias) < 0.8) %>%
   ggplot(aes(bias, fill = economic_model == 1)) +
   geom_density(alpha = 0.5)

@@ -28,3 +28,5 @@ data/google-bucket/
 *.Rdata
 *.rds
 *.txt
+*.svg
+presentations/libs/

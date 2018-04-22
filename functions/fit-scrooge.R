@@ -134,7 +134,6 @@ fit_scrooge <-
     #   )
 
 
-
     fit <-
       rstan::stan(
         file = here::here("src", paste0(scrooge_file, ".stan")),
