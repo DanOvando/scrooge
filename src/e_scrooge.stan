@@ -23,10 +23,6 @@ vector[n_ages] ages; // vector of ages
 
 int<lower = 0> economic_model; // 0 = no bioeconomic prior, 1 = bioeconomic prior,
 
-int<lower = 0, upper = 1> use_effort_data; // 0 = don't use effort data, 1 = use effort data,
-
-
-
 //// length data ////
 
 int length_comps[n_lcomps,n_lbins];
@@ -35,13 +31,13 @@ int length_comps_years[n_lcomps]; // time steps in which length comps are availa
 
 //// economic data ////
 
-row_vector[nt] relative_effort;
-
 row_vector[nt] price_t;
 
 row_vector[nt] cost_t;
 
 row_vector[nt] q_t;
+
+row_vector[nt] relative_effort;
 
 real beta;
 
@@ -56,6 +52,8 @@ real<lower = 0> p_msy;
 real<lower = 0> e_msy;
 
 real<lower = 0> f_init_guess;
+
+
 
 //// biology ////
 
@@ -296,6 +294,7 @@ if (new_effort <= 0){
 
 model{
 
+
 vector[nt] relative_total_effort_t; // effort in right units
 
 matrix[n_lcomps, n_lbins] pn_tl; // numbers at time and length bin
@@ -312,15 +311,13 @@ for (i in 1:(n_lcomps - 1)){
 
 //// effort prior ////
 
-if (use_effort_data == 1){
-
 relative_total_effort_t = total_effort_t / max(total_effort_t); // relative effort
 
 relative_effort ~ normal(relative_total_effort_t, 0.1);
-}
 
 f_init ~ normal(f_init_guess, 1);
 
+// log_base_effort ~ normal(log(f_init / q_t[1]), 1);
 
 if (economic_model == 1) {
 
@@ -349,7 +346,7 @@ log_sigma_r ~ normal(log(sigma_r_guess), 0.1);
 
 //// selectivity likelihood ////
 
-p_length_50_sel ~ normal(length_50_sel_guess/loo, .01);
+p_length_50_sel ~ normal(length_50_sel_guess/loo, 0.01);
 
 // sel_delta ~ normal(delta_guess, 2);
 

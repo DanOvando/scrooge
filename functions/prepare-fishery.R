@@ -30,8 +30,11 @@ prepare_fishery <-
            bias = 0,
            obs_error = 0,
            tune_costs = F,
-           est_msy = F
+           est_msy = F,
+           mey_buffer = 2,
+           use_effort_data = 0
            ) {
+
 
     if (query_price == T) {
       prices <-
@@ -48,6 +51,7 @@ prepare_fishery <-
       }
     }
 
+
     fish <-
       create_fish(
         scientific_name = sci_name,
@@ -59,7 +63,7 @@ prepare_fishery <-
         price_cv = price_cv,
         price_ac = price_ac,
         steepness = steepness,
-        r0 = 10000,
+        r0 = 1000,
         rec_ac = rec_ac
       )
 
@@ -127,7 +131,8 @@ prepare_fishery <-
         sigma_effort = sigma_effort,
         length_50_sel = percnt_loo_selected * fish$linf,
         initial_effort = fleet_params$initial_effort,
-        profit_lags =  profit_lags
+        profit_lags =  profit_lags,
+        mey_buffer = mey_buffer
       )
 
       tune_costs <- T
@@ -146,7 +151,10 @@ prepare_fishery <-
     #     ),
     #     fish = fish
     #   )
-    sim <- spasm::sim_fishery(
+    #
+
+
+    sim <- sim_fishery(
       fish = fish,
       fleet = fleet,
       manager = create_manager(mpa_size = 0),
@@ -257,10 +265,17 @@ prepare_fishery <-
     q_t <- price_and_cost_history %>%
       filter(variable == "q")
 
+    effort_t <- sim %>%
+      group_by(year) %>%
+      summarise(effort = mean(effort)) %>%
+      ungroup() %>%
+      mutate(relative_effort = effort/max(effort))
+
     scrooge_data <- list(
       economic_model = economic_model,
       estimate_recruits = 1,
       length_comps = length_comps %>% select(-year),
+      relative_effort = effort_t$relative_effort,
       length_comps_years  = length_comps$year,
       price_t = price_t$centered_value,
       cost_t = cost_t$centered_value,
@@ -283,9 +298,9 @@ prepare_fishery <-
       length_at_age_key = as.matrix(length_at_age_key),
       mean_length_at_age = fish$length_at_age,
       mean_weight_at_age = fish$weight_at_age,
-      mean_maturity_at_age = fish$maturity_at_age
+      mean_maturity_at_age = fish$maturity_at_age,
+      use_effort_data = use_effort_data
     )
-
 
     out <- list(simed_fishery = sim,
                 length_comps = length_comps,

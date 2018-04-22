@@ -2936,3 +2936,177 @@ ggplot(aes(max_delta_u)) +
 
 ```
 
+
+# integrating effort data
+
+The main question is is it data or is it a prior? On the data side, you treat the vector of relative effort over time as data or as a prior. If it comes in as data, the idea would be that you put it in the likelihood. The advantage there is that it's actual data means that the entire likelihood isn't explained by the length comps. The disadvantage is what to do if the effort data isn't really data but more of a prior.
+
+Fuck it, let's try both. 
+
+On the likelihood side, scale the effort relative to something, treat it as normally distributed for now. Philisophically, you have priors based on cost and tech, and you confront those priors with the effort and length data
+
+On the prior side, philosphically you're saying you don't have effort data per say but an idea around effort. So where would those come in?
+
+The prior would come in on effort_shock_t? though technicaly speaking, effort_shock is deviations from the open-access model. So, suppose that you sampled from a perfect open access scenario. Then, the prior on the effort shock should in theory be zero. So, it's kind of hard to think about how you would construct a prior around the deviations, when your prior is already that it is open access. 
+
+So in that case, I think your prior would have to actually sub in for the open-access model. In that you have some prior that effort has been flat, increasing, whatver, and then you still estimate the shocks around that model. 
+
+
+```{r}
+
+    fisheries_sandbox <-
+      purrr::cross_df(
+        list(
+          sci_name = c("Lutjanus campechanus"),
+          fleet_model = c(
+            "open-access"
+          ),
+          sigma_r = c(0.1),
+          sigma_effort = c(0),
+          price_cv = c(0),
+          cost_cv = c(0),
+          price_ac = 0,
+          cost_ac = 0,
+          economic_model = c(1),
+          steepness = c(0.6),
+          obs_error = c(0),
+          b_v_bmsy_oa = c(0.5)
+        )
+      )
+
+   fleet_model_params <- data_frame(
+      fleet_model = c(
+        "constant-catch",
+        "constant-effort",
+        "supplied-catch",
+        "open-access"
+      ),
+      fleet_params = list(
+        list(target_catch = 10000),
+        list(initial_effort = 200),
+        list(catches = cdfw_catches$catch[cdfw_catches$sci_name == "semicossyphus pulcher"]),
+        list(theta = 0.5, initial_effort = 10)
+      )
+    )
+   
+   fisheries_sandbox <- fisheries_sandbox %>%
+      left_join(fleet_model_params, by = "fleet_model") %>%
+      # filter(fleet_model == "open-access", b_v_bmsy_oa == 0.5) %>%
+      # arrange(b_v_bmsy_oa) %>%
+      # slice(1) %>%
+      mutate(prepped_fishery = pmap(
+        list(
+          sci_name = sci_name,
+          fleet_model = fleet_model,
+          fleet_params = fleet_params,
+          sigma_r = sigma_r,
+          sigma_effort = sigma_effort,
+          price_cv = price_cv,
+          cost_cv = cost_cv,
+          price_ac = price_ac,
+          cost_ac = cost_ac,
+          steepness = steepness,
+          obs_error = obs_error,
+          b_v_bmsy_oa = b_v_bmsy_oa
+        ),
+        safely(prepare_fishery),
+        sim_years = 50,
+        burn_years = 25,
+        price = 10,
+        cost = 5,
+        profit_lags = 1,
+        query_price = F,
+        use_effort_data = 1
+      ))
+   
+      no_error <- map(fisheries_sandbox$prepped_fishery,'error') %>%
+      map_lgl(is.null)
+
+    fisheries_sandbox <- fisheries_sandbox %>%
+      filter(no_error == T)
+
+    fisheries_sandbox <- fisheries_sandbox %>%
+      mutate(prepped_fishery = map(prepped_fishery,"result")) %>%
+      mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery))
+
+
+
+      tester <- fisheries_sandbox %>%
+    slice(1) %>%
+    mutate(prepped_fishery = map(prepped_fishery, subsample_data, window = 10, period = "end")) %>%
+    mutate(scrooge_fit = pmap(
+      list(
+      data = map(prepped_fishery, "scrooge_data"),
+      fish = map(prepped_fishery, "fish"),
+      fleet = map(prepped_fishery, "fleet")),
+      fit_scrooge,
+        iter = 8000,
+        warmup = 4000,
+        adapt_delta = 0.8,
+        economic_model = 0,
+      use_effort_data = 1,
+        scrooge_file = "scrooge",
+        in_clouds = F,
+      experiment = "pfo",
+      max_f_v_fmsy_increase = 0.5
+      )
+    )
+      
+       tester <- tester %>%
+    mutate(processed_scrooge = map2(
+      scrooge_fit,
+      map(prepped_fishery, "sampled_years"),
+      process_scrooge
+    )) %>%
+    mutate(observed = map(prepped_fishery, "simed_fishery")) %>%
+    mutate(scrooge_performance = pmap(
+      list(observed = observed,
+           predicted = processed_scrooge),
+      judge_performance
+    )) %>%
+    mutate(
+      scrooge_rec_performance = pmap(
+        list(observed = observed,
+             predicted = processed_scrooge),
+        judge_performance,
+        observed_variable = rec_dev,
+        predicted_variable = "rec_dev_t"
+      )
+    )  %>%
+    mutate(lcomps = map2(prepped_fishery, processed_scrooge, ~process_lcomps(.x$length_comps, .y$n_tl))) %>%
+    mutate(
+      rmse = map_dbl(scrooge_performance, ~ .x$comparison_summary$rmse),
+      bias =  map_dbl(scrooge_performance, ~ .x$comparison_summary$bias)
+    ) %>%
+    arrange(rmse)
+
+  tester$scrooge_performance[[1]]$comparison_plot
+  
+  tester <- tester %>%
+    mutate(lime_fit = pmap(list(
+      data = map(prepped_fishery, "scrooge_data"),
+      fish = map(prepped_fishery, "fish"),
+      fleet = map(prepped_fishery, "fleet")
+    ), fit_lime))
+
+  true_f <- tester$prepped_fishery[[1]]$simed_fishery %>%
+    group_by(year) %>%
+    summarise(f = unique(f)) %>%
+    filter(year >=64)
+
+ a <- tester$lime_fit[[1]]$Sdreport %>%
+    summary() %>%
+   as.data.frame() %>%
+   mutate(variable = rownames(.)) %>%
+   filter(variable == "lF_y") %>%
+   mutate(mean = exp(Estimate),
+          upper = exp(Estimate + 1.96 * `Std. Error`),
+          lower = exp(Estimate -  1.96 * `Std. Error`)) %>%
+   mutate(year = 1:nrow(.)) %>%
+   ggplot() +
+   geom_pointrange(aes(year, mean, ymin = lower, ymax = upper)) +
+   geom_point(data = true_f, aes(1:11, f), color = "red")
+
+    
+```
+

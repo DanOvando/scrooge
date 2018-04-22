@@ -20,8 +20,11 @@ fit_scrooge <-
            q = 0.01,
            r0 = 100,
            b_v_bmsy_oa = 0.5,
-           init_f_v_m = 0.8
+           init_f_v_m = 0.8,
+           use_effort_data = 1
            ) {
+
+    data$use_effort_data <- use_effort_data
 
     data$economic_model <- economic_model
 
