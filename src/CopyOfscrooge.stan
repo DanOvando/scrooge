@@ -337,15 +337,15 @@ effort_shock_t ~ normal(0,1);
 
 } // close effort loop
 
-log_sigma_effort ~ normal(0,0.25);
+log_sigma_effort ~ normal(0,0.1);
 
-p_response ~ normal(p_response_guess,.01); // constrain p_response
+p_response ~ normal(p_response_guess,.1); // constrain p_response
 
 //// recruitment prior ////
 
 uc_rec_dev_t ~ normal(0, 1);
 
-log_sigma_r ~ normal(log(0.2), 0.01);
+log_sigma_r ~ normal(log(sigma_r_guess), 0.1);
 
 //// selectivity likelihood ////
 

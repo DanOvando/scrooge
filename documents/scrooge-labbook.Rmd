@@ -2961,12 +2961,14 @@ So in that case, I think your prior would have to actually sub in for the open-a
           fleet_model = c(
             "open-access"
           ),
-          sigma_r = c(0.1),
+          sigma_r = c(0),
           sigma_effort = c(0),
           price_cv = c(0),
           cost_cv = c(0),
           price_ac = 0,
           cost_ac = 0,
+          q_cv = 0,
+          q_ac = 0,
           economic_model = c(1),
           steepness = c(0.6),
           obs_error = c(0),
@@ -3007,7 +3009,9 @@ So in that case, I think your prior would have to actually sub in for the open-a
           cost_ac = cost_ac,
           steepness = steepness,
           obs_error = obs_error,
-          b_v_bmsy_oa = b_v_bmsy_oa
+          b_v_bmsy_oa = b_v_bmsy_oa,
+          q_cv = q_cv,
+          q_ac = q_ac
         ),
         safely(prepare_fishery),
         sim_years = 50,
@@ -3040,15 +3044,15 @@ So in that case, I think your prior would have to actually sub in for the open-a
       fish = map(prepped_fishery, "fish"),
       fleet = map(prepped_fishery, "fleet")),
       fit_scrooge,
-        iter = 8000,
-        warmup = 4000,
+        iter = 4000,
+        warmup = 2000,
         adapt_delta = 0.8,
         economic_model = 1,
-       use_effort_data = 0,
-        scrooge_file = "scrooge",
+       use_effort_data = 1,
+        scrooge_file = "new_scrooge",
         in_clouds = F,
       experiment = "pfo",
-      max_f_v_fmsy_increase = 0.5
+      max_f_v_fmsy_increase = 0.25
       )
     )
       
@@ -3064,24 +3068,27 @@ So in that case, I think your prior would have to actually sub in for the open-a
            predicted = processed_scrooge),
       judge_performance
     )) %>%
-    mutate(
+ mutate(
       scrooge_rec_performance = pmap(
         list(observed = observed,
              predicted = processed_scrooge),
         judge_performance,
         observed_variable = rec_dev,
-        predicted_variable = "rec_dev_t"
-      )
-    )  %>%
-    mutate(lcomps = map2(prepped_fishery, processed_scrooge, ~process_lcomps(.x$length_comps, .y$n_tl))) %>%
+        predicted_variable = "log_rec_dev_t"
+      )) %>% 
+    mutate(lcomps = map2(prepped_fishery, processed_scrooge, ~process_lcomps(.x, .y$n_tl))) %>%
     mutate(
       rmse = map_dbl(scrooge_performance, ~ .x$comparison_summary$rmse),
       bias =  map_dbl(scrooge_performance, ~ .x$comparison_summary$bias)
     ) %>%
     arrange(rmse)
 
-  tester$scrooge_performance[[1]]$comparison_plot
+  tester$scrooge_performance[[1]]$comparison_plot + 
+    lims(x = c(35, NA))
   
+    tester$scrooge_rec_performance[[1]]$comparison_plot+ 
+    lims(x = c(35, NA))
+
   tester <- tester %>%
     mutate(lime_fit = pmap(list(
       data = map(prepped_fishery, "scrooge_data"),
@@ -3108,5 +3115,119 @@ So in that case, I think your prior would have to actually sub in for the open-a
    geom_point(data = true_f, aes(1:11, f), color = "red")
 
     
+```
+
+# Final tweeks to scrooge
+
+log sigma effort is a problem. The estiamtes are literally just the prior, with a SLIIIIIIIGHT boost to the right. Is it better to fix it at something, like 1?
+
+Your recruitment devs aren't particularly well mixed either
+
+Also, are you actually estimating length sel or is that just spitting back the prior? Check on that. 
+
+p_response is looking a bit goofy as well. 
+
+length_50_sel is 24cm, is that right?
+
+```{r}
+
+a = compare_sim$scrooge_fit[[1]]
+
+b <- rstan::extract(a, "p_length_50_sel")
+
+traceplot(a, pars = "p_length_50_sel", inc_warmup = TRUE)
+```
+
+Huh, it's starting off at the "right" level, but then heading south pretty quick... 
+
+```{r}
+
+sel <- rstan::extract(a, "mean_selectivity_at_age")$mean_selectivity_at_age
+
+sel <- colMeans(sel)
+
+compare <- data_frame(pred = sel, obs = compare_sim$prepped_fishery[[1]]$fleet$sel_at_age) %>% 
+  mutate(age = 1:nrow(.)) %>% 
+  gather(source, selectivity, -age)
+
+compare %>% 
+  ggplot(aes(age, selectivity, color = source)) + 
+  geom_jitter()
+
+
+```
+
+
+```{r}
+a = tester$prepped_fishery[[1]]$simed_fishery
+
+b <- a %>% 
+  group_by(year) %>% 
+  summarise(effort = mean(effort), profits = sum(profits)) %>% 
+  mutate(p_per_e = profits / effort)
+
+b %>% 
+  ggplot(aes(year, p_per_e)) + 
+  geom_point()
+
+b <- a %>% 
+  group_by(year) %>% 
+  summarise(biomass = sum(biomass),
+            price = mean(price),
+            cost = mean(cost),
+            q = mean(f) / mean(effort),
+            effort = mean(effort),
+            profits = sum(profits),
+            catch = sum(biomass_caught)) %>% 
+  ungroup() %>% 
+  mutate(lead_effort = lead(effort),
+         p_per_e = profits / effort,
+         c_per_e = catch / effort)
+
+b %>% 
+  select(-effort) %>% 
+  gather(variable, value, -year, -lead_effort) %>% 
+  ggplot(aes(value, lead_effort, color = variable)) + 
+  geom_point(show.legend = F) + 
+  facet_wrap(~variable, scales = "free_x")
+
+
+
+
+```
+
+oh wait, this is interesting. Conditional on the other crap, biomass us proportional to profit per unit effort. So does that mean that you could do something like profit per unit effort in the model enters the model by being fit to the biomass output by the model?
+
+Annnnd the relationship holds even outside of the open access model. woah. Now, that relationahips could be distorted by changes in price, cost, and technology, which if you have data on can help. 
+
+```{r}
+b %>% 
+  ggplot(aes(profits, lead_effort )) + 
+  geom_point()
+```
+
+
+# summary of candidate economic models
+
+OK, it's time to make some decisions. 
+
+1. Effort in this time step is proportional to effort in the last time step. This is just the LIME model 
+
+2. Open access + process error. Effort is a latent variable with mean open access model and some noise around it
+
+3. Open access + process error + observation error. You actually fit to the timeseries of effort data that comes out of this process. 
+
+4. profit_per_unit_effort ~ biomass. No more open access structure. The theory here is that given data on the other stuff, effort will get tuned to make this work out. 
+
+5. profit_per_unit_effort ~ hat(profit_per_unit_effort) prevents the need for a translator between biomass and profit per unit effort and should have a similar effect. 
+
+6. Just effort ~ hat(effort)
+
+
+So here's a simple question. What does profit per unit effort tell you that catch per unit effort doesn't? If I'm being honest, getting people to report their average catches per fishing trip seems easier than profits. One advantage is that it gives you something like a reference point: the closer profits per unit effort get to 0, the closer you are to open access. But what if you just observe a bunch of p per unit e at levels above 0, why is that any more or less informative than just CPUE? At least from the perspective of the model, there isn't anything. bummer. The only real advantage there would be if you felt that profit per units effort was easier to measure than catch per unit effort. 
+
+
+```{r}
+
 ```
 

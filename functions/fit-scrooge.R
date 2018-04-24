@@ -16,9 +16,9 @@ fit_scrooge <-
            max_f_v_fmsy_increase = 0.5,
            in_clouds = F,
            cloud_dir = "results/scrooge_results",
-           price = 1,
-           q = 0.01,
-           r0 = 100,
+           price = 2,
+           q = 0.1,
+           r0 = 1000,
            b_v_bmsy_oa = 0.5,
            init_f_v_m = 0.8,
            use_effort_data = 1
@@ -30,7 +30,7 @@ fit_scrooge <-
 
     data$sigma_r_guess <- 0.4
 
-    data$r0 <- 100
+    data$r0 <- r0
 
     data$f_init_guess <- fish$m * init_f_v_m
 

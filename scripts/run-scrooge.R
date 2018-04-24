@@ -31,7 +31,7 @@
 
   in_clouds <-  F
 
-  run_name <- "v2.0"
+  run_name <- "v3.0"
 
   local_data <- T
 
@@ -73,7 +73,7 @@
 
   run_tests <- F
 
-  n_cores <- 4
+  n_cores <- 5
 
   if (in_clouds == T){
 
@@ -200,6 +200,8 @@
           cost_cv = c(0,0.75),
           price_ac = 0.75,
           cost_ac = 0.75,
+          q_cv = c(0, 0.5),
+          q_ac = c(0,0.5),
           economic_model = c(1),
           steepness = c(0.6,0.9),
           obs_error = c(0,0.2),
@@ -239,7 +241,7 @@
 
     prepped_fishery <- foreach::foreach(i = 1:nrow(fisheries_sandbox)) %dopar% {
 
-      write(i, "sim_progress.txt", append = T)
+      write(glue::glue("{i/nrow(fisheries_sandbox)*100}% done with sims"), "sim_progress.txt", append = T)
 
       out <- spf(
           sci_name = fisheries_sandbox$sci_name[i],
@@ -249,8 +251,10 @@
           sigma_effort = fisheries_sandbox$sigma_effort[i],
           price_cv = fisheries_sandbox$price_cv[i],
           cost_cv = fisheries_sandbox$cost_cv[i],
+          q_cv = fisheries_sandbox$q_cv[i],
           price_ac = fisheries_sandbox$price_ac[i],
           cost_ac = fisheries_sandbox$cost_ac[i],
+          q_ac = fisheries_sandbox$q_ac[i],
           steepness = fisheries_sandbox$steepness[i],
           obs_error = fisheries_sandbox$obs_error[i],
           b_v_bmsy_oa = fisheries_sandbox$b_v_bmsy_oa[i],
@@ -260,7 +264,8 @@
         price = 10,
         cost = 5,
         profit_lags = 4,
-        query_price = F
+        query_price = F,
+        r0 = 10000
       )
 
     } # close dopar
@@ -323,7 +328,7 @@ if (run_tests == T) {
         scrooge_file = "scrooge",
         in_clouds = F,
       experiment = "pfo",
-      max_f_v_fmsy_increase = 0.5
+      max_f_v_fmsy_increase = 0.1
       )
     )
 
@@ -352,7 +357,7 @@ if (run_tests == T) {
         predicted_variable = "rec_dev_t"
       )
     )  %>%
-    mutate(lcomps = map2(prepped_fishery, processed_scrooge, ~process_lcomps(.x$length_comps, .y$n_tl))) %>%
+    mutate(lcomps = map2(prepped_fishery, processed_scrooge, ~process_lcomps(.x, .y$n_tl))) %>%
     mutate(
       rmse = map_dbl(scrooge_performance, ~ .x$comparison_summary$rmse),
       bias =  map_dbl(scrooge_performance, ~ .x$comparison_summary$bias)
@@ -543,30 +548,11 @@ if (fit_models == T) {
     left_join(experiments, by = "experiment") %>%
     # filter(window == 10, fleet_model == "open-access", b_v_bmsy_oa == 0.5) %>%
     # slice(1) %>%
-    slice(sample(1:nrow(fisheries_sandbox),4, replace = F)) %>%
+    # slice(sample(1:nrow(fisheries_sandbox),4, replace = F)) %>%
     mutate(prepped_fishery = pmap(list(
       prepped_fishery = prepped_fishery,
       window = window,
       period = period), subsample_data))
-
-  # fit lbspr
-
-  # fisheries_sandbox <- fisheries_sandbox %>%
-  #   mutate(lbspr_fit = pmap(list(
-  #     data = map(prepped_fishery, "scrooge_data"),
-  #     fish = map(prepped_fishery, "fish"),
-  #     fleet = map(prepped_fishery, "fleet")
-  #   ), fit_lbspr))
-
-  # fit lime
-
-  # fisheries_sandbox <- fisheries_sandbox %>%
-  #   mutate(lime_fit = pmap(list(
-  #     data = map(prepped_fishery, "scrooge_data"),
-  #     fish = map(prepped_fishery, "fish"),
-  #     fleet = map(prepped_fishery, "fleet")
-  #   ), fit_lime))
-
 
   fisheries_sandbox$experiment <- 1:nrow(fisheries_sandbox)
 
@@ -585,8 +571,8 @@ if (fit_models == T) {
       economic_model = fisheries_sandbox$economic_model[i],
       use_effort_data = fisheries_sandbox$use_effort_data[i],
       scrooge_file = "scrooge",
-      iter = 4000,
-      warmup = 2000,
+      iter = 8000,
+      warmup = 4000,
       adapt_delta = 0.8,
       max_treedepth = 12,
       in_clouds = in_clouds,

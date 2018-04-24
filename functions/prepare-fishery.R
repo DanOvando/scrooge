@@ -20,6 +20,7 @@ prepare_fishery <-
            burn_years = 10,
            linf_buffer = 1.5,
            num_patches = 1,
+           r0 = 10000,
            sample_type = "catch",
            percent_sampled = 1,
            economic_model = 1,
@@ -32,7 +33,8 @@ prepare_fishery <-
            tune_costs = F,
            est_msy = F,
            mey_buffer = 2,
-           use_effort_data = 0
+           use_effort_data = 0,
+           cv_effort = 0.25
            ) {
 
 
@@ -63,7 +65,7 @@ prepare_fishery <-
         price_cv = price_cv,
         price_ac = price_ac,
         steepness = steepness,
-        r0 = 1000,
+        r0 = r0,
         rec_ac = rec_ac
       )
 
@@ -73,7 +75,7 @@ prepare_fishery <-
       cost_cv =  cost_cv,
       cost_ac = cost_ac,
       q_cv = q_cv,
-      q_ac = q_cv,
+      q_ac = q_ac,
       fleet_model = fleet_model,
       target_catch = fleet_params$target_catch,
       cost = cost,
@@ -89,7 +91,7 @@ prepare_fishery <-
         cost_cv =  cost_cv,
         cost_ac = cost_ac,
         q_cv = q_cv,
-        q_ac = q_cv,
+        q_ac = q_ac,
         fleet_model = fleet_model,
         initial_effort = fleet_params$initial_effort,
         cost = cost,
@@ -104,7 +106,7 @@ prepare_fishery <-
         cost_cv =  cost_cv,
         cost_ac = cost_ac,
         q_cv = q_cv,
-        q_ac = q_cv,
+        q_ac = q_ac,
         fleet_model = fleet_model,
         catches = fleet_params$catches,
         cost = cost,
@@ -124,7 +126,7 @@ prepare_fishery <-
         cost_cv =  cost_cv,
         cost_ac = cost_ac,
         q_cv = q_cv,
-        q_ac = q_cv,
+        q_ac = q_ac,
         fleet_model = fleet_model,
         theta = fleet_params$theta,
         cost = cost,
@@ -268,6 +270,7 @@ prepare_fishery <-
     effort_t <- sim %>%
       group_by(year) %>%
       summarise(effort = mean(effort)) %>%
+      mutate(effort = effort * exp(rnorm(nrow(.), rnorm(nrow(.),0, bias), obs_error))) %>%
       ungroup() %>%
       mutate(relative_effort = effort/max(effort))
 
@@ -286,6 +289,7 @@ prepare_fishery <-
       delta_guess = 2,
       n_lcomps = nrow(length_comps),
       nt = length(length_comps$year),
+      n_burn = 100,
       n_ages = fish$max_age + 1,
       n_lbins = ncol(length_at_age_key),
       ages = 1:(fish$max_age + 1),
@@ -299,7 +303,8 @@ prepare_fishery <-
       mean_length_at_age = fish$length_at_age,
       mean_weight_at_age = fish$weight_at_age,
       mean_maturity_at_age = fish$maturity_at_age,
-      use_effort_data = use_effort_data
+      use_effort_data = use_effort_data,
+      cv_effort = cv_effort
     )
 
     out <- list(simed_fishery = sim,
