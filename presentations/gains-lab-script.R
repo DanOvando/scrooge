@@ -206,8 +206,8 @@ easy <- easy %>%
       fish = map(prepped_fishery, "fish"),
       fleet = map(prepped_fishery, "fleet")),
     fit_scrooge,
-    iter = 8000,
-    warmup = 4000,
+    iter = 4000,
+    warmup = 2000,
     adapt_delta = 0.8,
     economic_model = 1,
     use_effort_data = 0,
@@ -251,7 +251,7 @@ easy <- easy %>%
            predicted = processed_scrooge),
       judge_performance,
       observed_variable = rec_dev,
-      predicted_variable = "rec_dev_t"
+      predicted_variable = "log_rec_dev_t"
     )
   )  %>%
   mutate(lcomps = map2(prepped_fishery, processed_scrooge, ~process_lcomps(.x, .y$n_tl))) %>%
@@ -282,11 +282,11 @@ medium <- medium %>%
       fish = map(prepped_fishery, "fish"),
       fleet = map(prepped_fishery, "fleet")),
     fit_scrooge,
-    iter = 8000,
-    warmup = 4000,
+    iter = 4000,
+    warmup = 2000,
     adapt_delta = 0.8,
     economic_model = 1,
-    use_effort_data = 0,
+    use_effort_data = 1,
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
@@ -327,7 +327,7 @@ medium <- medium %>%
            predicted = processed_scrooge),
       judge_performance,
       observed_variable = rec_dev,
-      predicted_variable = "rec_dev_t"
+      predicted_variable = "log_rec_dev_t"
     )
   )  %>%
   mutate(lcomps = map2(prepped_fishery, processed_scrooge, ~process_lcomps(.x, .y$n_tl))) %>%
@@ -360,11 +360,11 @@ toughest <- toughest %>%
       fish = map(prepped_fishery, "fish"),
       fleet = map(prepped_fishery, "fleet")),
     fit_scrooge,
-    iter = 2000,
-    warmup = 1000,
+    iter = 4000,
+    warmup = 2000,
     adapt_delta = 0.8,
     economic_model = 1,
-    use_effort_data = 0,
+    use_effort_data = 1,
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
@@ -405,7 +405,7 @@ toughest <- toughest %>%
            predicted = processed_scrooge),
       judge_performance,
       observed_variable = rec_dev,
-      predicted_variable = "rec_dev_t"
+      predicted_variable = "log_rec_dev_t"
     )
   )  %>%
   mutate(lcomps = map2(prepped_fishery, processed_scrooge, ~process_lcomps(.x, .y$n_tl))) %>%
@@ -440,11 +440,11 @@ econ_helps <- helps %>%
       fish = map(prepped_fishery, "fish"),
       fleet = map(prepped_fishery, "fleet")),
     fit_scrooge,
-    iter = 2000,
-    warmup = 1000,
+    iter = 4000,
+    warmup = 2000,
     adapt_delta = 0.8,
     economic_model = 1,
-    use_effort_data = 0,
+    use_effort_data = 1,
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
@@ -470,7 +470,7 @@ econ_helps <- econ_helps %>%
            predicted = processed_scrooge),
       judge_performance,
       observed_variable = rec_dev,
-      predicted_variable = "rec_dev_t"
+      predicted_variable = "log_rec_dev_t"
     )
   )  %>%
   mutate(lcomps = map2(prepped_fishery, processed_scrooge, ~process_lcomps(.x, .y$n_tl))) %>%
@@ -488,8 +488,8 @@ noecon_helps <- helps %>%
       fish = map(prepped_fishery, "fish"),
       fleet = map(prepped_fishery, "fleet")),
     fit_scrooge,
-    iter = 2000,
-    warmup = 1000,
+    iter = 4000,
+    warmup = 2000,
     adapt_delta = 0.8,
     economic_model = 0,
     use_effort_data = 0,
@@ -518,7 +518,7 @@ noecon_helps <- noecon_helps %>%
            predicted = processed_scrooge),
       judge_performance,
       observed_variable = rec_dev,
-      predicted_variable = "rec_dev_t"
+      predicted_variable = "log_rec_dev_t"
     )
   )  %>%
   mutate(lcomps = map2(prepped_fishery, processed_scrooge, ~process_lcomps(.x, .y$n_tl))) %>%
@@ -628,11 +628,11 @@ econ_hurts <- hurts %>%
       fish = map(prepped_fishery, "fish"),
       fleet = map(prepped_fishery, "fleet")),
     fit_scrooge,
-    iter = 2000,
-    warmup = 1000,
+    iter = 4000,
+    warmup = 2000,
     adapt_delta = 0.8,
     economic_model = 1,
-    use_effort_data = 0,
+    use_effort_data = 1,
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
@@ -658,7 +658,7 @@ econ_hurts <- econ_hurts %>%
            predicted = processed_scrooge),
       judge_performance,
       observed_variable = rec_dev,
-      predicted_variable = "rec_dev_t"
+      predicted_variable = "log_rec_dev_t"
     )
   )  %>%
   mutate(lcomps = map2(prepped_fishery, processed_scrooge, ~process_lcomps(.x, .y$n_tl))) %>%
@@ -676,8 +676,8 @@ noecon_hurts <- hurts %>%
       fish = map(prepped_fishery, "fish"),
       fleet = map(prepped_fishery, "fleet")),
     fit_scrooge,
-    iter = 2000,
-    warmup = 1000,
+    iter = 4000,
+    warmup = 2000,
     adapt_delta = 0.8,
     economic_model = 0,
     use_effort_data = 0,
@@ -706,7 +706,7 @@ noecon_hurts <- noecon_hurts %>%
            predicted = processed_scrooge),
       judge_performance,
       observed_variable = rec_dev,
-      predicted_variable = "rec_dev_t"
+      predicted_variable = "log_rec_dev_t"
     )
   )  %>%
   mutate(lcomps = map2(prepped_fishery, processed_scrooge, ~process_lcomps(.x, .y$n_tl))) %>%
@@ -820,7 +820,7 @@ compare_sim <- compare_sim %>%
     warmup = 2000,
     adapt_delta = 0.8,
     economic_model = 1,
-    use_effort_data = 0,
+    use_effort_data = 1,
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
@@ -846,7 +846,7 @@ compare_sim <- compare_sim %>%
            predicted = processed_scrooge),
       judge_performance,
       observed_variable = rec_dev,
-      predicted_variable = "rec_dev_t"
+      predicted_variable = "log_rec_dev_t"
     )
   )  %>%
   mutate(lcomps = map2(prepped_fishery, processed_scrooge, ~process_lcomps(.x, .y$n_tl))) %>%

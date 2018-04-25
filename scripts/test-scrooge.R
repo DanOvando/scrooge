@@ -79,7 +79,9 @@ fisheries_sandbox <- fisheries_sandbox %>%
   mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery))
 
 
-tester <- fisheries_sandbox %>%
+
+
+tester <- woot %>%
   mutate(prepped_fishery = map(
     prepped_fishery,
     subsample_data,
@@ -98,12 +100,13 @@ tester <- fisheries_sandbox %>%
       warmup = 2000,
       adapt_delta = 0.8,
       economic_model = 1,
-      use_effort_data = 1,
+      use_effort_data = 0,
       scrooge_file = "new_scrooge",
       in_clouds = F,
       experiment = "pfo",
-      max_f_v_fmsy_increase = 0.05,
-      chains = 1
+      max_f_v_fmsy_increase = 0.25,
+      chains = 1,
+      cv_effort = 0.25
     )
   )
 
@@ -138,6 +141,10 @@ tester <- tester %>%
     bias =  map_dbl(scrooge_performance, ~ .x$comparison_summary$bias)
   ) %>%
   arrange(rmse)
+
+tester$scrooge_performance[[1]]$comparison_plot
+
+tester$scrooge_rec_performance[[1]]$comparison_plot
 
 
 
@@ -257,11 +264,6 @@ r_lengths <- burn %>%
   geom_density_ridges(stat = "identity") +
   labs(x = "Length (cm)", title = "Proportional Length Distribution")
 
-tester$scrooge_performance[[1]]$comparison_plot +
-  lims(x = c(175, NA))
-
-tester$scrooge_rec_performance[[1]]$comparison_plot+
-  lims(x = c(175, NA))
 
 
 tester <- tester %>%
@@ -320,7 +322,7 @@ scrooge_fits <- tester$processed_scrooge[[1]]$f_t %>%
   group_by(year) %>%
   mutate(rank_f = percent_rank(value)) %>%
   summarise(
-    estimate = mean(value),
+    estimate = median(value),
     upper = max(value[rank_f <= 0.975]),
     lower = min(value[rank_f >= 0.025])
   ) %>%

@@ -21,7 +21,8 @@ fit_scrooge <-
            r0 = 1000,
            b_v_bmsy_oa = 0.5,
            init_f_v_m = 0.8,
-           use_effort_data = 1
+           use_effort_data = 1,
+           cv_effort = 1.6
            ) {
 
     data$use_effort_data <- use_effort_data
@@ -34,6 +35,11 @@ fit_scrooge <-
 
     data$f_init_guess <- fish$m * init_f_v_m
 
+    if (is.na(cv_effort) == F){
+    data$cv_effort <-  cv_effort
+    }
+
+    print(data$cv_effort)
     p_response = max_f_v_fmsy_increase
 
     f_msy <-
