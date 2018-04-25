@@ -9,7 +9,9 @@ tune_costs <-
            price,
            q,
            b_v_bmsy_oa = 0.5,
-           use = "fit") {
+           use = "fit",
+           max_expansion = 1.25,
+           max_window = 10) {
 
 
 
@@ -56,18 +58,20 @@ tune_costs <-
     profits[1] <-
       price * catches[1] - cost * effort[1] ^ data$beta
 
-   # wtf <-
-   #    price * catches[1] - 0:1000 * effort[1] ^ data$beta
 
     for (i in 2:time) {
+
+      previous_max <- max(effort[max(1,(i - 1 - max_window)):(i - 1)])
+
       new_effort <-
         effort[i - 1] + e_msy * (p_response * (profits[i - 1] / p_msy))
 
       if (new_effort <= 0) {
         new_effort = -.01 / (new_effort - 1)
-
-
       }
+
+      new_effort <- pmin(new_effort, previous_max * max_expansion)
+
 
       effort[i] <- new_effort
 

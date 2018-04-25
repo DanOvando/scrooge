@@ -1,13 +1,15 @@
-library(rstan)
-library(spasm)
-library(FishLife)
+# library(rstan)
+# library(spasm)
+# library(FishLife)
+# library(ggridges)
+# library(scales)
+# library(patchwork)
+# library(LBSPR)
 library(ggridges)
-library(scales)
-library(patchwork)
-library(LBSPR)
 library(wesanderson)
-library(tidyverse)
+# library(tidyverse)
 
+rstan::rstan_options(auto_write = TRUE)
 
 
 # Recruitment and Fishing Pulses
@@ -214,9 +216,11 @@ easy <- easy %>%
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
-    max_f_v_fmsy_increase = 0.1
-  )
-  )
+    max_f_v_fmsy_increase = 0.5,
+    chains = 1,
+    cv_effort = 0.5,
+    max_expansion = 1.5
+  ))
 
 easy <- easy %>%
   mutate(lime_fit = pmap(list(
@@ -290,9 +294,11 @@ medium <- medium %>%
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
-    max_f_v_fmsy_increase = 0.1
-  )
-  )
+    max_f_v_fmsy_increase = 0.5,
+    chains = 1,
+    cv_effort = 0.5,
+    max_expansion = 1.5
+  ))
 
 medium <- medium %>%
   mutate(lime_fit = pmap(list(
@@ -368,9 +374,11 @@ toughest <- toughest %>%
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
-    max_f_v_fmsy_increase = 0.1
-  )
-  )
+    max_f_v_fmsy_increase = 0.5,
+    chains = 1,
+    cv_effort = 0.5,
+    max_expansion = 1.5
+  ))
 
 toughest <- toughest %>%
   mutate(lime_fit = pmap(list(
@@ -448,9 +456,11 @@ econ_helps <- helps %>%
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
-    max_f_v_fmsy_increase = 0.1
-  )
-  )
+    max_f_v_fmsy_increase = 0.5,
+    chains = 1,
+    cv_effort = 0.5,
+    max_expansion = 1.5
+  ))
 
 econ_helps <- econ_helps %>%
   mutate(processed_scrooge = map2(
@@ -496,9 +506,11 @@ noecon_helps <- helps %>%
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
-    max_f_v_fmsy_increase = 0.1
-  )
-  )
+    max_f_v_fmsy_increase = 0.5,
+    chains = 1,
+    cv_effort = 0.5,
+    max_expansion = 1.5
+  ))
 
 noecon_helps <- noecon_helps %>%
   mutate(processed_scrooge = map2(
@@ -636,9 +648,11 @@ econ_hurts <- hurts %>%
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
-    max_f_v_fmsy_increase = 0.1
-  )
-  )
+    max_f_v_fmsy_increase = 0.5,
+    chains = 1,
+    cv_effort = 0.5,
+    max_expansion = 1.5
+  ))
 
 econ_hurts <- econ_hurts %>%
   mutate(processed_scrooge = map2(
@@ -684,9 +698,11 @@ noecon_hurts <- hurts %>%
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
-    max_f_v_fmsy_increase = 0.1
-  )
-  )
+    max_f_v_fmsy_increase = 0.5,
+    chains = 1,
+    cv_effort = 0.5,
+    max_expansion = 1.5
+  ))
 
 noecon_hurts <- noecon_hurts %>%
   mutate(processed_scrooge = map2(
@@ -824,9 +840,11 @@ compare_sim <- compare_sim %>%
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
-    max_f_v_fmsy_increase = 0.05
-  )
-  )
+    max_f_v_fmsy_increase = 0.5,
+    chains = 1,
+    cv_effort = 0.5,
+    max_expansion = 1.5
+  ))
 
 compare_sim <- compare_sim %>%
   mutate(processed_scrooge = map2(

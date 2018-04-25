@@ -27,7 +27,9 @@ int<lower = 0> economic_model; // 0 = no bioeconomic prior, 1 = bioeconomic prio
 
 int<lower = 0, upper = 1> use_effort_data; // 0 = don't use effort data, 1 = use effort data,
 
+real max_expansion;
 
+int max_window;
 
 //// length data ////
 
@@ -58,6 +60,8 @@ real<lower = 0> p_msy;
 real<lower = 0> e_msy;
 
 real<lower = 0> cv_effort;
+
+
 
 //// biology ////
 
@@ -288,6 +292,8 @@ real sigma_effort;
 
 real new_effort;
 
+real previous_max;
+
 sigma_effort = cv_effort * mean(effort_t);
 
 //// length comps likelihood ////
@@ -312,7 +318,11 @@ if (economic_model == 1) {
 
   for (t in 2:nt){
 
+    previous_max = max(effort_t[max(1,t - 1 - max_window):(t - 1)]);
+
     new_effort = effort_t[t - 1] + e_msy * (p_response * (profit_t[t - 1] / p_msy));
+
+    new_effort = fmin(new_effort, previous_max * max_expansion);
 
     effort_t[t] ~ normal(new_effort,sigma_effort);
 
@@ -321,6 +331,7 @@ if (economic_model == 1) {
 } else{
 
   for (i in 2:nt){
+
 
   effort_t[i] ~ normal(effort_t[i - 1],sigma_effort);
 

@@ -1,5 +1,9 @@
 set.seed(42)
+rstan::rstan_options(auto_write = TRUE)
 
+custom_sandbox <- F
+
+if (custom_sandbox == T){
 fisheries_sandbox <-
   purrr::cross_df(
     list(
@@ -77,11 +81,14 @@ fisheries_sandbox <- fisheries_sandbox %>%
 fisheries_sandbox <- fisheries_sandbox %>%
   mutate(prepped_fishery = map(prepped_fishery, "result")) %>%
   mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery))
+} else{
+
+  load(file = here::here("processed_data", "fisheries_sandbox.Rdata"))
+
+}
 
 
-
-
-tester <- woot %>%
+tester <- fisheries_sandbox %>%
   mutate(prepped_fishery = map(
     prepped_fishery,
     subsample_data,
@@ -101,12 +108,13 @@ tester <- woot %>%
       adapt_delta = 0.8,
       economic_model = 1,
       use_effort_data = 0,
-      scrooge_file = "new_scrooge",
+      scrooge_file = "scrooge",
       in_clouds = F,
       experiment = "pfo",
-      max_f_v_fmsy_increase = 0.25,
+      max_f_v_fmsy_increase = 0.5,
       chains = 1,
-      cv_effort = 0.25
+      cv_effort = 0.5,
+      max_expansion = 1.5
     )
   )
 
