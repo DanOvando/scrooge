@@ -3,14 +3,14 @@ fisheries_sandbox <-
     list(
       sci_name = c("Lutjanus campechanus"),
       fleet_model = c("open-access"),
-      sigma_r = c(0),
-      sigma_effort = c(0),
-      price_cv = c(0),
-      cost_cv = c(0),
-      price_ac = 0,
-      cost_ac = 0,
-      q_cv = 0,
-      q_ac = 0,
+      sigma_r = c(0.4),
+      sigma_effort = c(0.1),
+      price_cv = c(0.25),
+      cost_cv = c(0.5),
+      price_ac = 0.5,
+      cost_ac = 0.5,
+      q_cv = .2,
+      q_ac = 0.5,
       economic_model = c(1),
       steepness = c(0.6),
       obs_error = c(0),
@@ -58,9 +58,10 @@ fisheries_sandbox <- fisheries_sandbox %>%
       burn_years = 50,
       price = 10,
       cost = 5,
-      profit_lags = 1,
+      profit_lags = 5,
       query_price = F,
-      use_effort_data = 1
+      use_effort_data = 1,
+      cv_len = 0.1
     )
   )
 
@@ -94,7 +95,7 @@ tester <- fisheries_sandbox %>%
       warmup = 2000,
       adapt_delta = 0.8,
       economic_model = 1,
-      use_effort_data = 0,
+      use_effort_data = 1,
       scrooge_file = "new_scrooge",
       in_clouds = F,
       experiment = "pfo",
@@ -138,6 +139,97 @@ tester <- tester %>%
 
 scrooge_fit <- tester$scrooge_fit[[1]]
 
+
+profits <- rstan::extract(scrooge_fit, "profit_t")$profit_t %>%
+  as_data_frame() %>%
+  mutate(iteration = 1:nrow(.)) %>%
+  gather(year, profits,-iteration) %>%
+  mutate(year = str_replace(year,"\\D","") %>% as.numeric()) %>%
+  group_by(year) %>%
+  summarise(mean_profits = mean(profits)) %>%
+  ggplot(aes(year, mean_profits)) +
+  geom_point()
+
+
+
+numbers <- rstan::extract(scrooge_fit, "n_ta")$n_ta %>%
+  purrr::array_branch(1) %>%
+  map(as_data_frame) %>%
+  bind_rows(.id = "iteration") %>%
+  group_by(iteration) %>%
+  mutate(year = 1:length(iteration)) %>%
+  gather(age,numbers, -iteration,-year) %>%
+  ungroup() %>%
+  mutate(age = str_replace(age,"\\D","") %>% as.numeric()) %>%
+  group_by(year, age) %>%
+  summarise(numbers = mean(numbers))
+
+
+numbers %>%
+  group_by(year) %>%
+  filter(age == 1) %>%
+  summarise(tn = sum(numbers)) %>%
+  ggplot(aes(year, tn)) +
+  geom_point()
+
+selectivity <- rstan::extract(scrooge_fit, "mean_selectivity_at_age")$mean_selectivity_at_age %>%
+  purrr::array_branch(1) %>%
+  map(~as_data_frame(t(.x))) %>%
+  bind_rows(.id = "iteration") %>%
+  group_by(iteration) %>%
+  mutate(year = 1:length(iteration)) %>%
+  gather(age,selectivity, -iteration,-year) %>%
+  ungroup() %>%
+  mutate(age = str_replace(age,"\\D","") %>% as.numeric()) %>%
+  group_by(year, age) %>%
+  summarise(selectivity = mean(selectivity)) %>%
+  mutate(true_selectivity = tester$prepped_fishery[[1]]$fleet$sel_at_age,
+         mean_length = tester$prepped_fishery[[1]]$fish$length_at_age)
+
+
+sel_50_hat <- rstan::extract(scrooge_fit, "length_50_sel")$length_50_sel %>%
+  mean()
+
+sel_95_hat <- sel_50_hat + 2
+
+sel_50_true <- tester$prepped_fishery[[1]]$fleet$length_50_sel
+
+manual <- 1.0 / (1 + exp(-log(19) * ((tester$prepped_fishery[[1]]$fish$length_at_age
+ - sel_50_hat) / 2)))
+
+1 / (1 + exp(-log(19)*(tester$prepped_fishery[[1]]$scrooge_data$mean_length_at_age - sel_95_hat)/(2)))
+
+1 / (1 + exp(-log(19)*(tester$prepped_fishery[[1]]$fish$length_at_age - sel_50_true)/(2)))
+
+tester$prepped_fishery[[1]]$fleet$sel_at_age
+
+selectivity$manual <- manual
+
+
+tester$prepped_fishery[[1]]$scrooge_data$mean_length_at_age
+
+tester$prepped_fishery[[1]]$fish$length_at_age
+
+selectivity %>%
+  ggplot() +
+  geom_line(aes(mean_length, selectivity)) +
+  geom_line(aes(mean_length, manual), color = "blue") +
+  geom_point(aes(mean_length, true_selectivity)) +
+  geom_vline(aes(xintercept = sel_50_hat), alpha = 0.5) +
+  geom_vline(aes(xintercept = sel_50_true), color = "red", alpha = 0.5)
+
+
+tester$prepped_fishery[[1]]$fleet$length_50_sel
+
+tester$prepped_fishery[[1]]$fleet$length_95_sel
+
+numbers %>%
+  group_by(year) %>%
+  filter(age == 1) %>%
+  summarise(tn = sum(numbers)) %>%
+  ggplot(aes(year, tn)) +
+  geom_point()
+
 burn <- rstan::extract(scrooge_fit, "n_a_init")$n_a_init %>%
   purrr::array_branch(1) %>%
   map(as_data_frame) %>%
@@ -152,24 +244,20 @@ burn <- rstan::extract(scrooge_fit, "n_a_init")$n_a_init %>%
 
 burn %>%
   group_by(year) %>%
-  filter(age == min(age)) %>%
   summarise(tn = sum(numbers)) %>%
   ggplot(aes(year, tn)) +
   geom_point()
 
 r_lengths <- burn %>%
-  filter(year > 90) %>%
   ggplot(aes(age, year, height = numbers, group = year)) +
   geom_density_ridges(stat = "identity") +
   labs(x = "Length (cm)", title = "Proportional Length Distribution")
 
-
-
 tester$scrooge_performance[[1]]$comparison_plot +
-  lims(x = c(35, NA))
+  lims(x = c(175, NA))
 
 tester$scrooge_rec_performance[[1]]$comparison_plot+
-  lims(x = c(35, NA))
+  lims(x = c(175, NA))
 
 
 tester <- tester %>%
@@ -220,7 +308,7 @@ lbspr_fits <- tester$processed_lbspr[[1]] %>%
   mutate(lower = NA,
          upper = NA,
          model = "lbspr") %>%
-  mutate(estimate = fm * compare_sim$prepped_fishery[[1]]$fish$m) %>%
+  mutate(estimate = fm * tester$prepped_fishery[[1]]$fish$m) %>%
   select(year, estimate, lower, upper, model)
 
 
@@ -239,8 +327,7 @@ scrooge_fits <- tester$processed_scrooge[[1]]$f_t %>%
 model_fits <- lbspr_fits %>%
   bind_rows(lime_fits) %>%
   bind_rows(scrooge_fits) %>%
-  left_join(true_f, by = "year") %>%
-  mutate(upper = pmin(upper, 2))
+  left_join(true_f, by = "year")
 
 model_trends_plot <- model_fits %>%
   ggplot() +
@@ -255,7 +342,9 @@ model_trends_plot <- model_fits %>%
   geom_line(aes(year, estimate, color = model),
             linetype = 2,
             size = 1.25) +
-  geom_line(aes(year, f, color = "true"), color = "black") +
-  geom_point(aes(year, f), size = 4, alpha = 0.8) +
-  scale_fill_manual(values = wes_palette("Zissou1")) +
+  geom_line(aes(year, f), color = "black", alpha = 0.75) +
+  geom_point(aes(year, f), size = 4, alpha = 0.75) +
+  scale_fill_viridis_d() +
+  scale_color_viridis_d() +
   labs(y = "Fishing Mortality", x = "Year", caption = "Black points are true values")
+

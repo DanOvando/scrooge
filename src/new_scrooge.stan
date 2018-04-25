@@ -164,7 +164,7 @@ transformed parameters{
 
   length_50_sel = loo * p_length_50_sel;
 
-  sel_delta = 1;
+  sel_delta = 2;
 
   sigma_r = exp(log_sigma_r);
 
@@ -276,15 +276,13 @@ transformed parameters{
 
   p_age_sampled = cn_ta[nt, 1:n_ages] / sum(cn_ta[nt, 1:n_ages]);
 
-  p_lbin_sampled[nt, 1:n_lbins] = p_age_sampled * length_at_age_key / sum(p_age_sampled * length_at_age_key);
+  p_lbin_sampled[nt, 1:n_lbins] = (p_age_sampled * length_at_age_key) / sum(p_age_sampled * length_at_age_key);
 
 }
 
 model{
 
 vector[nt] relative_effort_t; // effort in right units
-
-matrix[n_lcomps, n_lbins] pn_tl; // numbers at time and length bin
 
 real sigma_effort;
 
@@ -294,9 +292,7 @@ sigma_effort = cv_effort * mean(effort_t);
 
 //// length comps likelihood ////
 
-pn_tl = rep_matrix(0,n_lcomps, n_lbins);
-
-for (i in 1:(n_lcomps - 1)){
+for (i in 1:(n_lcomps)){
 
   length_comps[i, 1:n_lbins] ~ multinomial(to_vector(p_lbin_sampled[length_comps_years[i], 1:n_lbins]));
 
@@ -341,11 +337,11 @@ p_response ~ normal(p_response_guess,.01); // constrain p_response
 
 uc_rec_dev_t ~ normal(0, 1);
 
-log_sigma_r ~ normal(log(0.0001), 0.01);
+log_sigma_r ~ normal(log(sigma_r_guess), 1);
 
 //// selectivity likelihood ////
 
-p_length_50_sel ~ normal(length_50_sel_guess/loo, .01);
+// p_length_50_sel ~ normal(length_50_sel_guess/loo, .01);
 
 // sel_delta ~ normal(delta_guess, 2);
 

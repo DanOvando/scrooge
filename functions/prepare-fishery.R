@@ -34,7 +34,8 @@ prepare_fishery <-
            est_msy = F,
            mey_buffer = 2,
            use_effort_data = 0,
-           cv_effort = 0.25
+           cv_effort = 0.25,
+           cv_len = 0.1
            ) {
 
 
@@ -66,7 +67,8 @@ prepare_fishery <-
         price_ac = price_ac,
         steepness = steepness,
         r0 = r0,
-        rec_ac = rec_ac
+        rec_ac = rec_ac,
+        cv_len = cv_len
       )
 
     if (fleet_model == "constant-catch"){

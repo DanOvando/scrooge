@@ -67,7 +67,7 @@
 
   # run options -------------------------------------------------------------
 
-  sim_fisheries <- F
+  sim_fisheries <- T
 
   fit_models <- F
 
@@ -259,7 +259,7 @@
           obs_error = fisheries_sandbox$obs_error[i],
           b_v_bmsy_oa = fisheries_sandbox$b_v_bmsy_oa[i],
           mey_buffer = 20,
-        sim_years = 75,
+        sim_years = 100,
         burn_years = 25,
         price = 10,
         cost = 5,
