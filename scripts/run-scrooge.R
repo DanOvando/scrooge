@@ -29,7 +29,7 @@
 
   walk(functions, ~ here::here("functions", .x) %>% source()) # load local functions
 
-  in_clouds <-  T
+  in_clouds <-  F
 
   run_name <- "v1.0"
 
@@ -73,7 +73,7 @@
 
   run_tests <- F
 
-  n_cores <- 4
+  n_cores <- 1
 
   if (in_clouds == T){
 
