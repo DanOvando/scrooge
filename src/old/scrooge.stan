@@ -1,9 +1,10 @@
-/*scrooge_v1.0
+/*scrooge_v3.0
 
-non-centered recruitment, centered effort deviations
+effort prior is open-access dynamics
+
+non-centered recruitment and effort deviations
 
 */
-
 
 
 data{
@@ -16,13 +17,15 @@ int n_ages; // number of ages
 
 int n_lbins; // number of length bins;
 
-int n_lcomps; // number of timesteps of length comps availabl
+int n_lcomps; // number of timesteps of length comps available
 
 vector[n_ages] ages; // vector of ages
 
-int estimate_recruits; // 1 if you want to estimate recruitment deviates, 0 if not
+int<lower = 0> economic_model; // 0 = no bioeconomic prior, 1 = bioeconomic prior,
 
-int<lower = 0> economic_model; // 0 = no economic prior, 1 = economic shock prior,
+int<lower = 0, upper = 1> use_effort_data; // 0 = don't use effort data, 1 = use effort data,
+
+
 
 //// length data ////
 
@@ -32,13 +35,13 @@ int length_comps_years[n_lcomps]; // time steps in which length comps are availa
 
 //// economic data ////
 
-// vector<lower=0, upper=1>[n_ages] mean_selectivity_at_age;
+row_vector[nt] relative_effort;
 
-matrix[nt,2] price_t;
+row_vector[nt] price_t;
 
-matrix[nt,2] cost_t;
+row_vector[nt] cost_t;
 
-matrix[nt,2] q_t;
+row_vector[nt] q_t;
 
 real beta;
 
@@ -46,8 +49,13 @@ real length_50_sel_guess;
 
 real delta_guess;
 
-real<lower  = 0> base_effort;
-// vector<lower = 0>[nt] f_t;
+real<lower = 0> p_response_guess;
+
+real<lower = 0> p_msy;
+
+real<lower = 0> e_msy;
+
+real<lower = 0> f_init_guess;
 
 //// biology ////
 
@@ -72,33 +80,35 @@ real loo; // vbk linf
 
 real t0; // t0
 
+real sigma_r_guess;
+
 }
 
 transformed data{
 
-  // int n_sampled;
-
-  // n_sampled = 1;
 
 
 }
 
 parameters{
 
-vector<lower = -5, upper = 3>[nt]  log_effort_t; //  base effort multiplier
+// real <lower = -5, upper = 3> log_base_effort;
 
-real<lower = -5, upper = 1> log_sigma_effort; // standard deviation of effort
+vector[nt - economic_model]  effort_shock_t; //  base effort multiplier
+
+real<lower = -5, upper = 5> log_sigma_effort; // standard deviation of effort
 
 vector[nt]  uc_rec_dev_t; //  recruitment deviates
 
-real<lower = -5, upper = 1> log_sigma_r; // standard deviation of recruitment deviates
+real<lower = -5, upper = 2> log_sigma_r; // standard deviation of recruitment deviates
 
-real<lower = 0> length_50_sel; // length at 50% selectivity
+real<lower = 0, upper = 1.5> p_length_50_sel; // length at 50% selectivity
 
-real<lower = 0.001> sel_delta; // difference between length 50% selected and length 95% selected
+real<lower = 1e-3, upper = 2> f_init; // f to get to initial depletion
 
-// real<lower = 1, upper = 4*(m/.001)> base_effort;
+real<lower = 0, upper = 1> p_response;
 
+// real<lower = 0.001> sel_delta; // difference between length 50% selected and length 95% selected
 
 } // close parameters block
 
@@ -108,19 +118,21 @@ transformed parameters{
 
   real ssb_temp;
 
-  real temp_rec_dev;
-
   real sigma_r;
 
   real sigma_effort;
 
-  vector[nt]  effort_t; //  base effort multiplier
+  real new_effort;
+
+  real sel_delta;
+
+  real length_50_sel;
+
+  real base_effort;
 
   vector[nt]  rec_dev_t; //  base effort multiplier
 
   matrix[nt, n_ages] n_ta; // numbers at time and age
-
-  matrix[nt, n_ages] b_ta; // biomass at time and age
 
   matrix[nt, n_ages] ssb_ta; // spawning stock biomass at time and age
 
@@ -138,33 +150,33 @@ transformed parameters{
 
   vector[nt] profit_t; // profits
 
-  vector[nt] sq_profit_t; // profits under last years price and cost
-
-  vector[nt] profit_shock_t; // profit shock
-
   vector[n_ages] mean_selectivity_at_age; // mean selectivity at age
 
+  // vector[nt] profit_per_unit_effort;
 
-  // vector[nt] delta_f; // expected change in f from profit shock
-
-  row_vector[n_ages] temp_n_a;
+  row_vector[n_ages] n_a_0;
 
   row_vector[n_ages] p_age_sampled;
 
-  // transform parameters
+  length_50_sel = loo * p_length_50_sel;
+
+  sel_delta = 1;
 
   sigma_r = exp(log_sigma_r);
 
   sigma_effort = exp(log_sigma_effort);
 
-  effort_t = exp(log_effort_t);
+  rec_dev_t = exp(sigma_r * uc_rec_dev_t - sigma_r^2/2);
 
-  rec_dev_t = sigma_r * uc_rec_dev_t;
+  // base_effort = exp(log_base_effort);
 
-  // fill matrices with zeros
+  base_effort = f_init / q_t[1];
+
+  // fill matrices with zeros //
+
   n_ta = rep_matrix(0,nt, n_ages);
 
-  b_ta = rep_matrix(0,nt, n_ages);
+  // b_ta = rep_matrix(0,nt, n_ages);
 
   ssb_ta = rep_matrix(0,nt, n_ages);
 
@@ -175,52 +187,54 @@ transformed parameters{
   p_lbin_sampled = rep_matrix(0,nt, n_lbins);
 
   // profit_shock = rep_matrix(0, nt, 2);
-  // print("wtf")
-  mean_selectivity_at_age = 1.0 ./ (1 + exp(-log(19) * ((mean_length_at_age - length_50_sel) / sel_delta))); // selectivity ogive at age
 
-  total_effort_t = effort_t * base_effort; // convert effort into correct scale
+  mean_selectivity_at_age = 1.0 ./ (1 + exp(-log(19) * ((mean_length_at_age - length_50_sel) / sel_delta))); // selectivity ogive at age
 
   ssb0 = sum((r0 * exp(-m * (ages - 1)))  .* mean_maturity_at_age .* mean_weight_at_age); // virgin ssb
 
-  temp_n_a = r0 * exp(-m * (ages' - 1)); // transpose to specify row format
+  n_a_0[1] = r0;
 
-  n_ta[1, 1:n_ages] = temp_n_a;  // add in virign recruitment to get population moving
+  for (i in 2:n_ages){
 
-  n_ta[1, n_ages] = (n_ta[1, n_ages - 1] * exp(-m)) / (1 - exp(-m));  //plus group
+    n_a_0[i] = n_a_0[i-1] * exp(-(m + f_init .* mean_selectivity_at_age[i])); // transpose to specify row format
 
-  b_ta[1, 1:n_ages] = n_ta[1, 1:n_ages] .* mean_weight_at_age'; // virgin biomass
+  }
 
-  ssb_ta[1, 1:n_ages] = b_ta[1, 1:n_ages] .* mean_maturity_at_age'; // virgin ssb
 
-  f_t = total_effort_t .* q_t[1:nt,1];
+  n_ta[1, 1:n_ages] = n_a_0 * rec_dev_t[1];  // add in virign recruitment to get population moving
+
+  n_ta[1, n_ages] = n_ta[1, n_ages - 1] * exp(-(m + f_init)) / (1 - exp(-(m + f_init)));  //plus group
+
+  // b_ta[1, 1:n_ages] = n_ta[1, 1:n_ages] .* mean_weight_at_age'; // virgin biomass
+
+  ssb_ta[1, 1:n_ages] = n_ta[1, 1:n_ages] .* mean_maturity_at_age' .* mean_weight_at_age'; // virgin ssb
+
+
+  if (economic_model == 1) {
+  total_effort_t[1] = base_effort;
+  } else {
+
+   total_effort_t[1] = base_effort + sigma_effort * effort_shock_t[1];
+
+  }
+
+  f_t[1] = total_effort_t[1] .* q_t[1];
 
   // order of events spawn, grow and die, recruit
 
-
   for (t in 2:nt){
-
-  temp_rec_dev = 1;
-
-  if (estimate_recruits == 1){
-
-    temp_rec_dev = exp(rec_dev_t[t]);
-
-    // temp_rec_dev = exp(rec_dev_t[t] - sigma_r^2/2);
-
-
-  } // close estimate recruits
 
     ssb_temp =  sum(ssb_ta[t - 1, 1:n_ages]);
 
-    n_ta[t,1] = ((0.8 * r0 * h *ssb_temp) / (0.2 * ssb0 * (1 - h) + (h - 0.2) * ssb_temp)) * temp_rec_dev; //calculate recruitment
+    n_ta[t,1] = ((0.8 * r0 * h *ssb_temp) / (0.2 * ssb0 * (1 - h) + (h - 0.2) * ssb_temp)) * rec_dev_t[t]; //calculate recruitment
 
     n_ta[t , 2:n_ages] = n_ta[t - 1, 1:(n_ages -1)] .* (exp(-(m + f_t[t - 1] * mean_selectivity_at_age[1:(n_ages - 1)])))'; // grow and die
 
-    n_ta[t, n_ages] = n_ta[t - 1, n_ages] .* (exp(-(m + f_t[t - 1] * mean_selectivity_at_age[n_ages])))'; // assign to plus group
+    n_ta[t, n_ages] = n_ta[t, n_ages] + n_ta[t - 1, n_ages] .* (exp(-(m + f_t[t - 1] * mean_selectivity_at_age[n_ages])))'; // assign to plus group
 
-  b_ta[t, 1:n_ages] = n_ta[t, 1:n_ages] .* mean_weight_at_age'; // calculate biomass at age
+  // b_ta[t, 1:n_ages] = n_ta[t, 1:n_ages] .* mean_weight_at_age'; // calculate biomass at age
 
-  ssb_ta[t, 1:n_ages] = b_ta[t, 1:n_ages] .* mean_maturity_at_age'; // calculate ssb at age
+  ssb_ta[t, 1:n_ages] = n_ta[t, 1:n_ages] .* mean_maturity_at_age'.* mean_weight_at_age'; // calculate ssb at age
 
    cn_ta[t - 1, 1:n_ages] = ((f_t[t - 1] * mean_selectivity_at_age) ./ (m + f_t[t - 1] * mean_selectivity_at_age))' .* n_ta[t - 1, 1:n_ages] .* (1 - exp(-(m + f_t[t - 1] * mean_selectivity_at_age)))'; // .* mean_weight_at_age';
 
@@ -228,15 +242,34 @@ transformed parameters{
 
    c_t[t - 1] = sum(c_ta[t-1, 1:n_ages]);
 
+  // print(c_t[t - 1])
+
   // run economic model
 
-  profit_t[t - 1] = price_t[t - 1,1] * c_t[t - 1] - cost_t[t - 1,1] * total_effort_t[t - 1] ^ beta;
+  profit_t[t - 1] = price_t[t - 1] * c_t[t - 1] - cost_t[t - 1] * total_effort_t[t - 1] ^ beta;
 
-  sq_profit_t[t - 1] = price_t[t - 1,2] * c_t[t - 1] - cost_t[t - 1,2] * total_effort_t[t - 1] ^ beta;
+if (economic_model == 1){
 
-  profit_shock_t[t - 1] = profit_t[t - 1] - sq_profit_t[t - 1];
+new_effort = total_effort_t[t - 1] + e_msy * (p_response * (profit_t[t - 1] / p_msy)) + sigma_effort * effort_shock_t[t - 1];
 
-  // sample lengths
+} else {
+
+new_effort = base_effort + sigma_effort * effort_shock_t[t];
+
+}
+
+
+if (new_effort <= 0){
+
+  new_effort = -.01 / (new_effort - 1); // if effort is negative, have it asymptotically approach zero instead
+
+}
+
+ total_effort_t[t] = new_effort; //* exp(sigma_effort * effort_shock_t[t - 1]);
+
+  f_t[t] = total_effort_t[t] * q_t[t];
+
+  // sample lengths //
 
   p_age_sampled = cn_ta[t - 1, 1:n_ages] / sum(cn_ta[t - 1, 1:n_ages]);
 
@@ -253,11 +286,7 @@ transformed parameters{
 
    c_t[nt] = sum(c_ta[nt, 1:n_ages]);
 
-  profit_t[nt] = price_t[nt,1] * c_t[nt] - cost_t[nt,1] * total_effort_t[nt] ^ beta;
-
-  sq_profit_t[nt] = price_t[nt,2] * c_t[nt] - cost_t[nt,2] * total_effort_t[nt] ^ beta;
-
-  profit_shock_t[nt] = profit_t[nt] - sq_profit_t[nt];
+  profit_t[nt] = price_t[nt] * c_t[nt] - cost_t[nt] * total_effort_t[nt] ^ beta;
 
   p_age_sampled = cn_ta[nt, 1:n_ages] / sum(cn_ta[nt, 1:n_ages]);
 
@@ -267,11 +296,9 @@ transformed parameters{
 
 model{
 
+vector[nt] relative_total_effort_t; // effort in right units
+
 matrix[n_lcomps, n_lbins] pn_tl; // numbers at time and length bin
-
-vector[nt] economic_prior;
-
-int temp_n_tl[n_lbins];
 
 //// length comps likelihood ////
 
@@ -285,39 +312,46 @@ for (i in 1:(n_lcomps - 1)){
 
 //// effort prior ////
 
-if (economic_model == 0){
+if (use_effort_data == 1){
 
-  economic_prior = rep_vector(0, nt);
+relative_total_effort_t = total_effort_t / max(total_effort_t); // relative effort
 
-} else if(economic_model == 1){
+relative_effort ~ normal(relative_total_effort_t, 0.1);
+}
 
-  economic_prior = profit_shock_t / (sd(profit_shock_t) + 1e-3);
+f_init ~ normal(f_init_guess, 1);
+
+
+if (economic_model == 1) {
+
+effort_shock_t ~ normal(0,1);
+
+} else{
+
+  for (i in 2:nt){
+
+  effort_shock_t[i] ~ normal(effort_shock_t[i - 1],1);
 
 }
 
-log_effort_t[1] ~ normal(0,2);
 
-for (t in 2:nt){
+} // close effort loop
 
-log_effort_t[t] ~ normal(log_effort_t[t - 1] + economic_prior[t - 1], sigma_effort);
+log_sigma_effort ~ normal(0,0.25);
 
-} // close effort likelihood loop
-
-log_sigma_effort ~ normal(0,0.2);
+p_response ~ normal(p_response_guess,.01); // constrain p_response
 
 //// recruitment prior ////
 
 uc_rec_dev_t ~ normal(0, 1);
 
-// sigma_r ~ normal(0.7, 0.2);
-
-log_sigma_r ~ normal(0, 0.2);
+log_sigma_r ~ normal(log(0.2), 0.01);
 
 //// selectivity likelihood ////
 
-length_50_sel ~ normal(length_50_sel_guess, .1 * loo);
+p_length_50_sel ~ normal(length_50_sel_guess/loo, .01);
 
-sel_delta ~ normal(delta_guess, .01 * loo);
+// sel_delta ~ normal(delta_guess, 2);
 
 
 } // close model block
@@ -328,7 +362,7 @@ generated quantities{
 int n_tl[nt, n_lbins];
 
 for (t in 1:nt){
-    n_tl[t, 1:n_lbins] = multinomial_rng(to_vector(p_lbin_sampled[t, 1:n_lbins]),1000); // generate length comp samples
+    n_tl[t, 1:n_lbins] = multinomial_rng(to_vector(p_lbin_sampled[t, 1:n_lbins]),500); // generate length comp samples
 }
 
 } // close generated quantities block

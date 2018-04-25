@@ -2936,3 +2936,298 @@ ggplot(aes(max_delta_u)) +
 
 ```
 
+
+# integrating effort data
+
+The main question is is it data or is it a prior? On the data side, you treat the vector of relative effort over time as data or as a prior. If it comes in as data, the idea would be that you put it in the likelihood. The advantage there is that it's actual data means that the entire likelihood isn't explained by the length comps. The disadvantage is what to do if the effort data isn't really data but more of a prior.
+
+Fuck it, let's try both. 
+
+On the likelihood side, scale the effort relative to something, treat it as normally distributed for now. Philisophically, you have priors based on cost and tech, and you confront those priors with the effort and length data
+
+On the prior side, philosphically you're saying you don't have effort data per say but an idea around effort. So where would those come in?
+
+The prior would come in on effort_shock_t? though technicaly speaking, effort_shock is deviations from the open-access model. So, suppose that you sampled from a perfect open access scenario. Then, the prior on the effort shock should in theory be zero. So, it's kind of hard to think about how you would construct a prior around the deviations, when your prior is already that it is open access. 
+
+So in that case, I think your prior would have to actually sub in for the open-access model. In that you have some prior that effort has been flat, increasing, whatver, and then you still estimate the shocks around that model. 
+
+
+```{r}
+
+    fisheries_sandbox <-
+      purrr::cross_df(
+        list(
+          sci_name = c("Lutjanus campechanus"),
+          fleet_model = c(
+            "open-access"
+          ),
+          sigma_r = c(0),
+          sigma_effort = c(0),
+          price_cv = c(0),
+          cost_cv = c(0),
+          price_ac = 0,
+          cost_ac = 0,
+          q_cv = 0,
+          q_ac = 0,
+          economic_model = c(1),
+          steepness = c(0.6),
+          obs_error = c(0),
+          b_v_bmsy_oa = c(0.5)
+        )
+      )
+
+   fleet_model_params <- data_frame(
+      fleet_model = c(
+        "constant-catch",
+        "constant-effort",
+        "supplied-catch",
+        "open-access"
+      ),
+      fleet_params = list(
+        list(target_catch = 10000),
+        list(initial_effort = 200),
+        list(catches = cdfw_catches$catch[cdfw_catches$sci_name == "semicossyphus pulcher"]),
+        list(theta = 0.5, initial_effort = 10)
+      )
+    )
+   
+   fisheries_sandbox <- fisheries_sandbox %>%
+      left_join(fleet_model_params, by = "fleet_model") %>%
+      # filter(fleet_model == "open-access", b_v_bmsy_oa == 0.5) %>%
+      # arrange(b_v_bmsy_oa) %>%
+      # slice(1) %>%
+      mutate(prepped_fishery = pmap(
+        list(
+          sci_name = sci_name,
+          fleet_model = fleet_model,
+          fleet_params = fleet_params,
+          sigma_r = sigma_r,
+          sigma_effort = sigma_effort,
+          price_cv = price_cv,
+          cost_cv = cost_cv,
+          price_ac = price_ac,
+          cost_ac = cost_ac,
+          steepness = steepness,
+          obs_error = obs_error,
+          b_v_bmsy_oa = b_v_bmsy_oa,
+          q_cv = q_cv,
+          q_ac = q_ac
+        ),
+        safely(prepare_fishery),
+        sim_years = 50,
+        burn_years = 25,
+        price = 10,
+        cost = 5,
+        profit_lags = 1,
+        query_price = F,
+        use_effort_data = 1
+      ))
+   
+      no_error <- map(fisheries_sandbox$prepped_fishery,'error') %>%
+      map_lgl(is.null)
+
+    fisheries_sandbox <- fisheries_sandbox %>%
+      filter(no_error == T)
+
+    fisheries_sandbox <- fisheries_sandbox %>%
+      mutate(prepped_fishery = map(prepped_fishery,"result")) %>%
+      mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery))
+
+
+
+      tester <- fisheries_sandbox %>%
+    slice(1) %>%
+    mutate(prepped_fishery = map(prepped_fishery, subsample_data, window = 10, period = "end")) %>%
+    mutate(scrooge_fit = pmap(
+      list(
+      data = map(prepped_fishery, "scrooge_data"),
+      fish = map(prepped_fishery, "fish"),
+      fleet = map(prepped_fishery, "fleet")),
+      fit_scrooge,
+        iter = 4000,
+        warmup = 2000,
+        adapt_delta = 0.8,
+        economic_model = 1,
+       use_effort_data = 1,
+        scrooge_file = "new_scrooge",
+        in_clouds = F,
+      experiment = "pfo",
+      max_f_v_fmsy_increase = 0.25
+      )
+    )
+      
+       tester <- tester %>%
+    mutate(processed_scrooge = map2(
+      scrooge_fit,
+      map(prepped_fishery, "sampled_years"),
+      process_scrooge
+    )) %>%
+    mutate(observed = map(prepped_fishery, "simed_fishery")) %>%
+    mutate(scrooge_performance = pmap(
+      list(observed = observed,
+           predicted = processed_scrooge),
+      judge_performance
+    )) %>%
+ mutate(
+      scrooge_rec_performance = pmap(
+        list(observed = observed,
+             predicted = processed_scrooge),
+        judge_performance,
+        observed_variable = rec_dev,
+        predicted_variable = "log_rec_dev_t"
+      )) %>% 
+    mutate(lcomps = map2(prepped_fishery, processed_scrooge, ~process_lcomps(.x, .y$n_tl))) %>%
+    mutate(
+      rmse = map_dbl(scrooge_performance, ~ .x$comparison_summary$rmse),
+      bias =  map_dbl(scrooge_performance, ~ .x$comparison_summary$bias)
+    ) %>%
+    arrange(rmse)
+
+  tester$scrooge_performance[[1]]$comparison_plot + 
+    lims(x = c(35, NA))
+  
+    tester$scrooge_rec_performance[[1]]$comparison_plot+ 
+    lims(x = c(35, NA))
+
+  tester <- tester %>%
+    mutate(lime_fit = pmap(list(
+      data = map(prepped_fishery, "scrooge_data"),
+      fish = map(prepped_fishery, "fish"),
+      fleet = map(prepped_fishery, "fleet")
+    ), fit_lime))
+
+  true_f <- tester$prepped_fishery[[1]]$simed_fishery %>%
+    group_by(year) %>%
+    summarise(f = unique(f)) %>%
+    filter(year >=64)
+
+ a <- tester$lime_fit[[1]]$Sdreport %>%
+    summary() %>%
+   as.data.frame() %>%
+   mutate(variable = rownames(.)) %>%
+   filter(variable == "lF_y") %>%
+   mutate(mean = exp(Estimate),
+          upper = exp(Estimate + 1.96 * `Std. Error`),
+          lower = exp(Estimate -  1.96 * `Std. Error`)) %>%
+   mutate(year = 1:nrow(.)) %>%
+   ggplot() +
+   geom_pointrange(aes(year, mean, ymin = lower, ymax = upper)) +
+   geom_point(data = true_f, aes(1:11, f), color = "red")
+
+    
+```
+
+# Final tweeks to scrooge
+
+log sigma effort is a problem. The estiamtes are literally just the prior, with a SLIIIIIIIGHT boost to the right. Is it better to fix it at something, like 1?
+
+Your recruitment devs aren't particularly well mixed either
+
+Also, are you actually estimating length sel or is that just spitting back the prior? Check on that. 
+
+p_response is looking a bit goofy as well. 
+
+length_50_sel is 24cm, is that right?
+
+```{r}
+
+a = compare_sim$scrooge_fit[[1]]
+
+b <- rstan::extract(a, "p_length_50_sel")
+
+traceplot(a, pars = "p_length_50_sel", inc_warmup = TRUE)
+```
+
+Huh, it's starting off at the "right" level, but then heading south pretty quick... 
+
+```{r}
+
+sel <- rstan::extract(a, "mean_selectivity_at_age")$mean_selectivity_at_age
+
+sel <- colMeans(sel)
+
+compare <- data_frame(pred = sel, obs = compare_sim$prepped_fishery[[1]]$fleet$sel_at_age) %>% 
+  mutate(age = 1:nrow(.)) %>% 
+  gather(source, selectivity, -age)
+
+compare %>% 
+  ggplot(aes(age, selectivity, color = source)) + 
+  geom_jitter()
+
+
+```
+
+
+```{r}
+a = tester$prepped_fishery[[1]]$simed_fishery
+
+b <- a %>% 
+  group_by(year) %>% 
+  summarise(effort = mean(effort), profits = sum(profits)) %>% 
+  mutate(p_per_e = profits / effort)
+
+b %>% 
+  ggplot(aes(year, p_per_e)) + 
+  geom_point()
+
+b <- a %>% 
+  group_by(year) %>% 
+  summarise(biomass = sum(biomass),
+            price = mean(price),
+            cost = mean(cost),
+            q = mean(f) / mean(effort),
+            effort = mean(effort),
+            profits = sum(profits),
+            catch = sum(biomass_caught)) %>% 
+  ungroup() %>% 
+  mutate(lead_effort = lead(effort),
+         p_per_e = profits / effort,
+         c_per_e = catch / effort)
+
+b %>% 
+  select(-effort) %>% 
+  gather(variable, value, -year, -lead_effort) %>% 
+  ggplot(aes(value, lead_effort, color = variable)) + 
+  geom_point(show.legend = F) + 
+  facet_wrap(~variable, scales = "free_x")
+
+
+
+
+```
+
+oh wait, this is interesting. Conditional on the other crap, biomass us proportional to profit per unit effort. So does that mean that you could do something like profit per unit effort in the model enters the model by being fit to the biomass output by the model?
+
+Annnnd the relationship holds even outside of the open access model. woah. Now, that relationahips could be distorted by changes in price, cost, and technology, which if you have data on can help. 
+
+```{r}
+b %>% 
+  ggplot(aes(profits, lead_effort )) + 
+  geom_point()
+```
+
+
+# summary of candidate economic models
+
+OK, it's time to make some decisions. 
+
+1. Effort in this time step is proportional to effort in the last time step. This is just the LIME model 
+
+2. Open access + process error. Effort is a latent variable with mean open access model and some noise around it
+
+3. Open access + process error + observation error. You actually fit to the timeseries of effort data that comes out of this process. 
+
+4. profit_per_unit_effort ~ biomass. No more open access structure. The theory here is that given data on the other stuff, effort will get tuned to make this work out. 
+
+5. profit_per_unit_effort ~ hat(profit_per_unit_effort) prevents the need for a translator between biomass and profit per unit effort and should have a similar effect. 
+
+6. Just effort ~ hat(effort)
+
+
+So here's a simple question. What does profit per unit effort tell you that catch per unit effort doesn't? If I'm being honest, getting people to report their average catches per fishing trip seems easier than profits. One advantage is that it gives you something like a reference point: the closer profits per unit effort get to 0, the closer you are to open access. But what if you just observe a bunch of p per unit e at levels above 0, why is that any more or less informative than just CPUE? At least from the perspective of the model, there isn't anything. bummer. The only real advantage there would be if you felt that profit per units effort was easier to measure than catch per unit effort. 
+
+
+```{r}
+
+```
+

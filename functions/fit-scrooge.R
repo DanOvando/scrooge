@@ -16,20 +16,35 @@ fit_scrooge <-
            max_f_v_fmsy_increase = 0.5,
            in_clouds = F,
            cloud_dir = "results/scrooge_results",
-           price = 1,
-           q = 0.01,
-           r0 = 100,
+           price = 2,
+           q = 0.1,
+           r0 = 1000,
            b_v_bmsy_oa = 0.5,
-           init_f_v_m = 0.8
+           init_f_v_m = 0.8,
+           use_effort_data = 1,
+           cv_effort = 1.6,
+           c_guess = 1,
+           max_window = 10,
+           max_expansion = 1.25
            ) {
+
+    data$use_effort_data <- use_effort_data
 
     data$economic_model <- economic_model
 
     data$sigma_r_guess <- 0.4
 
-    data$r0 <- 100
+    data$r0 <- r0
 
     data$f_init_guess <- fish$m * init_f_v_m
+
+    data$max_expansion = max_expansion
+
+    data$max_window = max_window
+
+    if (is.na(cv_effort) == F){
+    data$cv_effort <-  cv_effort
+    }
 
     p_response = max_f_v_fmsy_increase
 
@@ -67,7 +82,7 @@ fit_scrooge <-
 
     cost <-
       nlminb(
-        0.2,
+        c_guess,
         tune_costs,
         data = data,
         time = 200,
@@ -81,20 +96,51 @@ fit_scrooge <-
         q = q
       )
 
-    if (cost$convergence != 0){
+    counter <- 0
+
+    if (cost$objective < 0.01){
+      counter <- 6
+    }
+
+    while (cost$objective > 0.1 & counter < 10){
+
+      c_guess <- c_guess * 2
+
+      cost <-
+        nlminb(
+          c_guess * 10,
+          tune_costs,
+          data = data,
+          time = 200,
+          lower = 0,
+          p_response = p_response,
+          b_v_bmsy_oa = b_v_bmsy_oa,
+          msy = msy,
+          e_msy = e_msy,
+          b_msy = b_msy,
+          price = price,
+          q = q
+        )
+      counter <- counter + 1
+    }
+
+    if (cost$objective > 0.1){
       stop("check cost convergence")
     }
 
-    # check <- tune_costs(cost$par, data = data,
-    #                     time = 1000,
-    #                     p_response = p_response,
-    #                     b_v_bmsy_target = 0.5,
-    #                     msy = msy,
-    #                     e_msy = e_msy,
-    #                     b_msy = b_msy,
-    #                     price = price,
-    #                     q = q,
-    #                     use = "blah")
+    # check <- tune_costs(
+    #   cost = cost$par,
+    #     data = data,
+    #     time = 200,
+    #     p_response = p_response,
+    #     b_v_bmsy_oa = 1.5,
+    #     msy = msy,
+    #     e_msy = e_msy,
+    #     b_msy = b_msy,
+    #     price = price,
+    #     q = q,
+    #   use = "blah"
+    #   )
 
     data$cost_t <- cost$par * data$cost_t
 
@@ -129,7 +175,6 @@ fit_scrooge <-
     #       p_response = p_response * exp(rnorm(1, 0, .1))
     #     )
     #   )
-
 
 
     fit <-

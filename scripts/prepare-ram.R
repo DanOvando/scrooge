@@ -25,6 +25,17 @@ ram_data <- ram$timeseries_values_views %>%
   left_join(ram$area, by = "areaid")
 
 
+effort_cv <- ram_data %>%
+  filter(abs(udivumsypref) < 2, year > 1975, year < 1985) %>%
+  select(stockid, year, udivumsypref) %>%
+  group_by(stockid) %>%
+  arrange(stockid, year) %>%
+  mutate(lag_u = lag(udivumsypref)) %>%
+  mutate(delta = udivumsypref - lag_u) %>%
+  filter(!is.na(delta))
+
+sd(effort_cv$delta) / mean(abs(effort_cv$delta))
+
 genus_species <-
   stringr::str_split(ram_data$scientificname, " ", simplify = T) %>%
   as_data_frame() %>%
