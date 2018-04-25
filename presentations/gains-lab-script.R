@@ -7,6 +7,7 @@
 # library(LBSPR)
 library(ggridges)
 library(wesanderson)
+library(scales)
 # library(tidyverse)
 
 rstan::rstan_options(auto_write = TRUE)
@@ -222,19 +223,19 @@ easy <- easy %>%
     max_expansion = 1.5
   ))
 
-easy <- easy %>%
-  mutate(lime_fit = pmap(list(
-    data = map(prepped_fishery, "scrooge_data"),
-    fish = map(prepped_fishery, "fish"),
-    fleet = map(prepped_fishery, "fleet")
-  ), fit_lime))
-
-easy <- easy %>%
-  mutate(processed_lime = map2(
-    lime_fit,
-    map(prepped_fishery, "sampled_years"),
-    safely(process_lime)
-  ))
+# easy <- easy %>%
+#   mutate(lime_fit = pmap(list(
+#     data = map(prepped_fishery, "scrooge_data"),
+#     fish = map(prepped_fishery, "fish"),
+#     fleet = map(prepped_fishery, "fleet")
+#   ), fit_lime))
+#
+# easy <- easy %>%
+#   mutate(processed_lime = map2(
+#     lime_fit,
+#     map(prepped_fishery, "sampled_years"),
+#     safely(process_lime)
+#   ))
 
 
 easy <- easy %>%
@@ -290,7 +291,7 @@ medium <- medium %>%
     warmup = 2000,
     adapt_delta = 0.8,
     economic_model = 1,
-    use_effort_data = 1,
+    use_effort_data = 0,
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
@@ -300,19 +301,19 @@ medium <- medium %>%
     max_expansion = 1.5
   ))
 
-medium <- medium %>%
-  mutate(lime_fit = pmap(list(
-    data = map(prepped_fishery, "scrooge_data"),
-    fish = map(prepped_fishery, "fish"),
-    fleet = map(prepped_fishery, "fleet")
-  ), fit_lime))
-
-medium <- medium %>%
-  mutate(processed_lime = map2(
-    lime_fit,
-    map(prepped_fishery, "sampled_years"),
-    safely(process_lime)
-  ))
+# medium <- medium %>%
+#   mutate(lime_fit = pmap(list(
+#     data = map(prepped_fishery, "scrooge_data"),
+#     fish = map(prepped_fishery, "fish"),
+#     fleet = map(prepped_fishery, "fleet")
+#   ), fit_lime))
+#
+# medium <- medium %>%
+#   mutate(processed_lime = map2(
+#     lime_fit,
+#     map(prepped_fishery, "sampled_years"),
+#     safely(process_lime)
+#   ))
 
 
 medium <- medium %>%
@@ -370,7 +371,7 @@ toughest <- toughest %>%
     warmup = 2000,
     adapt_delta = 0.8,
     economic_model = 1,
-    use_effort_data = 1,
+    use_effort_data = 0,
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
@@ -380,19 +381,19 @@ toughest <- toughest %>%
     max_expansion = 1.5
   ))
 
-toughest <- toughest %>%
-  mutate(lime_fit = pmap(list(
-    data = map(prepped_fishery, "scrooge_data"),
-    fish = map(prepped_fishery, "fish"),
-    fleet = map(prepped_fishery, "fleet")
-  ), fit_lime))
-
-toughest <- toughest %>%
-  mutate(processed_lime = map2(
-    lime_fit,
-    map(prepped_fishery, "sampled_years"),
-    safely(process_lime)
-  ))
+# toughest <- toughest %>%
+#   mutate(lime_fit = pmap(list(
+#     data = map(prepped_fishery, "scrooge_data"),
+#     fish = map(prepped_fishery, "fish"),
+#     fleet = map(prepped_fishery, "fleet")
+#   ), fit_lime))
+#
+# toughest <- toughest %>%
+#   mutate(processed_lime = map2(
+#     lime_fit,
+#     map(prepped_fishery, "sampled_years"),
+#     safely(process_lime)
+#   ))
 
 
 toughest <- toughest %>%
@@ -435,7 +436,9 @@ helps <- fisheries_sandbox %>%
          cost_cv == max(cost_cv),
          steepness == min(steepness),
          obs_error == min(obs_error),
-         b_v_bmsy_oa == min(b_v_bmsy_oa)) %>%
+         b_v_bmsy_oa == min(b_v_bmsy_oa),
+         q_cv == min(q_cv),
+         q_ac == min(q_ac)) %>%
   slice(1)
 
 helps$summary_plot
@@ -452,13 +455,13 @@ econ_helps <- helps %>%
     warmup = 2000,
     adapt_delta = 0.8,
     economic_model = 1,
-    use_effort_data = 1,
+    use_effort_data = 0,
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
-    max_f_v_fmsy_increase = 0.5,
+    max_f_v_fmsy_increase = 0.1,
     chains = 1,
-    cv_effort = 0.5,
+    cv_effort = 0.25,
     max_expansion = 1.5
   ))
 
@@ -506,9 +509,9 @@ noecon_helps <- helps %>%
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
-    max_f_v_fmsy_increase = 0.5,
+    max_f_v_fmsy_increase = 0.1,
     chains = 1,
-    cv_effort = 0.5,
+    cv_effort = 0.25,
     max_expansion = 1.5
   ))
 
@@ -644,7 +647,7 @@ econ_hurts <- hurts %>%
     warmup = 2000,
     adapt_delta = 0.8,
     economic_model = 1,
-    use_effort_data = 1,
+    use_effort_data = 0,
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
@@ -836,7 +839,7 @@ compare_sim <- compare_sim %>%
     warmup = 2000,
     adapt_delta = 0.8,
     economic_model = 1,
-    use_effort_data = 1,
+    use_effort_data = 0,
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",

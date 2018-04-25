@@ -29,9 +29,9 @@
 
   walk(functions, ~ here::here("functions", .x) %>% source()) # load local functions
 
-  in_clouds <-  F
+  in_clouds <-  T
 
-  run_name <- "v3.0"
+  run_name <- "v1.0"
 
   local_data <- T
 
@@ -67,13 +67,13 @@
 
   # run options -------------------------------------------------------------
 
-  sim_fisheries <- T
+  sim_fisheries <- F
 
-  fit_models <- F
+  fit_models <- T
 
   run_tests <- F
 
-  n_cores <- 5
+  n_cores <- 4
 
   if (in_clouds == T){
 
@@ -537,7 +537,7 @@ if (run_tests == T) {
 if (fit_models == T) {
 
 
-  experiments <- expand.grid(period = c("beginning","middle"," end"), window = c(2,5,10),
+  experiments <- expand.grid(period = c("beginning","middle","end"), window = c(2,5,10),
                              economic_model = c(0,1),
                              use_effort_data = c(0,1),
                              experiment = 1:nrow(fisheries_sandbox), stringsAsFactors = F)
@@ -548,7 +548,7 @@ if (fit_models == T) {
     left_join(experiments, by = "experiment") %>%
     # filter(window == 10, fleet_model == "open-access", b_v_bmsy_oa == 0.5) %>%
     # slice(1) %>%
-    # slice(sample(1:nrow(fisheries_sandbox),4, replace = F)) %>%
+    slice(sample(1:nrow(fisheries_sandbox),4, replace = F)) %>%
     mutate(prepped_fishery = pmap(list(
       prepped_fishery = prepped_fishery,
       window = window,
@@ -571,12 +571,16 @@ if (fit_models == T) {
       economic_model = fisheries_sandbox$economic_model[i],
       use_effort_data = fisheries_sandbox$use_effort_data[i],
       scrooge_file = "scrooge",
-      iter = 8000,
-      warmup = 4000,
+      iter = 4000,
+      warmup = 2000,
       adapt_delta = 0.8,
       max_treedepth = 12,
       in_clouds = in_clouds,
-      cloud_dir = cloud_dir
+      cloud_dir = cloud_dir,
+      max_f_v_fmsy_increase = 0.5,
+      chains = 1,
+      cv_effort = 1.5,
+      max_expansion = 1.5
     )
 
   } # close fitting loop
@@ -628,14 +632,15 @@ if (fit_models == T) {
 
 scrooge_worked <- map(fisheries_sandbox$scrooge_fit,'error') %>% map_lgl(is.null)
 
-lime_worked <- map_lgl(map(fisheries_sandbox$processed_lime,"error"), is.null)
+# lime_worked <- map_lgl(map(fisheries_sandbox$processed_lime,"error"), is.null)
 
-stan_worked <-  map_lgl(map(fisheries_sandbox$scrooge_fit,
-                            "result"),~!(nrow(.x) %>% is.null()))
+# stan_worked <-  map_lgl(map(fisheries_sandbox$scrooge_fit,
+#                             "result"),~!(nrow(.x) %>% is.null()))
 
 
 fisheries_sandbox <- fisheries_sandbox %>%
-  filter(scrooge_worked,stan_worked, lime_worked, period != "middle")
+  filter(scrooge_worked) %>%  #,stan_worked, lime_worked, period != "middle")
+   mutate(scrooge_fit = map(scrooge_fit, "result"))
 
 if(in_clouds == T){
 
@@ -643,7 +648,7 @@ if(in_clouds == T){
     readRDS(glue::glue("{cloud_dir}/{experiment}"))
   }
 
-  example_sandbox <- example_sandbox %>%
+  fisheries_sandbox <- fisheries_sandbox %>%
     mutate(scrooge_fit = map(scrooge_fit, safely(loadfoo), cloud_dir = cloud_dir))
 
 }
@@ -652,7 +657,7 @@ if(in_clouds == T){
 processed_sandbox <-  fisheries_sandbox%>%
   # slice(6) %>%
   mutate(scrooge_fit = map(scrooge_fit,"result")) %>%
-  mutate(processed_lime = map(processed_lime, "result")) %>%
+  # mutate(processed_lime = map(processed_lime, "result")) %>%
 mutate(processed_scrooge = map2(
     scrooge_fit,
     map(prepped_fishery, "sampled_years"),
@@ -673,11 +678,11 @@ mutate(processed_scrooge = map2(
       predicted_variable = "rec_dev_t"
     )
   )  %>%
-  mutate(lime_performance = pmap(
-    list(observed = observed,
-         predicted = processed_lime),
-    judge_lime
-  )) %>%
+  # mutate(lime_performance = pmap(
+  #   list(observed = observed,
+  #        predicted = processed_lime),
+  #   judge_lime
+  # )) %>%
   mutate(lcomps = map2(prepped_fishery, processed_scrooge, ~process_lcomps(.x, .y$n_tl))) %>%
   mutate(
     rmse = map_dbl(scrooge_performance, ~ .x$comparison_summary$rmse),
