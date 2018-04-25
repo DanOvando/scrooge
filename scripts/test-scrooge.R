@@ -1,3 +1,5 @@
+set.seed(42)
+
 fisheries_sandbox <-
   purrr::cross_df(
     list(
@@ -58,10 +60,11 @@ fisheries_sandbox <- fisheries_sandbox %>%
       burn_years = 50,
       price = 10,
       cost = 5,
-      profit_lags = 5,
+      profit_lags = 3,
       query_price = F,
       use_effort_data = 1,
-      cv_len = 0.1
+      cv_len = 0.1,
+      cv_effort = 1.6
     )
   )
 
@@ -99,7 +102,8 @@ tester <- fisheries_sandbox %>%
       scrooge_file = "new_scrooge",
       in_clouds = F,
       experiment = "pfo",
-      max_f_v_fmsy_increase = 0.05
+      max_f_v_fmsy_increase = 0.05,
+      chains = 1
     )
   )
 
