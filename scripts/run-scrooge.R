@@ -579,7 +579,7 @@ if (fit_models == T) {
       cloud_dir = cloud_dir,
       max_f_v_fmsy_increase = 0.5,
       chains = 1,
-      cv_effort = 1.5,
+      cv_effort = 0.5,
       max_expansion = 1.5
     )
 
@@ -656,7 +656,7 @@ if(in_clouds == T){
 
 processed_sandbox <-  fisheries_sandbox%>%
   # slice(6) %>%
-  mutate(scrooge_fit = map(scrooge_fit,"result")) %>%
+  # mutate(scrooge_fit = map(scrooge_fit,"result")) %>%
   # mutate(processed_lime = map(processed_lime, "result")) %>%
 mutate(processed_scrooge = map2(
     scrooge_fit,

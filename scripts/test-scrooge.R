@@ -88,7 +88,24 @@ fisheries_sandbox <- fisheries_sandbox %>%
 }
 
 
-tester <- fisheries_sandbox %>%
+test_set <- fisheries_sandbox %>%
+  dplyr::filter(
+    fleet_model == "open-access",
+    sigma_r == max(sigma_r),
+    sigma_effort == min(sigma_effort),
+    price_cv == max(price_cv),
+    price_ac == max(price_ac),
+    cost_ac == max(cost_ac),
+    cost_cv == max(cost_cv),
+    q_cv == max(q_cv),
+    q_ac == max(q_ac),
+    obs_error == min(obs_error),
+    b_v_bmsy_oa == 0.5
+  ) %>%
+  slice(2)
+
+
+tester <- test_set %>%
   mutate(prepped_fishery = map(
     prepped_fishery,
     subsample_data,
@@ -153,7 +170,6 @@ tester <- tester %>%
 tester$scrooge_performance[[1]]$comparison_plot
 
 tester$scrooge_rec_performance[[1]]$comparison_plot
-
 
 
 scrooge_fit <- tester$scrooge_fit[[1]]
