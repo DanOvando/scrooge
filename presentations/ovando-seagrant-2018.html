@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Bringing Economic Knowledge into Fisheries Stock Assessment</title>
+    <meta charset="utf-8">
+    <link href="libs/remark-css/default.css" rel="stylesheet" />
+    <link rel="stylesheet" href="sfg-template-xaringan/css/sfg-template.css" type="text/css" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+# Bringing Economic Knowledge into Fisheries Stock Assessment
+## NMFS Sea Grant Graduate Fellows Symposium
+### 2018/05/02
+
+---
+
+
+
+
+# What's the Problem?
+
+
+
+- It's hard to manage what you can't count
+
+- Counting fish requires data
+
+- Most fisheries lack resources for "traditional" assessment
+
+- Litte data and lots of needs creates demand for DLAs
+
+  - C-MSY
+  - DB-SRA
+  - LIME
+  - LBSPR
+  - The list goes on
+
+So, we're good?
+
+---
+
+# Why Another DLA?
+
+- All DLAs trade data for assumptions
+
+- We spend a *lot* of effort trying to scape more knowledge out of less data
+
+&gt; *I feel thin... like butter scraped over too much bread* - B. Baggins
+
+--
+&lt;p align="center-top"&gt;
+![](bilbo.gif)
+
+
+---
+
+# What's the Solution?
+
+- Just get more data!
+  
+- Easier said than done...
+
+  - Hard to measure eaten fish
+  
+  - New data can take time to pay off
+  
+- What about economic data?
+
+  - Economic data can be resurrected where biological cannot
+
+  - Fisheries can be data-limited but knowledge rich
+
+---
+
+# What Do Economic Data Tell Us?
+
+- Fisheries are coupled economic-ecological systems
+
+  - Fishermen respond to incentives provided by society and species
+ 
+  - Species respond to actions of fishermen, modifying incentives
+
+- Assertion: Profits make up a substantial part of incentives
+
+- Data on the incentive history of a fishery provide clues to its status
+
+---
+
+# The Basic Idea
+
+- We have economic theory about how fisheries work
+  - More profits ~ more effort
+  
+  - Effort ~ mortality
+
+- Economic data are easier to recover than biological data
+  - How many people have been fishing around here?
+  
+  - What size of fish do you usually catch?
+  
+  - How has your fishing technology changed?
+  
+  - How has the market changed?
+
+---
+
+# What's the Evidence?
+
+A few plots of open access dynamics in theory and practice
+
+---
+
+# Introducing `scrooge`
+
+## Core Philosphy:
+
+  - Integrate historic economic data (effort, prices, costs, technology) into stock assessment
+  
+## Initial Application
+
+  - Build off of length-based methods (and LIME framework)
+
+  - Why start with lengths
+    - Recruitment and F tough to disentangle
+    - SR relationships inform recruitment
+    - Economics inform F?
+
+---
+
+# Who's Driving the Bus?
+
+![](ovando-seagrant-2018_files/figure-html/unnamed-chunk-2-1.svg)&lt;!-- --&gt;
+
+---
+
+#Scrooge
+
+- Builds off of LIME structure (Rudd &amp; Thorson 2017)
+
+- With just length data, estimate
+
+  - Selectivity
+  
+  - *t* recruitment events `\(r_{t}\)`
+  
+  `$$r_{t} \sim BH(SSB,SSB_{0},h)e^{r^{dev}_{t} -\sigma_r^{2}/2}$$`
+  `$$r^{dev}_{t} \sim normal(0, \sigma_r)$$`
+
+- *t* fishing mortalities `\(f_{t}\)`
+
+Lime: `\(f_{t} \sim normal(f_{t-1},\sigma_{f})\)`
+
+---
+
+#Scrooge
+
+Two paths for economic data (always `\(f_{t} = q_{t}E_{t}\)`)
+
+- Effort history ("Effort is about twice what it used to be")
+
+`$$\Delta_{t}^{effort} = \frac{effort_{t+1}}{effort_{t}}$$`
+
+`$$\hat{f_{t}}^{effort} = f_{t-1}\Delta_{t-1}$$`
+  
+- Incentives history ("prices went up a lot the last few years")
+
+`$$p_t = p_{base}\frac{p^{obs}_t}{\bar{p^{obs}}}$$`
+
+`$$\Pi_{t-1} = p_{t}q_{t}E_{t}B^{c}_{t} - c_{t}E_{t}^{\beta}$$`
+
+`$$\hat{f_{t}}^{econ} = f_{t-1} + f_{msy}(\theta\frac{\Pi_{t-1}}{\Pi_{msy}})$$`
+
+`$$f_t \sim normal(\alpha\hat{f_{t}}^{econ} + (1 - \alpha)\hat{f_{t}}^{effort},\sigma_{f})$$`
+
+---
+
+#Scrooge
+
+In words...
+
+- Simulate fisheries using `spasm`
+  - Effort dynamics, recruitment regimes, observation error, etc.
+
+- Collect length comps and economic data from simulated fisheries
+  - Percent changes in in effort
+  - mean deviations in price, cost, tech
+
+- Life history from `FishLife`
+
+- Fit data using `scrooge`
+  - "LIME" prior
+  - Bioeconomic model only
+  - Effort history only
+  
+- Assess performance
+  - How much does it help/hurt?
+  - Compared to LBSPR/LIME?
+
+---
+
+# How Much Does it Help?
+
+![](ovando-seagrant-2018_files/figure-html/unnamed-chunk-3-1.svg)&lt;!-- --&gt;
+
+
+---
+
+# How Much Does it Hurt?
+
+![](ovando-seagrant-2018_files/figure-html/unnamed-chunk-4-1.svg)&lt;!-- --&gt;
+
+
+---
+
+# How Does it Compare
+
+
+![](ovando-seagrant-2018_files/figure-html/unnamed-chunk-5-1.svg)&lt;!-- --&gt;
+
+
+---
+
+
+# When Does it Work?
+
+- Assessment performance depends on complex set of non-linear dynamics
+
+- Hard for stakeholders to parse massive tables of RMSE
+
+- Proposed solution: *Predictive algorithm for model performance*
+
+  - Currently running 100,000's of `scrooge` simulations
+  
+  - Calculate metric of interst (RMSE, bias, etc.)
+  
+  - Train predictive algorithm (MARS, random forest)
+  
+- For new fisheries
+  
+  - Assess similarity to training set
+  
+  - Predict performance metric if appropriate
+
+---
+
+# When Does it Work?
+
+
+---
+
+
+# Thank you!
+
+## Collaborators
+
+- Jason Cope
+- Merril Rudd
+- Ray Hilborn
+- Chris Costello
+- Steve Gaines
+
+## Funding
+
+- NMFS Sea Grant Population and Ecosystem Dynamics Fellowship
+
+---
+    </textarea>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function() {
+  var d = document, s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})();</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+  }
+});
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://cdn.bootcss.com/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>

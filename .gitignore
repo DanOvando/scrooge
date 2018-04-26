@@ -30,3 +30,4 @@ data/google-bucket/
 *.txt
 *.svg
 presentations/libs/
+!presentations/ovando-seagrant-2018.html

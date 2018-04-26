@@ -99,7 +99,7 @@ parameters{
 
 // real <lower = -5, upper = 3> log_base_effort;
 
-vector<lower = 0.1, upper = 40>[nt]  effort_t; // effort in time t
+vector<lower = 0.1, upper = 15>[nt]  effort_t; // effort in time t
 
 // real<lower = -5, upper = 5> log_sigma_effort; // standard deviation of effort
 
@@ -107,7 +107,7 @@ vector[nt]  uc_rec_dev_t; //  recruitment deviates
 
 real<lower = -5, upper = 2> log_sigma_r; // standard deviation of recruitment deviates
 
-real<lower = 0, upper = 1.5> p_length_50_sel; // length at 50% selectivity
+real<lower = 0, upper = .9> p_length_50_sel; // length at 50% selectivity
 
 // real<lower = 1e-3, upper = 2> f_init; // f to get to initial depletion
 
@@ -210,11 +210,14 @@ transformed parameters{
 
  for (t in 2:n_burn){
 
+// print(min(n_a_init[1,1:n_ages]))
     ssb_temp =  sum(ssb_init[t - 1, 1:n_ages]);
 
-    n_a_init[t,1] = ((0.8 * r0 * h *ssb_temp) / (0.2 * ssb0 * (1 - h) + (h - 0.2) * ssb_temp)); //calculate recruitment
+    n_a_init[t,1] = (0.8 * r0 * h *ssb_temp) / (0.2 * ssb0 * (1 - h) + (h - 0.2) * ssb_temp); //calculate recruitment
 
     n_a_init[t , 2:n_ages] = n_a_init[t - 1, 1:(n_ages -1)] .* (exp(-(m + f_t[1] * mean_selectivity_at_age[1:(n_ages - 1)])))'; // grow and die
+
+// print(min(n_a_init[t,2:n_ages]))
 
     n_a_init[t, n_ages] = n_a_init[t, n_ages] + n_a_init[t - 1, n_ages] .* (exp(-(m + f_t[1] * mean_selectivity_at_age[n_ages])))'; // assign to plus group
 
@@ -223,7 +226,6 @@ transformed parameters{
 }
 
   // Start observed period
-
 
   n_ta[1, 1:n_ages] = n_a_init[n_burn, 1:n_ages];  // start at initial depletion
 

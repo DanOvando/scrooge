@@ -118,7 +118,7 @@ fish <-
 
 fleet <- create_fleet(
   fish = fish,
-  cost = 3,
+  cost = 5,
   cost_cv =  0,
   cost_ac = 0,
   q_cv = 0,
@@ -127,9 +127,9 @@ fleet <- create_fleet(
   length_50_sel = 50,
   theta = 0.1,
   fleet_model = "constant-effort",
-  sigma_effort = 0.2,
-  effort_ac = 0.25,
-  initial_effort = 25
+  sigma_effort = 0.4,
+  effort_ac = 0.75,
+  initial_effort = 40
 )
 
 fleet$e_msy <-  NA
@@ -176,12 +176,14 @@ length_comps <- sim %>%
 
 sim %>%
   group_by(year) %>%
-  summarise(effort = mean(effort)) %>%
-  ggplot(aes(year, effort)) +
+  summarise(effort = mean(effort),
+            biomass = sum(biomass),
+            ncaught = sum(numbers_caught)) %>%
+  ggplot(aes(year, biomass)) +
   geom_point()
 
 f_lengths <- length_comps %>%
-  filter(year > 75) %>%
+  filter(year <50) %>%
   ggplot(aes(length_bin, year, height = scaled_numbers, group = year)) +
   geom_density_ridges(stat = "identity") +
   labs(x = "Length (cm)", title = "Proportional Length Distribution")
@@ -430,21 +432,21 @@ toughest <- toughest %>%
 
 helps <- fisheries_sandbox %>%
   filter(fleet_model == "open-access",
-         sigma_r == min(sigma_r),
+         sigma_r == max(sigma_r),
          sigma_effort == min(sigma_effort),
          price_cv == max(price_cv),
          cost_cv == max(cost_cv),
          steepness == min(steepness),
          obs_error == min(obs_error),
          b_v_bmsy_oa == min(b_v_bmsy_oa),
-         q_cv == min(q_cv),
-         q_ac == min(q_ac)) %>%
+         q_cv == max(q_cv),
+         q_ac == max(q_ac)) %>%
   slice(1)
 
 helps$summary_plot
 
 econ_helps <- helps %>%
-  mutate(prepped_fishery = map(prepped_fishery, subsample_data, window = 10, period = "end")) %>%
+  mutate(prepped_fishery = map(prepped_fishery, subsample_data, window = 20, period = "middle")) %>%
   mutate(scrooge_fit = pmap(
     list(
       data = map(prepped_fishery, "scrooge_data"),
@@ -455,13 +457,13 @@ econ_helps <- helps %>%
     warmup = 2000,
     adapt_delta = 0.8,
     economic_model = 1,
-    effort_data_weight = 1,
+    effort_data_weight = 0,
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
-    max_f_v_fmsy_increase = 0.1,
+    max_f_v_fmsy_increase = 0.5,
     chains = 1,
-    cv_effort = 0.1,
+    cv_effort = 0.01,
     max_expansion = 1.5
   ))
 
@@ -494,7 +496,7 @@ econ_helps <- econ_helps %>%
   arrange(rmse)
 
 noecon_helps <- helps %>%
-  mutate(prepped_fishery = map(prepped_fishery, subsample_data, window = 10, period = "end")) %>%
+  mutate(prepped_fishery = map(prepped_fishery, subsample_data, window = 20, period = "middle")) %>%
   mutate(scrooge_fit = pmap(
     list(
       data = map(prepped_fishery, "scrooge_data"),
@@ -511,7 +513,7 @@ noecon_helps <- helps %>%
     experiment = "pfo",
     max_f_v_fmsy_increase = 0.1,
     chains = 1,
-    cv_effort = 0.1,
+    cv_effort = 0.01,
     max_expansion = 1.5
   ))
 
