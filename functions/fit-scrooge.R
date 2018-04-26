@@ -21,14 +21,13 @@ fit_scrooge <-
            r0 = 1000,
            b_v_bmsy_oa = 0.5,
            init_f_v_m = 0.8,
-           use_effort_data = 1,
            cv_effort = 1.6,
            c_guess = 1,
            max_window = 10,
-           max_expansion = 1.25
+           max_expansion = 1.25,
+           effort_data_weight = 0
            ) {
 
-    data$use_effort_data <- use_effort_data
 
     data$economic_model <- economic_model
 
@@ -38,9 +37,11 @@ fit_scrooge <-
 
     data$f_init_guess <- fish$m * init_f_v_m
 
-    data$max_expansion = max_expansion
+    data$max_expansion <-  max_expansion
 
-    data$max_window = max_window
+    data$max_window <-  max_window
+
+    data$effort_data_weight <-  effort_data_weight
 
     if (is.na(cv_effort) == F){
     data$cv_effort <-  cv_effort

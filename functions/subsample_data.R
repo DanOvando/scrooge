@@ -21,9 +21,7 @@ subsample_data <- function(prepped_fishery, period = "beginning", window = 5){
 
   prepped_fishery$sampled_years <- sampled_years
 
-  prepped_fishery$scrooge_data$relative_effort <- prepped_fishery$scrooge_data$relative_effort[sampled_years]
-
-  prepped_fishery$scrooge_data$relative_effort <- prepped_fishery$scrooge_data$relative_effort / max(prepped_fishery$scrooge_data$relative_effort)
+  prepped_fishery$scrooge_data$perc_change_effort <- prepped_fishery$scrooge_data$perc_change_effort[sampled_years]
 
   prepped_fishery$scrooge_data$length_comps <- prepped_fishery$scrooge_data$length_comps %>%
     slice(sampled_years)

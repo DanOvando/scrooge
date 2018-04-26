@@ -1,7 +1,7 @@
 set.seed(42)
 rstan::rstan_options(auto_write = TRUE)
 
-custom_sandbox <- F
+custom_sandbox <- T
 
 if (custom_sandbox == T){
 fisheries_sandbox <-
@@ -102,14 +102,14 @@ test_set <- fisheries_sandbox %>%
     obs_error == min(obs_error),
     b_v_bmsy_oa == 0.5
   ) %>%
-  slice(2)
+  slice(1)
 
 
 tester <- test_set %>%
   mutate(prepped_fishery = map(
     prepped_fishery,
     subsample_data,
-    window = 20,
+    window = 15,
     period = "end"
   )) %>%
   mutate(
@@ -130,8 +130,9 @@ tester <- test_set %>%
       experiment = "pfo",
       max_f_v_fmsy_increase = 0.5,
       chains = 1,
-      cv_effort = 0.5,
-      max_expansion = 1.5
+      cv_effort = 0.1,
+      max_expansion = 1.5,
+      effort_data_weight = 0
     )
   )
 
@@ -376,5 +377,6 @@ model_trends_plot <- model_fits %>%
   geom_point(aes(year, f), size = 4, alpha = 0.75) +
   scale_fill_viridis_d() +
   scale_color_viridis_d() +
-  labs(y = "Fishing Mortality", x = "Year", caption = "Black points are true values")
+  labs(y = "Fishing Mortality", x = "Year", caption = "Black points are true values") +
+  lims(y = c(0,.75))
 
