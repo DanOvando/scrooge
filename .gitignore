@@ -27,6 +27,5 @@ data/google-bucket/
 *.Rdata
 *.rds
 *.txt
-*.svg
 presentations/libs/
 !presentations/scrooge-seagrant-2018.html
