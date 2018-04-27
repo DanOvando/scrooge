@@ -9,7 +9,7 @@
 /* Set fonts for body text and headers */
 body { font-family: 'Helvetica', 'Droid Serif', 'Palatino Linotype', 'Book Antiqua', Palatino, 'Microsoft YaHei', 'Songti SC', serif; }
 h1, h2, h3 {
-  font-family: 'Helvetica', 'Droid Serif', 'Palatino Linotype', 'Book Antiqua', Palatino, 'Microsoft YaHei', 'Songti SC', serif;
+  font-family: 'Arial', 'Droid Serif', 'Palatino Linotype', 'Book Antiqua', Palatino, 'Microsoft YaHei', 'Songti SC', serif;
   font-weight: normal;
 }
 .remark-code, .remark-inline-code { font-family: 'Source Code Pro', 'Lucida Console', Monaco, monospace; }

@@ -24,7 +24,7 @@ fish <-
     max_age = 30,
     time_step = 1,
     sigma_r = 0.4,
-    rec_ac = 0.4,
+    rec_ac = 0.6,
     price = 10,
     price_cv = 0,
     price_ac = 0,
@@ -90,7 +90,7 @@ length_comps <- sim %>%
   mutate(scaled_numbers = numbers / sum(numbers))
 
 r_lengths <- length_comps %>%
-  filter(year > 75) %>%
+  filter(year < 40,length_bin > 30) %>%
   ggplot(aes(length_bin, year, height = scaled_numbers, group = year)) +
   geom_density_ridges(stat = "identity") +
   labs(x = "Length (cm)", title = "Proportional Length Distribution")
@@ -128,7 +128,7 @@ fleet <- create_fleet(
   theta = 0.1,
   fleet_model = "constant-effort",
   sigma_effort = 0.4,
-  effort_ac = 0.75,
+  effort_ac = 0.8,
   initial_effort = 40
 )
 
@@ -185,10 +185,84 @@ sim %>%
   geom_point()
 
 f_lengths <- length_comps %>%
-  filter(year < 50) %>%
+  filter(year < 40,length_bin > 30) %>%
   ggplot(aes(length_bin, year, height = scaled_numbers, group = year)) +
   geom_density_ridges(stat = "identity") +
   labs(x = "Length (cm)", title = "Proportional Length Distribution")
+
+# what's the evidence?
+
+set.seed(42)
+fish <-
+  create_fish(
+    query_fishlife = T,
+    scientific_name = "Scomber japonicus",
+    mat_mode = "length",
+    linf = 100,
+    max_age = 30,
+    time_step = 1,
+    sigma_r = 0,
+    rec_ac = 0,
+    price = 10,
+    price_cv = 0,
+    price_ac = 0,
+    steepness = 0.8
+  )
+
+
+
+fleet <- create_fleet(
+  fish = fish,
+  cost = 3,
+  cost_cv =  0,
+  cost_ac = 0,
+  q_cv = 0,
+  q_ac = 0,
+  profit_lags = 4,
+  length_50_sel = 50,
+  theta = 0.1,
+  fleet_model = "open-access",
+  initial_effort = 100
+)
+
+fleet$e_msy <-  NA
+
+fleet$p_msy <-  NA
+
+sim <- sim_fishery(
+  fish = fish,
+  fleet = fleet,
+  manager = create_manager(mpa_size = 0),
+  num_patches = 1,
+  sim_years = 200,
+  burn_year = 50,
+  time_step = fish$time_step,
+  est_msy = T,
+  tune_costs = T,
+  b_v_bmsy_oa = 1.5
+)
+
+oa <- sim %>%
+  group_by(year) %>%
+  summarise(effort = mean(effort),
+            biomass = sum(biomass),
+            profits = sum(profits)) %>%
+  mutate(ease = "linear",
+         id = 1) %>%
+  ungroup()
+
+oa_tween <- oa %>%
+  tween_elements(., "year", "id", "ease", nframes = 500)
+
+
+oa_plot <- oa_tween %>%
+  filter(year < 200) %>%
+  ggplot(aes(biomass, effort, frame = .frame)) +
+  geom_path(aes(cumulative = T), size = 1, show.legend = F, color = "steelblue") +
+    labs(x = "Biomass", y="Fishing Effort")
+
+
+gganimate::gganimate(oa_plot, filename = "presentations/oa.gif",interval = 0.05, title_frame = FALSE)
 
 
 # how much does it help ---------------------------------------------------
@@ -963,6 +1037,67 @@ bias_plot <- experiment_summary %>%
         axis.text.y = element_blank())
 
 
+# machine learning --------------------------------------------------------
+
+linf <- fisheries_sandbox %>%
+  select(sci_name, prepped_fishery) %>%
+  mutate(linf = map_dbl(prepped_fishery,c("fish","linf"))) %>%
+  select(-prepped_fishery) %>%
+  group_by(sci_name) %>%
+  summarise(linf = mean(linf))
+
+experiment_frame <- experiment_summary %>%
+  left_join(linf, by = "sci_name") %>%
+  select(
+    rmse,
+    economic_model,
+    effort_data_weight,
+    sigma_r,
+    linf,
+    steepness,
+    q_cv,
+    price_cv,
+    cost_cv
+  ) %>%
+  mutate(model = glue::glue("{economic_model}-{effort_data_weight}")) %>%
+  select(-economic_model, -effort_data_weight)
+
+scrooge_split <- rsample::initial_split(experiment_frame, strata = "model")
+
+scrooge_train <- rsample::training(scrooge_split)
+
+scrooge_test <- rsample::testing(scrooge_split)
+
+
+fitfoo <- function(data){
+
+  scrooge_recipe <- recipe(rmse ~ ., data = data)  %>%
+    step_num2factor(all_predictors())
+
+  prepped_scrooge_recipe <- prep(scrooge_recipe, data = data, retain = TRUE)
+
+  model <- caret::train(scrooge_recipe,
+                        data = data,
+                        method = "ranger",
+                        importance = "impurity_corrected")
+
+}
+
+scrooge_train <- scrooge_train %>%
+  nest(-model) %>%
+  mutate(scrooge_fit = map(data, fitfoo))
+
+
+
+
+
+pred_rmse <- predict(model, newdata = experiment_frame)
+
+experiment_frame$pred <- pred_rmse
+
+experiment_frame %>%
+  ggplot(aes(rmse, pred)) +
+  geom_point()
 
 save(
   file = here::here("presentations", "seagrant-presentation.Rdata"),

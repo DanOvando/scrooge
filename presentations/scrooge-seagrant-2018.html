@@ -110,10 +110,37 @@ So, we're good?
 
 ---
 
-# What's the Evidence?
+# What Does Theory Tell Us?
 
-A few plots of open access dynamics in theory and practice
 
+.pull-left[
+- Gordon (1954)
+  - Fishermen respond to profits
+  - Open access leads to zero profits
+
+`$$effort_{t} = effort_{t - 1} + \theta{profits_{t-1}}$$`
+
+- More advanced models, same basic idea, more levers
+
+  - Game theory
+  - Random utility models 
+  - Agent based models
+
+]
+
+.pull-right[
+![](oa.gif)
+]
+
+---
+
+# What Evidence Is there?
+
+![](oa-evidence.png)
+
+.footnote[
+Szuwalski &amp; Thorson 2017 - *Global fishery dynamics are poorly predicted by classical models*
+]
 ---
 
 # Introducing `scrooge`
@@ -139,7 +166,7 @@ A few plots of open access dynamics in theory and practice
 
 ---
 
-#Scrooge
+#`Scrooge`
 
 - Builds off of LIME structure (Rudd &amp; Thorson 2017)
 
@@ -152,37 +179,37 @@ A few plots of open access dynamics in theory and practice
   `$$r_{t} \sim BH(SSB,SSB_{0},h)e^{r^{dev}_{t} -\sigma_r^{2}/2}$$`
   `$$r^{dev}_{t} \sim normal(0, \sigma_r)$$`
 
-- *t* fishing mortalities `\(f_{t}\)`
+  - *t* fishing mortalities `\(f_{t}\)`
 
-Lime: `\(f_{t} \sim normal(f_{t-1},\sigma_{f})\)`
+  - LIME: 
+ 
+ `$$f_{t} \sim normal(f_{t-1},\sigma_{f})$$`
 
 ---
 
-#Scrooge
-
-Two paths for economic data (always `\(f_{t} = q_{t}E_{t}\)`)
+#`Scrooge`
 
 - Effort history ("Effort is about twice what it used to be")
 
 `$$\Delta_{t}^{effort} = \frac{effort_{t+1}}{effort_{t}}$$`
 
-`$$\hat{f_{t}}^{effort} = f_{t-1}\Delta_{t-1}$$`
+`$$\hat{effort_{t}}^{data} = effort_{t-1}\Delta_{t-1}$$`
   
 - Incentives history ("prices went up a lot the last few years")
 
 `$$p_t = p_{base}\frac{p^{obs}_t}{\bar{p^{obs}}}$$`
 
-`$$\Pi_{t-1} = p_{t}q_{t}E_{t}B^{c}_{t} - c_{t}E_{t}^{\beta}$$`
+`$$\Pi_{t} = p_{t}q_{t}E_{t}B^{c}_{t} - c_{t}E_{t}^{\beta}$$`
 
-`$$\hat{f_{t}}^{econ} = f_{t-1} + f_{msy}(\theta\frac{\Pi_{t-1}}{\Pi_{msy}})$$`
+`$$\hat{effort_{t}}^{econ} = effort_{t-1} + effort_{msy}(\theta\frac{\Pi_{t-1}}{\Pi_{msy}})$$`
 
 - Expected effort is then...
 
-`$$f_t \sim normal(\alpha\hat{f_{t}}^{econ} + (1 - \alpha)\hat{f_{t}}^{effort},\sigma_{f})$$`
+`$$effort_t \sim normal((\alpha)\hat{effort_{t}}^{econ} + (1 - \alpha)\hat{effort_{t}}^{data},\sigma_{f})$$`
 
 ---
 
-#Scrooge
+#`Scrooge`
 
 In words...
 
