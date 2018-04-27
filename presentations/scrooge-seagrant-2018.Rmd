@@ -1,6 +1,7 @@
 ---
 title: "Bringing Economic Knowledge into Fisheries Stock Assessment"
 subtitle: "NMFS Sea Grant Graduate Fellows Symposium"
+author: "Dan Ovando"
 date: "2018/05/02"
 output:
   xaringan::moon_reader:
@@ -12,12 +13,14 @@ output:
       countIncrementalSlides: false
 ---
 
+
 ```{r setup, include=FALSE}
 options(htmltools.dir.version = FALSE)
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE,
-                      dev = "svg", fig.width = 8,
-                      fig.height = 5)
+                      dev = "svg", fig.width = 9,
+                      fig.height = 6)
 ```
+
 
 # What's the Problem?
 
@@ -53,7 +56,7 @@ load(here::here("processed_data","fisheries_sandbox.Rdata"))
 
   theme_set(scrooge_theme)
   
-  load(file = here::here("presentations","gaines-lab.Rdata"))
+  load(file = here::here("presentations","seagrant-presentation.Rdata"))
 
 ```
 
@@ -292,8 +295,19 @@ model_trends_plot
 # When Does it Work?
 
 
+```{r}
+rmse_plot
+```
+
 ---
 
+# When Does it Work?
+
+```{r}
+bias_plot
+```
+
+---
 
 # Thank you!
 

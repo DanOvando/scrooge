@@ -23,7 +23,7 @@ judge_performance <-
     comparison_summary <- comparison %>%
       filter(is.na(value) == F) %>%
       summarise(rmse = sqrt(mean((value - observed) ^ 2)),
-                bias = median((value - observed) / observed)) #%>%
+                bias = pmin(4,median((value - observed) / observed))) #%>%
 
 
     comparison_plot <- comparison %>%
