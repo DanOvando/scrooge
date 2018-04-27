@@ -20,7 +20,6 @@ data/google-bucket/
 *.bib
 *.docx
 *.csl
-*.png
 *.html
 *.nb.html
 *.pdf
