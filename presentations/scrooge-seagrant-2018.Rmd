@@ -18,7 +18,7 @@ output:
 options(htmltools.dir.version = FALSE)
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE,
                       dev = "svg", fig.width = 9,
-                      fig.height = 6)
+                      fig.height = 5)
 ```
 
 
@@ -324,3 +324,4 @@ bias_plot
 - NMFS Sea Grant Population and Ecosystem Dynamics Fellowship
 
 ---
+
