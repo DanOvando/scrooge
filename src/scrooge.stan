@@ -25,8 +25,6 @@ vector[n_ages] ages; // vector of ages
 
 int<lower = 0> economic_model; // 0 = no bioeconomic prior, 1 = bioeconomic prior,
 
-int<lower = 0, upper = 1> use_effort_data; // 0 = don't use effort data, 1 = use effort data,
-
 real max_expansion;
 
 int max_window;
@@ -39,7 +37,7 @@ int length_comps_years[n_lcomps]; // time steps in which length comps are availa
 
 //// economic data ////
 
-row_vector[nt] relative_effort;
+row_vector[nt] perc_change_effort;
 
 row_vector[nt] price_t;
 
@@ -61,6 +59,7 @@ real<lower = 0> e_msy;
 
 real<lower = 0> cv_effort;
 
+real<lower = 0, upper  = 1> effort_data_weight;
 
 
 //// biology ////
@@ -100,7 +99,7 @@ parameters{
 
 // real <lower = -5, upper = 3> log_base_effort;
 
-vector<lower = 0.1, upper = 40>[nt]  effort_t; // effort in time t
+vector<lower = 0.1, upper = 15>[nt]  effort_t; // effort in time t
 
 // real<lower = -5, upper = 5> log_sigma_effort; // standard deviation of effort
 
@@ -108,7 +107,7 @@ vector[nt]  uc_rec_dev_t; //  recruitment deviates
 
 real<lower = -5, upper = 2> log_sigma_r; // standard deviation of recruitment deviates
 
-real<lower = 0, upper = 1.5> p_length_50_sel; // length at 50% selectivity
+real<lower = 0, upper = .9> p_length_50_sel; // length at 50% selectivity
 
 // real<lower = 1e-3, upper = 2> f_init; // f to get to initial depletion
 
@@ -211,11 +210,14 @@ transformed parameters{
 
  for (t in 2:n_burn){
 
+// print(min(n_a_init[1,1:n_ages]))
     ssb_temp =  sum(ssb_init[t - 1, 1:n_ages]);
 
-    n_a_init[t,1] = ((0.8 * r0 * h *ssb_temp) / (0.2 * ssb0 * (1 - h) + (h - 0.2) * ssb_temp)); //calculate recruitment
+    n_a_init[t,1] = (0.8 * r0 * h *ssb_temp) / (0.2 * ssb0 * (1 - h) + (h - 0.2) * ssb_temp); //calculate recruitment
 
     n_a_init[t , 2:n_ages] = n_a_init[t - 1, 1:(n_ages -1)] .* (exp(-(m + f_t[1] * mean_selectivity_at_age[1:(n_ages - 1)])))'; // grow and die
+
+// print(min(n_a_init[t,2:n_ages]))
 
     n_a_init[t, n_ages] = n_a_init[t, n_ages] + n_a_init[t - 1, n_ages] .* (exp(-(m + f_t[1] * mean_selectivity_at_age[n_ages])))'; // assign to plus group
 
@@ -224,7 +226,6 @@ transformed parameters{
 }
 
   // Start observed period
-
 
   n_ta[1, 1:n_ages] = n_a_init[n_burn, 1:n_ages];  // start at initial depletion
 
@@ -286,9 +287,11 @@ transformed parameters{
 
 model{
 
-vector[nt] relative_effort_t; // effort in right units
-
 real sigma_effort;
+
+real oa_prediction;
+
+real effort_data_prediction;
 
 real new_effort;
 
@@ -306,23 +309,21 @@ for (i in 1:(n_lcomps)){
 
 //// effort prior ////
 
-if (use_effort_data == 1){
-
-relative_effort_t = effort_t / max(effort_t); // relative effort
-
-relative_effort ~ normal(relative_effort_t, 0.1);
-}
-
-
 if (economic_model == 1) {
 
   for (t in 2:nt){
 
     previous_max = max(effort_t[max(1,t - 1 - max_window):(t - 1)]);
 
-    new_effort = effort_t[t - 1] + e_msy * (p_response * (profit_t[t - 1] / p_msy));
+    oa_prediction = effort_t[t - 1] + e_msy * (p_response * (profit_t[t - 1] / p_msy));
 
-    new_effort = fmin(new_effort, previous_max * max_expansion);
+    effort_data_prediction =  effort_t[t - 1] * perc_change_effort[t - 1];
+
+    new_effort = effort_data_weight * effort_data_prediction + (1 - effort_data_weight) * oa_prediction;
+
+
+    // new_effort = fmin(new_effort, previous_max * max_expansion);
+
 
     effort_t[t] ~ normal(new_effort,sigma_effort);
 

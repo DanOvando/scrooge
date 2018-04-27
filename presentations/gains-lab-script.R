@@ -213,7 +213,7 @@ easy <- easy %>%
     warmup = 2000,
     adapt_delta = 0.8,
     economic_model = 1,
-    use_effort_data = 0,
+    effort_data_weight = 1,
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
@@ -275,7 +275,7 @@ medium <- fisheries_sandbox %>%
          price_cv == max(price_cv),
          cost_cv == max(cost_cv),
          steepness == min(steepness),
-         obs_error == max(obs_error),
+         obs_error == min(obs_error),
          b_v_bmsy_oa == min(b_v_bmsy_oa)) %>%
   slice(1)
 
@@ -291,7 +291,7 @@ medium <- medium %>%
     warmup = 2000,
     adapt_delta = 0.8,
     economic_model = 1,
-    use_effort_data = 0,
+    effort_data_weight = 1,
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
@@ -355,7 +355,7 @@ toughest <- fisheries_sandbox %>%
          price_cv == max(price_cv),
          cost_cv == max(cost_cv),
          steepness == min(steepness),
-         obs_error == max(obs_error),
+         obs_error == min(obs_error),
          b_v_bmsy_oa == min(b_v_bmsy_oa)) %>%
   slice(1)
 
@@ -371,7 +371,7 @@ toughest <- toughest %>%
     warmup = 2000,
     adapt_delta = 0.8,
     economic_model = 1,
-    use_effort_data = 0,
+    effort_data_weight = 1,
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
@@ -455,13 +455,13 @@ econ_helps <- helps %>%
     warmup = 2000,
     adapt_delta = 0.8,
     economic_model = 1,
-    use_effort_data = 0,
+    effort_data_weight = 1,
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
     max_f_v_fmsy_increase = 0.1,
     chains = 1,
-    cv_effort = 0.25,
+    cv_effort = 0.1,
     max_expansion = 1.5
   ))
 
@@ -505,13 +505,13 @@ noecon_helps <- helps %>%
     warmup = 2000,
     adapt_delta = 0.8,
     economic_model = 0,
-    use_effort_data = 0,
+    effort_data_weight = 0,
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
     max_f_v_fmsy_increase = 0.1,
     chains = 1,
-    cv_effort = 0.25,
+    cv_effort = 0.1,
     max_expansion = 1.5
   ))
 
@@ -626,13 +626,15 @@ helps_plot <- ((rmse_plot / bias_plot) | trend_plot) + plot_layout(ncol = 2, wid
 
 hurts <- fisheries_sandbox %>%
   filter(fleet_model == "constant-effort",
-         sigma_r == max(sigma_r),
+         sigma_r == min(sigma_r),
          sigma_effort == min(sigma_effort),
          price_cv == min(price_cv),
          cost_cv == min(cost_cv),
          steepness == max(steepness),
-         obs_error == max(obs_error),
-         b_v_bmsy_oa == min(b_v_bmsy_oa)) %>%
+         obs_error == min(obs_error),
+         b_v_bmsy_oa == min(b_v_bmsy_oa),
+         q_cv == min(q_cv),
+         q_ac == min(q_ac)) %>%
   slice(1)
 
 econ_hurts <- hurts %>%
@@ -647,13 +649,13 @@ econ_hurts <- hurts %>%
     warmup = 2000,
     adapt_delta = 0.8,
     economic_model = 1,
-    use_effort_data = 0,
+    effort_data_weight = 1,
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
     max_f_v_fmsy_increase = 0.5,
     chains = 1,
-    cv_effort = 0.5,
+    cv_effort = 0.1,
     max_expansion = 1.5
   ))
 
@@ -697,7 +699,7 @@ noecon_hurts <- hurts %>%
     warmup = 2000,
     adapt_delta = 0.8,
     economic_model = 0,
-    use_effort_data = 0,
+    effort_data_weight = 0,
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",
@@ -839,7 +841,7 @@ compare_sim <- compare_sim %>%
     warmup = 2000,
     adapt_delta = 0.8,
     economic_model = 1,
-    use_effort_data = 0,
+    effort_data_weight = 1,
     scrooge_file = "scrooge",
     in_clouds = F,
     experiment = "pfo",

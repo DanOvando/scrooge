@@ -299,6 +299,37 @@
     }
   }
 
+  # modify_scroogedata <- function(prepped, obs_error,linf_buffer = 1.5,percent_sampled = 1,
+  #                                cv_effort = 0.25,
+  #                                economic_model){
+  #
+  #   new_scd <- prepare_scrooge_data(
+  #     fish = prepped$fish,
+  #     fleet = prepped$fleet,
+  #     bias = 0,
+  #     obs_error = obs_error,
+  #     linf_buffer = linf_buffer,
+  #     sim = prepped$simed_fishery,
+  #     sample_type = "catch",
+  #     percent_sampled = percent_sampled,
+  #     cv_effort = cv_effort,
+  #     economic_model = economic_model
+  #   )
+  #
+  #   prepped$scrooge_data <- new_scd
+  #
+  #   return(prepped)
+  #
+  # }
+  #
+  #
+  # fisheries_sandbox <- fisheries_sandbox %>%
+  #   mutate(prepped_fishery = pmap(list(
+  #     prepped = prepped_fishery,
+  #     obs_error = obs_error,
+  #     economic_model = economic_model
+  #   ), modify_scroogedata))
+
   # stop()
 # apply candidate assessment models ---------------------------------------
 
@@ -537,9 +568,9 @@ if (run_tests == T) {
 if (fit_models == T) {
 
 
-  experiments <- expand.grid(period = c("beginning","middle","end"), window = c(2,5,10),
+  experiments <- expand.grid(period = c("middle","end"), window = c(2,5,10),
                              economic_model = c(0,1),
-                             use_effort_data = c(0,1),
+                             effort_data_weight = c(0,1),
                              experiment = 1:nrow(fisheries_sandbox), stringsAsFactors = F)
 
   fisheries_sandbox <- fisheries_sandbox %>%
@@ -569,7 +600,7 @@ if (fit_models == T) {
       fleet = fisheries_sandbox$prepped_fishery[[i]]$fleet,
       experiment = fisheries_sandbox$experiment[i],
       economic_model = fisheries_sandbox$economic_model[i],
-      use_effort_data = fisheries_sandbox$use_effort_data[i],
+      effort_data_weight = fisheries_sandbox$effort_data_weight[i],
       scrooge_file = "scrooge",
       iter = 4000,
       warmup = 2000,
@@ -579,7 +610,7 @@ if (fit_models == T) {
       cloud_dir = cloud_dir,
       max_f_v_fmsy_increase = 0.5,
       chains = 1,
-      cv_effort = 0.5,
+      cv_effort = 0.25,
       max_expansion = 1.5
     )
 
@@ -613,19 +644,19 @@ if (fit_models == T) {
 
   # fit lime
 
-  fisheries_sandbox <- fisheries_sandbox %>%
-    mutate(lime_fit = pmap(list(
-      data = map(prepped_fishery, "scrooge_data"),
-      fish = map(prepped_fishery, "fish"),
-      fleet = map(prepped_fishery, "fleet")
-    ), fit_lime))
+  # fisheries_sandbox <- fisheries_sandbox %>%
+  #   mutate(lime_fit = pmap(list(
+  #     data = map(prepped_fishery, "scrooge_data"),
+  #     fish = map(prepped_fishery, "fish"),
+  #     fleet = map(prepped_fishery, "fleet")
+  #   ), fit_lime))
 
-  fisheries_sandbox <- fisheries_sandbox %>%
-    mutate(processed_lime = map2(
-    lime_fit,
-    map(prepped_fishery, "sampled_years"),
-    safely(process_lime)
-  ))
+  # fisheries_sandbox <- fisheries_sandbox %>%
+  #   mutate(processed_lime = map2(
+  #   lime_fit,
+  #   map(prepped_fishery, "sampled_years"),
+  #   safely(process_lime)
+  # ))
 
 # process_fits ------------------------------------------------------------
 
