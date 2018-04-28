@@ -8,6 +8,8 @@
 library(ggridges)
 library(wesanderson)
 library(scales)
+library(tweenr)
+library(gganimate)
 # library(tidyverse)
 
 rstan::rstan_options(auto_write = TRUE)
@@ -958,6 +960,7 @@ model_trends_plot <- model_fits %>%
 
 # when does it work? ------------------------------------------------------
 run_name <- "v1.0"
+in_clouds <-  T
 if (in_clouds == T){
 
 
@@ -1001,7 +1004,6 @@ fisheries_sandbox$experiment <- 1:nrow(fisheries_sandbox)
 
 # map(prepped_fishery, "sampled_years"),
 
-sampled
 
 experiment_sandbox <- fisheries_sandbox %>%
   filter(experiment %in% experiment_numbers) %>%
@@ -1059,8 +1061,12 @@ experiment_frame <- experiment_summary %>%
     price_cv,
     cost_cv
   ) %>%
+  filter(!(economic_model == 0 & effort_data_weight == 1)) %>%
+  mutate(economic_model = ifelse(economic_model == 1, "Econ. Priors","Naive Priors"),
+         effort_data_weight = ifelse(effort_data_weight == 1, "Effort Data Priors","Bioeconomic Prior")) %>%
   mutate(model = glue::glue("{economic_model}-{effort_data_weight}")) %>%
-  select(-economic_model, -effort_data_weight)
+  select(-economic_model, -effort_data_weight) %>%
+  filter(rmse < 1)
 
 scrooge_split <- rsample::initial_split(experiment_frame, strata = "model")
 
@@ -1070,6 +1076,9 @@ scrooge_test <- rsample::testing(scrooge_split)
 
 
 fitfoo <- function(data){
+
+  data <- data %>%
+    select(rmse, sigma_r, cost_cv, price_cv, q_cv, linf)
 
   scrooge_recipe <- recipe(rmse ~ ., data = data)  %>%
     step_num2factor(all_predictors())
@@ -1087,17 +1096,55 @@ scrooge_train <- scrooge_train %>%
   nest(-model) %>%
   mutate(scrooge_fit = map(data, fitfoo))
 
+get_varimp <- function(model){
+
+  varimp <-  caret::varImp(model)$importance %>%
+    as.data.frame() %>%
+    mutate(variable = rownames(.)) %>%
+    rename(importance = Overall)
+
+
+}
+
+
+scrooge_train$varimp <- map(scrooge_train$scrooge_fit, get_varimp)
+
+varimp_plot <- scrooge_train %>%
+  select(model, varimp) %>%
+  unnest() %>%
+  ggplot(aes(variable, importance)) +
+  geom_col() +
+  facet_wrap(~model) +
+  coord_flip()
 
 
 
+add_preds <- function(model, newdata){
 
-pred_rmse <- predict(model, newdata = experiment_frame)
+  newdata <- newdata %>%
+    select(rmse, sigma_r, cost_cv, price_cv, q_cv, linf, model)
 
-experiment_frame$pred <- pred_rmse
+  preds <- predict(model, newdata = newdata)
 
-experiment_frame %>%
-  ggplot(aes(rmse, pred)) +
-  geom_point()
+  newdata$pred_rmse <- preds
+
+  return(newdata)
+
+}
+
+scrooge_preds <- scrooge_train %>%
+  mutate(pred_test = map(scrooge_fit, add_preds,scrooge_test)) %>%
+  rename(fitted_model = model) %>%
+  select(-data, -scrooge_fit,-varimp) %>%
+  unnest() %>%
+  arrange(rmse) %>%
+  mutate(fishery = factor(rmse))
+
+
+scrooge_preds_plot <- scrooge_preds %>%
+  ggplot(aes(fishery, pred_rmse, color = fitted_model)) +
+  geom_point() +
+  coord_flip()
 
 save(
   file = here::here("presentations", "seagrant-presentation.Rdata"),
