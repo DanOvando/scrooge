@@ -18,7 +18,7 @@ output:
 options(htmltools.dir.version = FALSE)
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE,
                       dev = "svg", fig.width = 9,
-                      fig.height = 6)
+                      fig.height = 5)
 ```
 
 
@@ -146,13 +146,15 @@ So, we're good?
 
 # What Does Theory Tell Us?
 
-
-.pull-left[
 - Gordon (1954)
   - Fishermen respond to profits
   - Open access leads to zero profits
 
 $$effort_{t} = effort_{t - 1} + \theta{profits_{t-1}}$$
+
+<p align="center">
+![](wide-oa.gif)
+
 
 - More advanced models: same basic idea, more levers
 
@@ -160,17 +162,12 @@ $$effort_{t} = effort_{t - 1} + \theta{profits_{t-1}}$$
   - Random utility models 
   - Agent based models
 
-]
-
-.pull-right[
-![](small-oa.gif)
-]
 
 ---
 
 # What Evidence Is there?
 
-![](oa-evidence.png)
+![](oa-evidence-small.png)
 
 .footnote[
 Szuwalski & Thorson 2017 - *Global fishery dynamics are poorly predicted by classical models*

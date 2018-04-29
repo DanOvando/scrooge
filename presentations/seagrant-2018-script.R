@@ -289,6 +289,15 @@ gganimate::gganimate(
   ani.width = 200, ani.height = 300
 )
 
+gganimate::gganimate(
+  oa_plot,
+  filename = "presentations/wide-oa.gif",
+  interval = 0.05,
+  title_frame = FALSE,
+  ani.width = 600, ani.height = 200
+)
+
+
 
 # how much does it help ---------------------------------------------------
 
