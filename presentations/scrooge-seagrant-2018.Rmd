@@ -18,7 +18,7 @@ output:
 options(htmltools.dir.version = FALSE)
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE,
                       dev = "svg", fig.width = 9,
-                      fig.height = 5)
+                      fig.height = 6)
 ```
 
 
@@ -66,7 +66,7 @@ load(here::here("processed_data","fisheries_sandbox.Rdata"))
 
 - Most fisheries lack resources for "traditional" assessment
 
-- Litte data and lots of needs creates demand for DLAs
+- Little data and lots of need creates demand for DLAs
 
   - C-MSY
   - DB-SRA
@@ -82,7 +82,7 @@ So, we're good?
 
 - All DLAs trade data for assumptions
 
-- We spend a *lot* of effort trying to scape more knowledge out of less data
+- We spend a *lot* of effort trying to scrape more knowledge out of less data
 
 > *I feel thin... like butter scraped over too much bread* - B. Baggins
 
@@ -123,6 +123,7 @@ So, we're good?
 
 - Data on the incentive history of a fishery provide clues to its status
 
+- Economic behavior increasingly incorporated in MSE
 ---
 
 # The Basic Idea
@@ -153,7 +154,7 @@ So, we're good?
 
 $$effort_{t} = effort_{t - 1} + \theta{profits_{t-1}}$$
 
-- More advanced models, same basic idea, more levers
+- More advanced models: same basic idea, more levers
 
   - Game theory
   - Random utility models 
@@ -162,7 +163,7 @@ $$effort_{t} = effort_{t - 1} + \theta{profits_{t-1}}$$
 ]
 
 .pull-right[
-![](oa.gif)
+![](small-oa.gif)
 ]
 
 ---
@@ -186,9 +187,12 @@ Szuwalski & Thorson 2017 - *Global fishery dynamics are poorly predicted by clas
 
   - Build off of length-based methods (and LIME framework)
 
-  - Why start with lengths
+  - Why start with lengths?
+   
     - Recruitment and F tough to disentangle
+   
     - SR relationships inform recruitment
+   
     - Economics inform F?
 
 ---
@@ -204,6 +208,8 @@ Szuwalski & Thorson 2017 - *Global fishery dynamics are poorly predicted by clas
 #`Scrooge`
 
 - Builds off of LIME structure (Rudd & Thorson 2017)
+
+  - Age structured, "mixed effects" (or hierarchical here)
 
 - With just length data, estimate
 
@@ -234,7 +240,7 @@ $$\hat{effort_{t}}^{data} = effort_{t-1}\Delta_{t-1}$$
 
 $$p_t = p_{base}\frac{p^{obs}_t}{\bar{p^{obs}}}$$
 
-$$\Pi_{t} = p_{t}q_{t}E_{t}B^{c}_{t} - c_{t}E_{t}^{\beta}$$
+$$\Pi_{t} \sim p_{t}q_{t}E_{t}B^{c}_{t} - c_{t}E_{t}^{\beta}$$
 
 $$\hat{effort_{t}}^{econ} = effort_{t-1} + effort_{msy}(\theta\frac{\Pi_{t-1}}{\Pi_{msy}})$$
 
@@ -307,7 +313,7 @@ model_trends_plot
 
   - Currently running 100,000's of `scrooge` simulations
   
-  - Calculate metric of interst (RMSE, bias, etc.)
+  - Calculate metric of interest (RMSE, bias, etc.)
   
   - Train predictive algorithm (MARS, random forest)
   
@@ -336,13 +342,45 @@ bias_plot
 
 ---
 
-# Next Steps
+# When Does it Work?
+
+```{r}
+varimp_plot
+```
+
+
+---
+
+#  Economic Data are an Underutilized source of Information
+
+- Economic data shows potential to improve stock assessment
+
+  - Incorporates local knowledge where data is limited
+  
+- Technology will increase ability to collect economic data
+
+  - Mobile phones
+  
+  - Global fishing watch
+  
+- But... 
+
+  - When it's wrong, how wrong is it?
+  
+  - Need empirical data to test
+
+---
+
+
+# Ongoing Work
 
 - Assemble testing library
 
 - Test and diagnose performance
 
 - Test against "traditional" stock assessment
+
+- Catch estimation from total effort
 
 - If appropriate apply to 
 
@@ -355,19 +393,30 @@ bias_plot
 
 ---
 
-# Thank you!
+class: center
 
-## Collaborators
+# Thanks!
 
+### Collaborators
 - Jason Cope
-- Merril Rudd
+- Merrill Rudd
 - Ray Hilborn
 - Chris Costello
 - Steve Gaines
 
-## Funding
-
+### Funding
 - NMFS Sea Grant Population and Ecosystem Dynamics Fellowship
+### Contact
+**email**: dovando@bren.ucsb.edu
+**github**: DanOvando
+**website**: [weirdfishes.blog](http://www.weirdfishes.blog)
 
 ---
 
+# Extras
+
+```{r}
+scrooge_pred_rmse_plot
+```
+
+---

@@ -343,7 +343,7 @@ if (economic_model == 1) {
 
 // log_sigma_effort ~ normal(0,0.25);
 
-p_response ~ normal(p_response_guess,.01); // constrain p_response
+p_response ~ normal(p_response_guess,.1); // constrain p_response
 
 //// recruitment prior ////
 

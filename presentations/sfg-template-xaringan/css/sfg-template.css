@@ -35,7 +35,8 @@ h1, h2, h3 {
 /* Change background color or text color here */
 h1 {
   font-size: 36px;
-  background-color: #afd1d1;
+  font-color: #FFFFFF;
+  background-color: #3193CC;
   padding-top: 0.15em;
   padding-bottom: 0.15em;
   padding-left: 1em;
@@ -119,7 +120,7 @@ content: "";
   background-position: center;
   background-size: cover;
   background-repeat: no-repeat;
-  background-image: url("img/title-background-2.jpg");
+  background-image: url("img/title-photo.jpg");
   background-color: #14253f;
   margin: 0 0 20px -50px;
   border-bottom: solid;

@@ -571,15 +571,15 @@ if (fit_models == T) {
   experiments <- expand.grid(period = c("middle","end"), window = c(2,5,10),
                              economic_model = c(0,1),
                              effort_data_weight = c(0,1),
-                             experiment = 1:nrow(fisheries_sandbox), stringsAsFactors = F)
+                             fishery = 1:nrow(fisheries_sandbox), stringsAsFactors = F)
 
   fisheries_sandbox <- fisheries_sandbox %>%
     select(-economic_model) %>%
-    mutate(experiment = 1:nrow(.)) %>%
-    left_join(experiments, by = "experiment") %>%
+    mutate(fishery = 1:nrow(.)) %>%
+    left_join(experiments, by = "fishery") %>%
     # filter(window == 10, fleet_model == "open-access", b_v_bmsy_oa == 0.5) %>%
     # slice(1) %>%
-    slice(sample(1:nrow(fisheries_sandbox),4, replace = F)) %>%
+    # slice(sample(1:nrow(fisheries_sandbox),4, replace = F)) %>%
     mutate(prepped_fishery = pmap(list(
       prepped_fishery = prepped_fishery,
       window = window,

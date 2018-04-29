@@ -9,6 +9,8 @@ library(ggridges)
 library(wesanderson)
 library(scales)
 library(tweenr)
+library(caret)
+library(recipes)
 library(gganimate)
 # library(tidyverse)
 
@@ -69,7 +71,7 @@ sim <- sim_fishery(
 
 length_comps <- sim %>%
   select(year, patch, age, numbers, numbers_caught) %>%
-  nest(-year, -patch, .key = n_at_age) %>%
+  nest(-year,-patch, .key = n_at_age) %>%
   mutate(catch_length = map(
     n_at_age,
     ~ spasm::sample_lengths(
@@ -92,7 +94,7 @@ length_comps <- sim %>%
   mutate(scaled_numbers = numbers / sum(numbers))
 
 r_lengths <- length_comps %>%
-  filter(year < 40,length_bin > 30) %>%
+  filter(year < 40, length_bin > 30) %>%
   ggplot(aes(length_bin, year, height = scaled_numbers, group = year)) +
   geom_density_ridges(stat = "identity") +
   labs(x = "Length (cm)", title = "Proportional Length Distribution")
@@ -154,7 +156,7 @@ sim <- sim_fishery(
 
 length_comps <- sim %>%
   select(year, patch, age, numbers, numbers_caught) %>%
-  nest(-year, -patch, .key = n_at_age) %>%
+  nest(-year,-patch, .key = n_at_age) %>%
   mutate(catch_length = map(
     n_at_age,
     ~ spasm::sample_lengths(
@@ -187,7 +189,7 @@ sim %>%
   geom_point()
 
 f_lengths <- length_comps %>%
-  filter(year < 40,length_bin > 30) %>%
+  filter(year < 40, length_bin > 30) %>%
   ggplot(aes(length_bin, year, height = scaled_numbers, group = year)) +
   geom_density_ridges(stat = "identity") +
   labs(x = "Length (cm)", title = "Proportional Length Distribution")
@@ -246,9 +248,11 @@ sim <- sim_fishery(
 
 oa <- sim %>%
   group_by(year) %>%
-  summarise(effort = mean(effort),
-            biomass = sum(biomass),
-            profits = sum(profits)) %>%
+  summarise(
+    effort = mean(effort),
+    biomass = sum(biomass),
+    profits = sum(profits)
+  ) %>%
   mutate(ease = "linear",
          id = 1) %>%
   ungroup()
@@ -260,11 +264,30 @@ oa_tween <- oa %>%
 oa_plot <- oa_tween %>%
   filter(year < 200) %>%
   ggplot(aes(biomass, effort, frame = .frame)) +
-  geom_path(aes(cumulative = T), size = 1, show.legend = F, color = "steelblue") +
-    labs(x = "Biomass", y="Fishing Effort")
+  geom_path(
+    aes(cumulative = T),
+    size = 1,
+    show.legend = F,
+    color = "steelblue"
+  ) +
+  labs(x = "Biomass", y = "Fishing Effort")
 
 
-gganimate::gganimate(oa_plot, filename = "presentations/oa.gif",interval = 0.05, title_frame = FALSE)
+gganimate::gganimate(
+  oa_plot,
+  filename = "presentations/oa.gif",
+  interval = 0.05,
+  title_frame = FALSE
+)
+
+
+gganimate::gganimate(
+  oa_plot,
+  filename = "presentations/small-oa.gif",
+  interval = 0.05,
+  title_frame = FALSE,
+  ani.width = 200, ani.height = 300
+)
 
 
 # how much does it help ---------------------------------------------------
@@ -961,44 +984,52 @@ model_trends_plot <- model_fits %>%
 # when does it work? ------------------------------------------------------
 run_name <- "v1.0"
 in_clouds <-  T
-if (in_clouds == T){
-
-
+if (in_clouds == T) {
   system("umount results/scrooge-results")
 
   system("rm -r results/scrooge-results")
 
-  if (dir.exists("results/scroote-results") == F){
-
+  if (dir.exists("results/scroote-results") == F) {
     system("mkdir results/scrooge-results")
 
   }
 
   system("gcsfuse scrooge-results results/scrooge-results")
 
-  cloud_dir <- here::here("results","scrooge-results",run_name)
+  cloud_dir <- here::here("results", "scrooge-results", run_name)
 
 }
 
 experiment_files <- list.files(cloud_dir)
 
-experiment_files <- experiment_files[!str_detect(experiment_files,"description")]
+experiment_files <-
+  experiment_files[!str_detect(experiment_files, "description")]
 
-experiment_numbers <- str_replace_all(experiment_files,"\\D","") %>% as.numeric()
+experiment_numbers <-
+  str_replace_all(experiment_files, "\\D", "") %>% as.numeric()
 
-experiments <- expand.grid(period = c("middle","end"), window = c(2,5,10),
-                           economic_model = c(0,1),
-                           effort_data_weight = c(0,1),
-                           experiment = 1:nrow(fisheries_sandbox), stringsAsFactors = F)
+experiments <-
+  expand.grid(
+    period = c("middle", "end"),
+    window = c(2, 5, 10),
+    economic_model = c(0, 1),
+    effort_data_weight = c(0, 1),
+    fishery = 1:nrow(fisheries_sandbox),
+    stringsAsFactors = F
+  )
 
 fisheries_sandbox <- fisheries_sandbox %>%
   select(-economic_model) %>%
-  mutate(experiment = 1:nrow(.)) %>%
-  left_join(experiments, by = "experiment") %>%
-  mutate(prepped_fishery = pmap(list(
-    prepped_fishery = prepped_fishery,
-    window = window,
-    period = period), subsample_data))
+  mutate(fishery = 1:nrow(.)) %>%
+  left_join(experiments, by = "fishery") %>%
+  mutate(prepped_fishery = pmap(
+    list(
+      prepped_fishery = prepped_fishery,
+      window = window,
+      period = period
+    ),
+    subsample_data
+  ))
 
 fisheries_sandbox$experiment <- 1:nrow(fisheries_sandbox)
 
@@ -1008,33 +1039,36 @@ fisheries_sandbox$experiment <- 1:nrow(fisheries_sandbox)
 experiment_sandbox <- fisheries_sandbox %>%
   filter(experiment %in% experiment_numbers) %>%
   arrange(experiment) %>%
-  mutate(performance = map2(experiment, prepped_fishery, process_experiment, cloud_dir = cloud_dir))
+  mutate(
+    performance = map2(experiment, prepped_fishery, process_experiment, cloud_dir = cloud_dir)
+  )
 
 
 experiment_summary <- experiment_sandbox %>%
-  select(-fleet_params, -prepped_fishery, -summary_plot) %>%
+  select(-fleet_params,-prepped_fishery,-summary_plot) %>%
   unnest() %>%
-  mutate(emodel = ifelse(economic_model == 1, "Uses Economic Data","Ignores Economic Data")) %>%
-  mutate(eweight = ifelse(effort_data_weight == 1, "Incentive Priors","Effort Priors"))
+  mutate(emodel = ifelse(economic_model == 1, "Uses Economic Data", "Ignores Economic Data")) %>%
+  mutate(eweight = ifelse(effort_data_weight == 1, "Effort Priors", "Incentive Priors"))
 
 
 rmse_plot <- experiment_summary %>%
-  ggplot(aes(pmin(1,rmse), fill = emodel)) +
+  ggplot(aes(pmin(1, rmse), fill = eweight)) +
   geom_vline(aes(xintercept = 0), linetype = 2) +
   geom_density(alpha = 0.5) +
-  facet_grid(eweight ~fleet_model, scales = "free") +
+  facet_grid(emodel ~ fleet_model, scales = "free") +
   scale_fill_viridis_d(name = "") +
-  labs(x = 'RMSE') +
+  labs(x = 'RMSE', caption = "Note: Random sample of experiments") +
   theme(axis.title.y = element_blank(),
         axis.text.y = element_blank())
 
 bias_plot <- experiment_summary %>%
-  ggplot(aes(pmin(1,bias), fill = emodel)) +
+  ggplot(aes(pmin(1, bias), fill = eweight)) +
   geom_vline(aes(xintercept = 0), linetype = 2) +
   geom_density(alpha = 0.5) +
-  facet_grid(eweight ~fleet_model, scales = "free") +
+  facet_grid(emodel ~ fleet_model, scales = "free") +
   scale_x_continuous(labels = percent, name = "Bias") +
   scale_fill_viridis_d(name = "") +
+  labs(caption = "Note: Random sample of experiments") +
   theme(axis.title.y = element_blank(),
         axis.text.y = element_blank())
 
@@ -1043,7 +1077,7 @@ bias_plot <- experiment_summary %>%
 
 linf <- fisheries_sandbox %>%
   select(sci_name, prepped_fishery) %>%
-  mutate(linf = map_dbl(prepped_fishery,c("fish","linf"))) %>%
+  mutate(linf = map_dbl(prepped_fishery, c("fish", "linf"))) %>%
   select(-prepped_fishery) %>%
   group_by(sci_name) %>%
   summarise(linf = mean(linf))
@@ -1052,6 +1086,7 @@ experiment_frame <- experiment_summary %>%
   left_join(linf, by = "sci_name") %>%
   select(
     rmse,
+    experiment,
     economic_model,
     effort_data_weight,
     sigma_r,
@@ -1062,33 +1097,36 @@ experiment_frame <- experiment_summary %>%
     cost_cv
   ) %>%
   filter(!(economic_model == 0 & effort_data_weight == 1)) %>%
-  mutate(economic_model = ifelse(economic_model == 1, "Econ. Priors","Naive Priors"),
-         effort_data_weight = ifelse(effort_data_weight == 1, "Effort Data Priors","Bioeconomic Prior")) %>%
+  mutate(economic_model = ifelse(economic_model == 1, "Uses Economic Data", "Ignores Economic Data")) %>%
+  mutate(effort_data_weight = ifelse(effort_data_weight == 1, "Effort Priors", "Incentive Priors")) %>%
   mutate(model = glue::glue("{economic_model}-{effort_data_weight}")) %>%
-  select(-economic_model, -effort_data_weight) %>%
+  select(-economic_model,-effort_data_weight) %>%
   filter(rmse < 1)
 
-scrooge_split <- rsample::initial_split(experiment_frame, strata = "model")
+scrooge_split <-
+  rsample::initial_split(experiment_frame, strata = "model")
 
 scrooge_train <- rsample::training(scrooge_split)
 
 scrooge_test <- rsample::testing(scrooge_split)
 
 
-fitfoo <- function(data){
-
+fitfoo <- function(data) {
   data <- data %>%
     select(rmse, sigma_r, cost_cv, price_cv, q_cv, linf)
 
   scrooge_recipe <- recipe(rmse ~ ., data = data)  %>%
     step_num2factor(all_predictors())
 
-  prepped_scrooge_recipe <- prep(scrooge_recipe, data = data, retain = TRUE)
+  prepped_scrooge_recipe <-
+    prep(scrooge_recipe, data = data, retain = TRUE)
 
-  model <- caret::train(scrooge_recipe,
-                        data = data,
-                        method = "ranger",
-                        importance = "impurity_corrected")
+  model <- caret::train(
+    scrooge_recipe,
+    data = data,
+    method = "ranger",
+    importance = "impurity_corrected"
+  )
 
 }
 
@@ -1096,8 +1134,7 @@ scrooge_train <- scrooge_train %>%
   nest(-model) %>%
   mutate(scrooge_fit = map(data, fitfoo))
 
-get_varimp <- function(model){
-
+get_varimp <- function(model) {
   varimp <-  caret::varImp(model)$importance %>%
     as.data.frame() %>%
     mutate(variable = rownames(.)) %>%
@@ -1112,17 +1149,19 @@ scrooge_train$varimp <- map(scrooge_train$scrooge_fit, get_varimp)
 varimp_plot <- scrooge_train %>%
   select(model, varimp) %>%
   unnest() %>%
-  ggplot(aes(variable, importance)) +
-  geom_col() +
-  facet_wrap(~model) +
+  ggplot(aes(variable, importance, fill = model)) +
+  geom_col(position = "dodge", color = "grey") +
+  scale_fill_viridis_d(name = "") +
+  labs(y = "Importance Score") +
+  theme(axis.title.y = element_blank()) +
+  # facet_wrap(~model) +
   coord_flip()
 
 
 
-add_preds <- function(model, newdata){
-
+add_preds <- function(model, newdata) {
   newdata <- newdata %>%
-    select(rmse, sigma_r, cost_cv, price_cv, q_cv, linf, model)
+    select(rmse, experiment, sigma_r, cost_cv, price_cv, q_cv, linf, model)
 
   preds <- predict(model, newdata = newdata)
 
@@ -1133,18 +1172,24 @@ add_preds <- function(model, newdata){
 }
 
 scrooge_preds <- scrooge_train %>%
-  mutate(pred_test = map(scrooge_fit, add_preds,scrooge_test)) %>%
+  mutate(pred_test = map(scrooge_fit, add_preds, scrooge_test)) %>%
   rename(fitted_model = model) %>%
-  select(-data, -scrooge_fit,-varimp) %>%
+  select(-data,-scrooge_fit, -varimp) %>%
   unnest() %>%
   arrange(rmse) %>%
   mutate(fishery = factor(rmse))
 
 
-scrooge_preds_plot <- scrooge_preds %>%
-  ggplot(aes(fishery, pred_rmse, color = fitted_model)) +
-  geom_point() +
-  coord_flip()
+scrooge_preds <- scrooge_preds %>%
+  mutate(fishery = as.numeric(factor(fishery)))
+
+scrooge_pred_rmse_plot <- scrooge_preds %>%
+  ggplot(aes(factor(fishery), pred_rmse, fill = fitted_model), alpha = 0.75) +
+  geom_point(shape = 21) +
+  coord_flip() +
+  labs(x = "Fishery", y = "Predicted RMSE") +
+  scale_fill_viridis_d(name = "")
+
 
 save(
   file = here::here("presentations", "seagrant-presentation.Rdata"),
@@ -1156,5 +1201,7 @@ save(
   model_fits,
   rmse_plot,
   bias_plot,
-  experiment_sandbox
+  experiment_sandbox,
+  varimp_plot,
+  scrooge_pred_rmse_plot
 )
