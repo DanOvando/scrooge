@@ -29,3 +29,4 @@ data/google-bucket/
 *.txt
 presentations/libs/
 !presentations/scrooge-seagrant-2018.html
+!presentations/rawgit-scrooge-seagrant-2018.html
