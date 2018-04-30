@@ -1,5 +1,5 @@
 ---
-title: "Using Economic Knowledge in Fisheries Stock Assessment"
+title: "Hello Using Economic Knowledge in Fisheries Stock Assessment"
 subtitle: "NMFS Sea Grant Graduate Fellows Symposium"
 author: "Dan Ovando"
 date: "2018/05/02"
