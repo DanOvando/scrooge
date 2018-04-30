@@ -70,6 +70,19 @@ content: "";
   background-image: url("img/sfg-logo-black.png");
 }
 
+div.scrooge-footer {
+content: "";
+  position: absolute;
+  bottom: 15px;
+  right:  15px;
+  height: 50px;
+  width: 180px;
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-position: right;
+  background-image: url("img/scrooge-hex.png");
+}
+
 /* For footer with color sfg logo on the bottom left */
 div.sfg-footer-color {
 content: "";
