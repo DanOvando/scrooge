@@ -18,7 +18,7 @@ output:
 options(htmltools.dir.version = FALSE)
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE,
                       dev = "svg", fig.width = 9,
-                      fig.height = 5)
+                      fig.height = 6)
 ```
 
 
@@ -386,6 +386,11 @@ varimp_plot
 
 - Apply to case study fisheries
 
+  - Channel Islands
+  
+  - Peru
+  
+  - Montserrat
 
 ---
 
