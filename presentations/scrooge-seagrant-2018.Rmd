@@ -180,7 +180,7 @@ layout: true
 
 # Introducing `scrooge`
 
-## Core Philosphy:
+## Core Concept:
 
   > *Integrate historic economic data (effort, prices, costs, technology) into stock assessment*
   
@@ -395,6 +395,12 @@ varimp_plot
   - Peru
   
   - Montserrat
+
+---
+
+layout: true
+
+<div class="seagrant-footer"></div> 
 
 ---
 
