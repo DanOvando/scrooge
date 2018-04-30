@@ -293,7 +293,10 @@ hurts_plot
 
 
 ```{r}
-model_trends_plot
+model_trends_plot + 
+  ggsci::scale_fill_npg() + 
+    ggsci::scale_color_npg()
+
 ```
 
 
@@ -371,6 +374,8 @@ varimp_plot
 
 # Ongoing Work
 
+- Integrate demand dynamics
+
 - Assemble testing library
 
 - Test and diagnose performance
@@ -379,13 +384,7 @@ varimp_plot
 
 - Catch estimation from total effort
 
-- If appropriate apply to 
-
-  - Channel Islands fisheries
-  
-  - Montserrat fisheries
-  
-  - Peruvian fisheries
+- Apply to case study fisheries
 
 
 ---
@@ -413,7 +412,9 @@ class: center
 # Extras
 
 ```{r}
-scrooge_pred_rmse_plot
+scrooge_pred_rmse_plot +
+  theme(axis.text.x = element_text(size = 8))
+ 
 ```
 
 ---
