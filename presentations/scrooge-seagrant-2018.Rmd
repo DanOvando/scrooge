@@ -255,7 +255,7 @@ $$effort_t \sim normal((\alpha)\hat{effort_{t}}^{econ} + (1 - \alpha)\hat{effort
 
 In words...
 
-- Simulate fisheries using `spasm`
+- Simulate **LOTS** of fisheries using `spasm`
   - Effort dynamics, recruitment regimes, observation error, etc.
 
 - Collect length comps and economic data from simulated fisheries
@@ -266,8 +266,8 @@ In words...
 
 - Fit data using `scrooge`
   - "LIME" prior
-  - Bioeconomic model only
-  - Effort history only
+  - Bioeconomic model only (incentives)
+  - Effort history only (data)
   
 - Assess performance
   - How much does it help/hurt?
