@@ -52,7 +52,7 @@ load(here::here("processed_data","fisheries_sandbox.Rdata"))
 
   run_name <- "v3.0"
   
-    scrooge_theme <- theme_ipsum(base_size = 14, axis_title_size = 18)
+    scrooge_theme <- theme_ipsum(base_size = 16, axis_title_size = 18, strip_text_size = 18)
 
   theme_set(scrooge_theme)
   
@@ -380,13 +380,13 @@ varimp_plot
 
 - Integrate demand dynamics
 
+- Catch estimation from total effort
+
 - Assemble testing library
 
 - Test and diagnose performance
 
 - Test against "traditional" stock assessment
-
-- Catch estimation from total effort
 
 - Apply to case study fisheries
 
@@ -420,7 +420,7 @@ class: center
 ###Contact
 **email**: dovando@bren.ucsb.edu
 **github**: DanOvando
-**website**: [weirdfishes.blog](http://www.weirdfishes.blog)
+**web**: [weirdfishes.blog](http://www.weirdfishes.blog)
 
 ---
 
