@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Bringing Economic Knowledge into Fisheries Stock Assessment</title>
+    <title>Using Economic Knowledge in Fisheries Stock Assessment</title>
     <meta charset="utf-8">
+    <meta name="author" content="Dan Ovando" />
     <link href="libs/remark-css/default.css" rel="stylesheet" />
     <link rel="stylesheet" href="sfg-template-xaringan/css/sfg-template.css" type="text/css" />
   </head>
@@ -10,11 +11,14 @@
     <textarea id="source">
 class: center, middle, inverse, title-slide
 
-# Bringing Economic Knowledge into Fisheries Stock Assessment
+# Using Economic Knowledge in Fisheries Stock Assessment
 ## NMFS Sea Grant Graduate Fellows Symposium
-### 2018/05/02
+### Dan Ovando
+### May 2018
 
 ---
+
+
 
 
 
@@ -29,7 +33,7 @@ class: center, middle, inverse, title-slide
 
 - Most fisheries lack resources for "traditional" assessment
 
-- Litte data and lots of needs creates demand for DLAs
+- Little data and lots of need creates demand for DLAs
 
   - C-MSY
   - DB-SRA
@@ -45,7 +49,7 @@ So, we're good?
 
 - All DLAs trade data for assumptions
 
-- We spend a *lot* of effort trying to scape more knowledge out of less data
+- We spend a *lot* of effort trying to scrape more knowledge out of less data
 
 &gt; *I feel thin... like butter scraped over too much bread* - B. Baggins
 
@@ -86,6 +90,7 @@ So, we're good?
 
 - Data on the incentive history of a fishery provide clues to its status
 
+- Economic behavior increasingly incorporated in MSE
 ---
 
 # The Basic Idea
@@ -106,38 +111,71 @@ So, we're good?
 
 ---
 
-# What's the Evidence?
+# What Does Theory Tell Us?
 
-A few plots of open access dynamics in theory and practice
+- Gordon (1954)
+  - Fishermen respond to profits
+  - Open access leads to zero profits
 
+`$$effort_{t} = effort_{t - 1} + \theta{profits_{t-1}}$$`
+
+&lt;p align="center"&gt;
+![](wide-oa.gif)
+
+
+- More advanced models: same basic idea, more levers
+
+  - Game theory
+  - Random utility models 
+  - Agent based models
+
+
+---
+
+# What Evidence Is there?
+
+![](oa-evidence-small.png)
+
+.footnote[
+Szuwalski &amp; Thorson 2017 - *Global fishery dynamics are poorly predicted by classical models*
+]
+---
+
+layout: true
+&lt;div class="scrooge-footer"&gt;&lt;/div&gt; 
 ---
 
 # Introducing `scrooge`
 
-## Core Philosphy:
+## Core Concept:
 
-  - Integrate historic economic data (effort, prices, costs, technology) into stock assessment
+  &gt; *Integrate historic economic data (effort, prices, costs, technology) into stock assessment*
   
 ## Initial Application
 
   - Build off of length-based methods (and LIME framework)
 
-  - Why start with lengths
+  - Why start with lengths?
+   
     - Recruitment and F tough to disentangle
+   
     - SR relationships inform recruitment
+   
     - Economics inform F?
 
 ---
 
 # Who's Driving the Bus?
 
-![](ovando-seagrant-2018_files/figure-html/unnamed-chunk-2-1.svg)&lt;!-- --&gt;
+![](scrooge-seagrant-2018_files/figure-html/unnamed-chunk-2-1.svg)&lt;!-- --&gt;
 
 ---
 
-#Scrooge
+#`Scrooge`
 
 - Builds off of LIME structure (Rudd &amp; Thorson 2017)
+
+  - Age structured, "mixed effects" (or hierarchical here)
 
 - With just length data, estimate
 
@@ -148,39 +186,41 @@ A few plots of open access dynamics in theory and practice
   `$$r_{t} \sim BH(SSB,SSB_{0},h)e^{r^{dev}_{t} -\sigma_r^{2}/2}$$`
   `$$r^{dev}_{t} \sim normal(0, \sigma_r)$$`
 
-- *t* fishing mortalities `\(f_{t}\)`
+  - *t* fishing mortalities `\(f_{t}\)`
 
-Lime: `\(f_{t} \sim normal(f_{t-1},\sigma_{f})\)`
+  - LIME: 
+ 
+ `$$f_{t} \sim normal(f_{t-1},\sigma_{f})$$`
 
 ---
 
-#Scrooge
-
-Two paths for economic data (always `\(f_{t} = q_{t}E_{t}\)`)
+#`Scrooge`
 
 - Effort history ("Effort is about twice what it used to be")
 
 `$$\Delta_{t}^{effort} = \frac{effort_{t+1}}{effort_{t}}$$`
 
-`$$\hat{f_{t}}^{effort} = f_{t-1}\Delta_{t-1}$$`
+`$$\hat{effort_{t}}^{data} = effort_{t-1}\Delta_{t-1}$$`
   
 - Incentives history ("prices went up a lot the last few years")
 
 `$$p_t = p_{base}\frac{p^{obs}_t}{\bar{p^{obs}}}$$`
 
-`$$\Pi_{t-1} = p_{t}q_{t}E_{t}B^{c}_{t} - c_{t}E_{t}^{\beta}$$`
+`$$\Pi_{t} \sim p_{t}q_{t}E_{t}B^{c}_{t} - c_{t}E_{t}^{\beta}$$`
 
-`$$\hat{f_{t}}^{econ} = f_{t-1} + f_{msy}(\theta\frac{\Pi_{t-1}}{\Pi_{msy}})$$`
+`$$\hat{effort_{t}}^{econ} = effort_{t-1} + effort_{msy}(\theta\frac{\Pi_{t-1}}{\Pi_{msy}})$$`
 
-`$$f_t \sim normal(\alpha\hat{f_{t}}^{econ} + (1 - \alpha)\hat{f_{t}}^{effort},\sigma_{f})$$`
+- Expected effort is then...
+
+`$$effort_t \sim normal((\alpha)\hat{effort_{t}}^{econ} + (1 - \alpha)\hat{effort_{t}}^{data},\sigma_{f})$$`
 
 ---
 
-#Scrooge
+#`Scrooge`
 
 In words...
 
-- Simulate fisheries using `spasm`
+- Simulate **LOTS** of fisheries using `spasm`
   - Effort dynamics, recruitment regimes, observation error, etc.
 
 - Collect length comps and economic data from simulated fisheries
@@ -191,8 +231,8 @@ In words...
 
 - Fit data using `scrooge`
   - "LIME" prior
-  - Bioeconomic model only
-  - Effort history only
+  - Bioeconomic model only (incentives)
+  - Effort history only (data)
   
 - Assess performance
   - How much does it help/hurt?
@@ -202,14 +242,14 @@ In words...
 
 # How Much Does it Help?
 
-![](ovando-seagrant-2018_files/figure-html/unnamed-chunk-3-1.svg)&lt;!-- --&gt;
+![](scrooge-seagrant-2018_files/figure-html/unnamed-chunk-3-1.svg)&lt;!-- --&gt;
 
 
 ---
 
 # How Much Does it Hurt?
 
-![](ovando-seagrant-2018_files/figure-html/unnamed-chunk-4-1.svg)&lt;!-- --&gt;
+![](scrooge-seagrant-2018_files/figure-html/unnamed-chunk-4-1.svg)&lt;!-- --&gt;
 
 
 ---
@@ -217,7 +257,7 @@ In words...
 # How Does it Compare
 
 
-![](ovando-seagrant-2018_files/figure-html/unnamed-chunk-5-1.svg)&lt;!-- --&gt;
+![](scrooge-seagrant-2018_files/figure-html/unnamed-chunk-5-1.svg)&lt;!-- --&gt;
 
 
 ---
@@ -233,7 +273,7 @@ In words...
 
   - Currently running 100,000's of `scrooge` simulations
   
-  - Calculate metric of interst (RMSE, bias, etc.)
+  - Calculate metric of interest (RMSE, bias, etc.)
   
   - Train predictive algorithm (MARS, random forest)
   
@@ -248,22 +288,95 @@ In words...
 # When Does it Work?
 
 
+![](scrooge-seagrant-2018_files/figure-html/unnamed-chunk-6-1.svg)&lt;!-- --&gt;
+
+---
+
+# When Does it Work?
+
+![](scrooge-seagrant-2018_files/figure-html/unnamed-chunk-7-1.svg)&lt;!-- --&gt;
+
+---
+
+# When Does it Work?
+
+![](scrooge-seagrant-2018_files/figure-html/unnamed-chunk-8-1.svg)&lt;!-- --&gt;
+
+
+---
+
+#  Economic Data are Underutilized 
+
+- Economic data show potential to improve stock assessment
+
+  - Incorporates local knowledge where data is limited
+  
+- Technology will increase ability to collect economic data
+
+  - Mobile market data
+ 
+  - [Global Fishing Watch](http://globalfishingwatch.org/map/)
+  
+- But... 
+
+  - When it's wrong, how wrong is it?
+  
+  - Need empirical data to test
+
 ---
 
 
-# Thank you!
+# Ongoing Work
 
-## Collaborators
+- Integrate demand dynamics
 
+- Catch estimation from total effort
+
+- Assemble testing library
+
+- Test and diagnose performance
+
+- Test against "traditional" stock assessment
+
+- Apply to case study fisheries
+
+  - Channel Islands
+  
+  - Peru
+  
+  - Montserrat
+
+---
+
+layout: true
+
+&lt;div class="seagrant-footer"&gt;&lt;/div&gt; 
+
+---
+
+class: center
+
+# Thanks!
+
+###Collaborators
 - Jason Cope
-- Merril Rudd
+- Merrill Rudd
 - Ray Hilborn
 - Chris Costello
 - Steve Gaines
 
-## Funding
-
+###Funding
 - NMFS Sea Grant Population and Ecosystem Dynamics Fellowship
+###Contact
+**email**: dovando@bren.ucsb.edu
+**github**: DanOvando
+**web**: [weirdfishes.blog](http://www.weirdfishes.blog)
+
+---
+
+# Extras
+
+![](scrooge-seagrant-2018_files/figure-html/unnamed-chunk-9-1.svg)&lt;!-- --&gt;
 
 ---
     </textarea>

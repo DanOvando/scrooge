@@ -1,0 +1,167 @@
+---
+title: "On the Integration of Economic Data in Fisheries Stock Assessment"
+author: "Dan Ovando"
+output: bookdown::pdf_document2
+linkcolor: blue
+bibliography: dissertation.bib
+biblio-style: apalike
+toc: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+
+```{r}
+library(hrbrthemes)
+library(extrafont)
+library(scales)
+library(rstan)
+library(tidyverse)
+library(wesanderson)
+library(patchwork)
+extrafont::loadfonts()
+rstan::rstan_options(auto_write = TRUE)
+
+load(here::here("processed_data","fisheries_sandbox.Rdata"))
+
+# load(here::here("presentations","gaines-lab.Rdata"))
+
+  functions <- list.files(here::here("functions"))
+
+  walk(functions, ~ here::here("functions", .x) %>% source()) # load local functions
+
+  in_clouds <-  F
+
+  run_name <- "v3.0"
+  
+    scrooge_theme <- theme_ipsum(base_size = 10, axis_title_size = 14, strip_text_size = 14)
+
+  theme_set(scrooge_theme)
+  
+  load(file = here::here("presentations","seagrant-presentation.Rdata"))
+```
+
+# Activity Update
+
+The original proposal for this project centered on utilizing data from marine protected area (MPA) monitoring to provide dynamic estimates of fishery status in data-limited contexts. In the course of developing this project and collaboration with colleagues at the University of Washington, it became clear that this proposed project overlapped strongly with methods already being developed by another student. As a result, following consultation with my dissertation committee and my Sea Grant mentor, Dr. Jason Cope, we elected to pivot my project in a new direction. My new focus is development of methods for integrating economic information into data-limited stock assessment, focusing on data from the Channel Islands region of California as a case study.
+
+# Principal Objectives
+
+Many fisheries around the world require management guidance but lack the robust data streams that underpin state-of-the art fisheries management. To resolve this problem, a large and growing suite of "data-limited stock assessments" (DLAs) have emerged, designed to provide management advice using relatively minimal data (but generous assumptions). Nearly all of the quantitative DLAs established rely exclusively on fish-centric data, for example length frequency distributions [e.g. @Gedamke2006; @Hoenig1983; @Hordyk2016], or catch data [e.g. models summarized in @Rosenberg2017; @Carruthers2014]. Specifically, DLAs generally look for the suite of data that would be used in a "traditional" stock assessment, assess what are missing, and consider ways to substitute the missing data with assumptions while utilizing the pieces of biological data that are available.  While these types of data are clearly critical to proper understanding of a fishery's status, they also ignore the potential light that the economic history of a fishery may shed on its current biological status. This project proposes to address this challenge, by developing a quantitative method for integrating economic information into the stock assessment process, which we can loosely term economic-DLAs (eDLAs).
+
+Why should we try and utilize economic data in stock assessment? Fisheries are inherently economic institutions. @Gordon1954 explained how economic incentives explain the development of a fishing industry. @Hardin1968 extended these principles to make the case that left unregulated these economic incentives would lead to the inevitable over-exploitation of fishery resources. @Ostrom1990 showed that this tragedy could be avoided given an improved set of economic incentives. More recently, a suite of papers and methods have sought to better incorporate the ways that economic incentives drive fisheries outcomes [@Nielsen2017]. While fisheries science has generally been focused on measuring the effects of fishing behavior on fish populations [@Smith1994a], it is clear that economic factors substantially drive the fate of fished populations. Therefore, if we agree that economic incentives in part drive the development of fisheries, then data on the history of those incentives should be informative on the state of that fishery over time. For example, knowledge of the arrival of a new buyer that dramatically increases the ex-vessel price of a given species suggests a strong incentive to increase fishing pressure. Conversely, dramatic increases in fuel prices or demand might indicate a drop in fishing activity. This Sea Grant project presents a formalized framework for integrating these types of data, and in doing so address two key shortcomings with many current DLAs. 
+
+First, the vast majority of DLAs are centered on use of one stream of data. This is both due to practical realities (in many cases only one source of biological data are available), and model simplification. However, basing management solely on one stream of evidence is risky at best. Integrating economic data can provide a second stream of information that can commonly be collected, even if alternative sources of biological data are inaccessible. This proposed eDLA framework provides a method for formally utilizing a perhaps more readily available and informative stream of data that generally goes untouched in data-limited fisheries.
+
+Second, length based methods in particular are among the most prevalent methods of DLA, and to good reason. Robust sampling of length frequencies can provide a quick and cheap estimate of stock status, even with only one year of data [e.g. @Hordyk2016]. However, the performance of these methods is highly dependent on the validity of key assumptions, particularly that the population is at equilibrium, and that recruitment deviates are on average 0 (and are not strongly auto-correlated). Violation of these assumptions can lead to dramatically incorrect estimates of stock status. Ideally then we would like to relax these strict equilibrium assumptions, for example by explicitly estimating recruitment deviates over time from a time series of length data. However, given solely length data, it can be very difficult to separate recruitment pulses from changes in fishing mortality. This proposed framework seeks to resolve this challenge by providing informative priors (or outright estimates) on changes of fishing mortality rate over time, allowing for improved estimates of fishing mortality and recruitment deviates over time from primarily length-based DLAs.
+
+Taken together then, the goal of this project is provide a quantitative framework for integrating often present but rarely used economic data into DLAs. Successfully applied, this approach will help provide managers with an additional stream of information with which to interpret stock status and guide management, as well as improve the ability of length-based DLAs to operate in non-equilibrium conditions. The first version of the model is completed and undergoing performance testing at the moment. I present below a brief summary of the methods, early results, and next steps. 
+
+# Methods
+
+## Model Structure
+
+This method, which we currently call `scrooge`, builds off of the `LIME` package developed by @Rudd2017. `LIME` is built around an age-structure operating model, that takes as inputs data on the life history of the species in question, as well as whatever combinations of length composition, catch, and CPUE data are available.  Using these inputs, `LIME` provides dynamic estimates of selectivity, fishing mortality, and spawning potential ratio (SPR). In the case where the only source of data are length compositions, for a given time series of length composition data of length *t*, `LIME` estimates selectivity, random effects for recruitment deviates, and penalized fixed effects for fishing mortality that best fit the observed length composition data. 
+
+Given *t* time steps, it is not possible to estimate *t* recruitment events, *t* fishing mortalities, and the associated standard deviations ($\sigma$'s) for each of these vectors, without assigning some prior or penalty to the model. `LIME` overcomes this challenge by assuming that recruitment is on average described by a Beverton-Holt [@Beverton1956] recruitment function, recruitment in time *t* ($r_t$) is distributed
+
+$$r_{t} \sim BH(SSB,SSB_{0},h)e^{r^{dev}_{t} -\sigma_r^{2}/2}$$
+
+
+$$r^{dev}_{t} \sim normal(0, \sigma_r)$$
+
+`LIME` assumes that fishing mortality in time *t* ($f_t$) is distributed 
+
+ $$f_{t} \sim normal(f_{t-1},\sigma_{f})$$
+ 
+ If $\sigma_f$ is large, then *f* can vary wildly year to year, and the smaller $\sigma_f$ becomes the less *f* should change year to year. 
+ 
+The key advance of this project and the `scrooge` package is to utilize economic data to improve on the estimate of $f_t$. 
+
+A standard economic model of an open-access fishery says that 
+
+$$effort_{t} = effort_{t - 1} + \theta{profits_{t-1}}$$
+
+In other words, if there are lots of profits to be made, effort will increase, and vice versa. When paired with a model of a fished population, this will lead to the classic open-access scenario that will reach equilibrium when all rents in the fishery have been dissipated (i.e. profits are zero). 
+
+
+We can model $profits_{t}$ as
+
+$$profits_{t} \sim p_{t}q_{t}Effort_{t}B^{c}_{t} - c_{t}E_{t}^{\beta}$$
+
+Where *p* is price, *q* is a catchability coefficient, *B* is commercially exploitable biomass, *c* is cost per unit effort, and $\beta$ allows for heterogeneity in fleet skill (i.e. some units of effort are cheaper to exert than others, and the cheapest get used first). 
+
+`scrooge` steps in by allowing us to explicitly incorporate knowledge on the relative changes in *p*, *q*, and *c*. Suppose for example that we have knowledge that prices increased by 25% from one year to the next. `scrooge` assigns an arbitrary base price in its operating model, which will be the price in time *t*. The price in time $t+1$ will then be $1.25*p_{t}$. The profits in time $t+1$ can then be calculated using the new price, and the effort in time $t+2$ will reflect this increased profit resulting in the spike in prices. This same exercise can be carried out for any combination of changes in *p*, *c*, and *q*. 
+
+The resulting predicted effort resulting from these "incentive priors" is then 
+
+$$\hat{effort_{t}}^{incentive} = effort_{t-1} + effort_{msy}(\theta\frac{profits_{t-1}}{profits_{msy}})$$
+
+Where $profits_{t-1}$ incorporate the data on the changes in the incentive structure of the fishery (changes in *p*, *c*, and *q*). 
+
+In some cases though, we may also have information on the changes in the actual effort in the fishery, not just the incentives driving the effort (this is especially common in smaller isolated fishing communities). For example, if we have information that effort increased by 25% from one year to the next, then our prior on effort in time *t* is 
+
+$$\hat{effort_{t}}^{data} = effort_{t-1}*1.25$$
+
+We can call this type of information a "data prior"
+
+`scrooge` integrates these incentive and data priors into the estimation of $effort_t$ per
+
+$$effort_t \sim normal((\alpha)\hat{effort_{t}}^{incentive} + (1 - \alpha)\hat{effort_{t}}^{data},\sigma_{f})$$
+
+This allows for `scrooge` to use just the incentive prior, just the data prior, or a weighted mean of the two. 
+
+To put this in words then, `scrooge` allows users to use historic data on prices, costs, technology (*q*), and effort to provide informative priors on the effort in time *t*. 
+
+The model is fit in a Bayesian hierarchical manner using R [@RCoreTeam2018] and Stan (http://mc-stan.org/, @StanDevelopmentTeam2018). We choose to use Stan over Template Model Builder [@Kristensen2016] for this phase to better reflect the Bayesian philosophy of the underlying model and to improve debugging. Underlying code can be found [here](https://github.com/DanOvando/scrooge). 
+
+## Diagnostics
+
+We developed a spatially explicitly age structured bio-economic model to test the performance of `scrooge`. This operating model allows for generation of length composition data from a fishery with fully flexibly recruitment (e.g. pre or post settlement recruitment, degrees of steepness) and effort dynamics (e.g. open access, constant effort), along with sampling error. So, for example we can simulate the trajectory of fishing mortality rates in an open access fishery that experiences a sudden spike in prices, sample length data from this fishery, use `scrooge` to estimate the fishing mortality rates over time, and then compare the observed (true) and predicted values of *f*. 
+
+In order to provide more useful diagnostics, we are currently repeating this process over hundreds of thousands of fishery scenarios. This allows us to calculate the performance of `scrooge` for a variety of metrics (e.g. root mean squared error, bias) under a range of fishery outcomes. From there, we are training predictive models that allows us to take a new fishery and ask how likely `scrooge` is to perform well for that particular fishery. 
+
+# Results
+
+We can first ask, if the underlying assumptions of `scrooge` are correct (i.e. effort responds to profits and profits are described by the equations described above), how much does it improve our estimates of fishing mortality *f*? Consider two models, one that uses economic data (in the `scrooge` manner described above), and one that ignores economic data (uses that same methods as `LIME`) (Fig.\@ref(fig:helps-plot)). Including the economic data using `scrooge` dramatically reduces both bias and rmse. 
+
+```{r helps-plot, fig.cap = "Observed (black points) and predicted (dashed lines) fishing mortality rates over time. Red areas use economic data per scrooge, grey ignore them. Fishing mortality rates are driven by economic incentives"}
+helps_plot
+```
+
+However, this result should be somewhat obvious: giving the estimation model more information on the true operating model should improve performance. A more informative question then may be, how much does it hurt if the model assumptions are wrong? We can repeat the same exercise as above, but now breaking the assumptions of the model (fishing mortality is now completely independent of incentives). We see that `scrooge` still performs comparably well to the model that ignores the economic data, even though its assumptions are violated. In other words, we see evidence that `scrooge` can improve performance when it its assumptions are right, but doesn't necessarily hamper performance when its assumptions are wrong (Fig.\@ref(fig:hurts-plot)). 
+
+```{r hurts-plot, fig.cap = "Observed (black points) and predicted (dashed lines) fishing mortality rates over time. Red areas use economic data per scrooge, grey ignore them. Fishing mortality rates are independent of economic incentives"}
+hurts_plot
+```
+
+## Predicting Performance
+
+The examples in Figs \@ref(fig:helps-plot)-\@ref(fig:hurts-plot) demonstrate the potential of the mode, but are only two examples. And of course any model will work will in some circumstances and poorly in others. The simulation framework we have developed allows for robust testing of `scrooge` across a range of scenarios. For example, drawing from a sampling of our simulation runs, we can consider the bias of the model under a range of scenarios (Fig.\@ref(fig:bias-plot)). This allows to for example see that when the model uses incentive priors in the manner described above, but the true catches are supplied and are exogenous to the incentives, the model can be highly positively biased. 
+
+```{r bias-plot, fig.cap = "Distribution of bias in estimated fishing mortality across a range of model scenarios"}
+bias_plot
+```
+
+
+We are also developing predictive algorithms that will allows us to predict how well `scrooge` will perform for a new fishery. These kinds of algorithms are important since the performance of a model is likely to be the result of a complex set of non-linear interactions among variables. For example, looking at the variable importance scores for different metrics used in predicting rmse, we see that the importance of different factors varies dramatically across model structures. For the model that ignores economic data, the degree of recruitment variation is an important predictor of performance, while for the model that uses economic data with incentive priors, the size of the species and the variability in prices and technology matter much more (Fig.\@ref(fig:varimp-plot)).
+
+```{r varimp-plot, fig.cap = "Variable importance scores from a random forest model trained to predict rmse of three candidate models"}
+
+varimp_plot
+
+```
+
+# Next Steps
+
+We are in the closing stages of this project, and our next steps include
+
+- Completion of simulation testing and predictive algorithm development
+
+- Testing of `scrooge` model on economic and length composition data from Channel Island fisheries. 
+
+- Roll out of R package for `scrooge`
+
+# Works Cited
