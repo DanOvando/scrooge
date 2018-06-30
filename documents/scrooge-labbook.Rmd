@@ -3227,9 +3227,6 @@ OK, it's time to make some decisions.
 So here's a simple question. What does profit per unit effort tell you that catch per unit effort doesn't? If I'm being honest, getting people to report their average catches per fishing trip seems easier than profits. One advantage is that it gives you something like a reference point: the closer profits per unit effort get to 0, the closer you are to open access. But what if you just observe a bunch of p per unit e at levels above 0, why is that any more or less informative than just CPUE? At least from the perspective of the model, there isn't anything. bummer. The only real advantage there would be if you felt that profit per units effort was easier to measure than catch per unit effort. 
 
 
-```{r}
-
-```
 
 # Sea Grant feedback
 

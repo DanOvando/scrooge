@@ -9,9 +9,43 @@ biblio-style: apalike
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 ```
 
+```{r}
+library(hrbrthemes)
+library(extrafont)
+library(scales)
+library(rstan)
+library(tidyverse)
+library(wesanderson)
+library(patchwork)
+extrafont::loadfonts()
+rstan::rstan_options(auto_write = TRUE)
+
+
+  scrooge_theme <- theme_ipsum(base_size = 14, axis_title_size = 18)
+
+  theme_set(scrooge_theme)
+
+load(here::here("processed_data","fisheries_sandbox.Rdata"))
+
+# load(here::here("presentations","gaines-lab.Rdata"))
+
+  functions <- list.files(here::here("functions"))
+
+  walk(functions, ~ here::here("functions", .x) %>% source()) # load local functions
+
+  in_clouds <-  F
+
+  run_name <- "v3.0"
+  
+    scrooge_theme <- theme_ipsum(base_size = 16, axis_title_size = 18, strip_text_size = 18)
+
+  theme_set(scrooge_theme)
+
+
+```
 
 
 # Introduction
@@ -120,7 +154,191 @@ economic shock explanation and illustration
 
 # Results
 
+
 ## Case Studies
+
+Focus on performance using economic priors and LIME priors; more cohesive than also then trying to compare to LIME/LBSPR. 
+
+Save that for the mega-run, where you can then say something about when different models are likely to perform well, by predicting RMSE as a function of model with effects for each model scenario. 
+
+For the case studies, the point is to highlight the general performance of the model. So, let's hold fishery constant, but now run the assessments no economic prior, and then with all incentive, all effort, and equal weighting, and compare performance
+
+So you're running this here now, wouldn't this potentially be easier just to pull from your bank of saved runs? i.e. find the experiment numbers that match those, and pull in the assessment results? Though of course that gets tricky since it depends on having all of those saved and ready to go, doesn't allow for easy modification, so if this doesn't take that long I kind of like re-running it on the fly as long as runtime isn't too prohibitive. 
+
+```{r case-studies}
+
+case_studies <- purrr::cross_df(list(scenario = c("simple","complex"), 
+                                     economic_model = c(1,0),
+                                    effort_data_weight = c(0,0.5,1))) %>% 
+  filter(!(economic_model == 0 & effort_data_weight > 0))
+
+
+simple <- fisheries_sandbox %>% 
+  filter(sci_name == "Lutjanus campechanus",
+         steepness == 0.6, 
+         sigma_r == min(sigma_r),
+         sigma_effort == min(sigma_effort),
+         price_cv == min(price_cv),
+         cost_cv == min(cost_cv),
+         q_cv == min(q_cv),
+         q_ac == min(q_ac),
+         obs_error == min(obs_error),
+         fleet_model == "constant-effort") %>% 
+  mutate(scenario = "simple")
+
+
+complex <- fisheries_sandbox %>% 
+  filter(sci_name == "Lutjanus campechanus",
+         steepness == 0.9, 
+         sigma_r == max(sigma_r),
+         sigma_effort == max(sigma_effort),
+         price_cv == max(price_cv),
+         cost_cv == max(cost_cv),
+         q_cv == max(q_cv),
+         q_ac == max(q_ac),
+         obs_error == min(obs_error),
+         fleet_model == "open-access") %>% 
+  mutate(scenario = "complex")
+
+temp_studies <- 
+
+case_studies <- case_studies %>% 
+  left_join(simple %>% bind_rows(complex) %>% nest(-scenario), by = "scenario")
+  
+  
+case_studies <- case_studies %>%
+  mutate(assessment = pmap(
+  list(
+  fishery = data,
+  experiment = scenario,
+  economic_model = economic_model,
+  effort_data_weight = effort_data_weight
+  ),
+  run_and_judge_scrooge
+  ))
+
+case_studies$assessment[[1]]$scrooge_performance[[1]]$comparison_plot + 
+  lims(x = c(40,65))
+  
+
+case_studies$assessment[[2]]$scrooge_rec_performance[[1]]$comparison_plot +
+  lims(x = c(40, 65))
+  
+
+case_studies$assessment[[2]]$scrooge_fit[[1]] %>% rstanarm::launch_shinystan()
+
+
+
+case_studies <- case_studies %>% 
+  mutate(f_t_hat = map(assessment, ~map_df(.x$processed_scrooge,"f_t")))
+
+
+
+case_studies <- case_studies %>% 
+  mutate(f_t = map(data, ~ map_df(.x$prepped_fishery,"simed_fishery") %>% 
+                     group_by(year) %>% summarise(f = unique(f))))
+
+
+true_f <- case_studies %>% 
+  select(scenario, f_t) %>% 
+  unique() %>% 
+  unnest()
+  
+
+f_performance <- case_studies %>%
+  select(-data, -assessment,-f_t) %>%
+  unnest() %>%
+  mutate(effort_data_weight = if_else(economic_model == 0, 99, effort_data_weight)) %>% mutate(effort_data_weight = factor(effort_data_weight))
+
+f_summary <- f_performance %>%
+  group_by(effort_data_weight, scenario, year) %>%
+  summarise(
+  lower = quantile(value, 0.1),
+  upper = quantile(value, 0.9),
+  mean_f = mean(value),
+  median_f = median(value)
+  ) %>%
+  ungroup() %>% 
+  mutate(effort_data_weight = factor(effort_data_weight))
+
+
+f_performance_plot <- f_summary %>%
+  ggplot()  +
+  geom_ribbon(aes(
+  year,
+  ymin = lower,
+  ymax = upper,
+  fill = effort_data_weight
+  ),
+  alpha = 0.25) +
+  geom_line(aes(year, mean_f, color =effort_data_weight )) +
+  geom_line(data = true_f %>% filter(year %in% unique(f_performance$year)), aes(year, f)) +
+  facet_wrap(~ scenario)
+  
+
+f_rmse_bias <- f_performance %>%
+  left_join(true_f, by = c("year","scenario")) %>% 
+  group_by(iteration, scenario, effort_data_weight) %>%
+  summarise(rmse = sqrt(mean((value - f) ^ 2)),
+            bias = median((value - f) / f)) %>%
+  ungroup() %>%
+  group_by(effort_data_weight) %>%
+  mutate(mean_bias = mean(bias),
+         mean_rmse = mean(rmse))  %>% 
+  ungroup()
+
+rmse_plot <- f_rmse_bias%>%
+  ggplot() +
+  geom_density(
+    aes(rmse, fill = effort_data_weight),
+    alpha = 0.5,
+    color = NA,
+    show.legend = F
+  ) +
+  geom_vline(aes(xintercept = 0), size = 1, linetype = 2) +
+  scale_y_continuous(expand = c(0, 0)) +
+  labs(x = "RMSE") +
+  theme(
+    legend.position = "bottom",
+    axis.text.y = element_blank(),
+    axis.title.y = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.margin = unit(c(.1, .1, .1, .1), "lines")
+  ) + 
+  facet_wrap(~scenario)
+
+
+bias_plot <- f_rmse_bias %>%
+  ggplot() +
+  geom_density(
+    aes(bias, fill = effort_data_weight),
+    alpha = 0.5,
+    color = NA,
+    show.legend = F
+  ) +
+  geom_vline(aes(xintercept = 0), size = 1, linetype = 2) +
+  scale_y_continuous(expand = c(0, 0)) +
+  labs(x = "Bias") +
+  theme(
+    legend.position = "bottom",
+    axis.text.y = element_blank(),
+    axis.title.y = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.margin = unit(c(.1, .1, .1, .1), "lines")
+  ) + 
+  facet_wrap(~scenario)
+
+
+  (f_performance_plot |
+     (rmse_plot / bias_plot)) + plot_layout(ncol = 2, widths = c(2, 1))
+
+
+
+```
+
+
 
 all with the same fishus idealus 
 

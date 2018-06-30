@@ -333,14 +333,13 @@ model_trends_plot +
 
 
 ```{r}
-rmse_plot
-```
+````
 
 ---
 
 # When Does it Work?
 
-```{r}
+```{r bias-plot, fig.cap = "Distribution of bias in estimated fishing mortality across a range of model scenarios"}
 bias_plot
 ```
 
