@@ -1,6 +1,4 @@
 run_and_judge_scrooge <- function(fishery,
-                                  window = 20,
-                                  period = "end",
                                   total_iterations = 4000,
                                   warmup = 2000,
                                   adapt_delta = 0.8,
@@ -11,7 +9,10 @@ run_and_judge_scrooge <- function(fishery,
                                   experiment_name = "blah",
                                   max_f_v_fmsy_increase = 0.5,
                                   cv_effort = 0.25,
-                                  max_expansion = 1.5
+                                  max_expansion = 1.5,
+                                  window = 10,
+                                  period = "end",
+                                  prop_years_lcomp_data = 1
                                   )
 {
 
@@ -19,8 +20,9 @@ run_and_judge_scrooge <- function(fishery,
   mutate(prepped_fishery = map(
     prepped_fishery,
     subsample_data,
-    window = 20,
-    period = "middle"
+    window = window,
+    period = period,
+    prop_years_lcomp_data = prop_years_lcomp_data
   )) %>%
   mutate(
     scrooge_fit = pmap(
@@ -63,7 +65,7 @@ run_and_judge_scrooge <- function(fishery,
            predicted = processed_scrooge),
       judge_performance,
       observed_variable = rec_dev,
-      predicted_variable = "log_rec_dev_t"
+      predicted_variable = "rec_dev_t"
     )
   )  %>%
   mutate(lcomps = map2(

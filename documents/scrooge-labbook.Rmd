@@ -3231,3 +3231,147 @@ So here's a simple question. What does profit per unit effort tell you that catc
 # Sea Grant feedback
 
 - Think about dynamics of food motivated fisherie
+
+
+# Final steps
+
+So at the moment, are are providing the same data in every year: all the economic priors are doing is help you separate out F and recruitment. And, it turns out that's not all that useful. Not really surprising there in any real way given that in order to stop total chaos youre not letting F change all that much year to year, so the generic prior on that isn't a bad idea. You could mess with the sigma priors a bit here to try and tighten things up there, but I'm not really happy with results being that sensitive to that esoteric of a choice. 
+
+You should also explore though why it is that the first year of effort is so precisely estimated, unlike first year of recruitment. 
+
+So, the story here is that if you have 10-20 years of highly representative length data, you do a decent job. Maybe economic priors tighten up the intervals a bit. 
+
+That's not really all the common of a situation though. So, what you should be testing now is what if you only have say 1-5 years of length data, but a few years of economic priors. This is a *MUCH* more realistic scenario. You are already set up to only have a few years of length comps, so I think this should only take a little wrangling on the data-input side to get this to work properly. 
+
+One other thing you should consider. Aside form letting effort be just a prior on F, what if it's data? Still need to estimate q, and then fit observed vs predicted effort. So this would be for a case where you think you have a handle on the scale of total effort in the fishery, and you want to translate that effort into an F. Interesting for a few reasons. Allows the q to help translate the relative impact of that effort on the population (could have the trend right but the magnitude wrong), e.g. if you are sampling representative effort from a fishery but only a small portion of it. But that would actually back out estimated catch which would be very cool (whoop no since that would require something about r0 in there). So now this would be a joint likelihood with the effort and lengths... 
+
+In that way, you could use the economic priors to help guide F, and then confront those priors with data from the fishery. The weighting could then come down to how much creedence you want to give to the effort data itself, instead of just in the in the prior itself. 
+
+Seems like a good discussion to have with Jason; don't scrap the current method, but definitely build this in. For that, sample the effort data through some process, probably negative binomial to allow discrete but overdispersed?
+
+Phase 1: More econ prior time series than length data
+
+Phase 2: Turning effort into data instead of just priors
+
+
+## phase 1
+
+Easiest option is to build it into subsample_data
+
+```{r}
+
+
+case_studies <- purrr::cross_df(list(scenario = c("complex"), 
+                                     economic_model = c(1,0),
+                                    effort_data_weight = c(0))) %>% 
+  filter(!(economic_model == 0 & effort_data_weight > 0))
+
+
+
+simple <- fisheries_sandbox %>%
+  filter(
+  sci_name == "Lutjanus campechanus",
+  steepness == 0.6,
+  sigma_r == min(sigma_r),
+  sigma_effort == min(sigma_effort),
+  price_cv == min(price_cv),
+  cost_cv == min(cost_cv),
+  q_cv == min(q_cv),
+  q_ac == min(q_ac),
+  obs_error == min(obs_error),
+  fleet_model == "constant-effort"
+  ) %>%
+  mutate(scenario = "simple") 
+
+
+complex <- fisheries_sandbox %>% 
+  filter(sci_name == "Lutjanus campechanus",
+         steepness == 0.9, 
+         sigma_r == max(sigma_r),
+         sigma_effort == max(sigma_effort),
+         price_cv == max(price_cv),
+         cost_cv == max(cost_cv),
+         q_cv == max(q_cv),
+         q_ac == max(q_ac),
+         obs_error == min(obs_error),
+         fleet_model == "open-access") %>% 
+  mutate(scenario = "complex")
+
+case_studies <- case_studies %>% 
+  left_join(simple %>% bind_rows(complex) %>% select(-economic_model) %>% nest(-scenario), by = "scenario")
+  
+
+case_studies <- case_studies %>%
+  mutate(assessment = pmap(
+    list(
+      fishery = data,
+      experiment = scenario,
+      economic_model = economic_model,
+      effort_data_weight = effort_data_weight
+    ),
+    run_and_judge_scrooge,
+    prop_years_lcomp_data = .1,
+    window = 10,
+    period = "middle",
+    max_f_v_fmsy_increase = 3,
+    cv_effort = .5
+  ))
+
+
+case_studies <- case_studies %>% 
+  mutate(f_t_hat = map(assessment, ~map_df(.x$processed_scrooge,"f_t")))
+
+
+
+case_studies <- case_studies %>% 
+  mutate(f_t = map(data, ~ map_df(.x$prepped_fishery,"simed_fishery") %>% 
+                     group_by(year) %>% summarise(f = unique(f))))
+
+
+true_f <- case_studies %>% 
+  select(scenario, f_t) %>% 
+  unique() %>% 
+  unnest()
+  
+
+f_performance <- case_studies %>%
+  select(-data, -assessment,-f_t) %>%
+  unnest() %>%
+  mutate(effort_data_weight = if_else(economic_model == 0, 99, effort_data_weight)) %>% mutate(effort_data_weight = factor(effort_data_weight))
+
+f_summary <- f_performance %>%
+  group_by(effort_data_weight, scenario, year) %>%
+  summarise(
+  lower = quantile(value, 0.1),
+  upper = quantile(value, 0.9),
+  mean_f = mean(value),
+  median_f = median(value)
+  ) %>%
+  ungroup() %>% 
+  mutate(effort_data_weight = factor(effort_data_weight))
+
+
+f_performance_plot <- f_summary %>%
+  ggplot()  +
+  geom_ribbon(aes(
+  year,
+  ymin = lower,
+  ymax = upper,
+  fill = effort_data_weight
+  ),
+  alpha = 0.25) +
+  geom_line(aes(year, mean_f, color =effort_data_weight )) +
+  geom_line(data = true_f %>% filter(year %in% unique(f_performance$year)), aes(year, f)) +
+  facet_wrap(~ scenario)
+
+```
+
+
+
+
+
+
+
+
+
+

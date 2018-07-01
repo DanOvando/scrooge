@@ -1,5 +1,5 @@
 process_scrooge <-
-  function(fit, sampled_years,to_tidy = c("f_t", "n_tl", "rec_dev_t","log_rec_dev_t")
+  function(fit, sampled_years,to_tidy = c("f_t", "n_tl", "rec_dev_t")
                             ) {
 
     fits <- rstan::extract(fit)

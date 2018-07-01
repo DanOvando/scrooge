@@ -47,7 +47,7 @@ fit_scrooge <-
     data$cv_effort <-  cv_effort
     }
 
-    p_response = max_f_v_fmsy_increase
+    p_response <- max_f_v_fmsy_increase
 
     f_msy <-
       nlminb(
