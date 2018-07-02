@@ -3258,12 +3258,15 @@ Phase 2: Turning effort into data instead of just priors
 
 Easiest option is to build it into subsample_data
 
+Ah interesting, I think steepness is where the bias is coming in from! Seems like the model is unbiased when steepness is low, but when sigma R is high and steepness is high, things become biased. Check and see what your default steepness is. So in general,probably shouldn't be passing steepness as data, but rather as a guess. 
+
+
 ```{r}
 
 
-case_studies <- purrr::cross_df(list(scenario = c("complex"), 
+case_studies <- purrr::cross_df(list(scenario = c("simple","complex"), 
                                      economic_model = c(1,0),
-                                    effort_data_weight = c(0))) %>% 
+                                    effort_data_weight = c(1,0))) %>% 
   filter(!(economic_model == 0 & effort_data_weight > 0))
 
 
@@ -3286,7 +3289,7 @@ simple <- fisheries_sandbox %>%
 
 complex <- fisheries_sandbox %>% 
   filter(sci_name == "Lutjanus campechanus",
-         steepness == 0.9, 
+         steepness == max(steepness), 
          sigma_r == max(sigma_r),
          sigma_effort == max(sigma_effort),
          price_cv == max(price_cv),
@@ -3314,13 +3317,149 @@ case_studies <- case_studies %>%
     window = 10,
     period = "middle",
     max_f_v_fmsy_increase = 3,
-    cv_effort = .5
+    cv_effort = 0.25
   ))
 
 
 case_studies <- case_studies %>% 
   mutate(f_t_hat = map(assessment, ~map_df(.x$processed_scrooge,"f_t")))
 
+
+
+case_studies <- case_studies %>% 
+  mutate(f_t = map(data, ~ map_df(.x$prepped_fishery,"simed_fishery") %>% 
+                     group_by(year) %>% summarise(f = unique(f))))
+
+
+true_f <- case_studies %>% 
+  select(scenario, f_t) %>% 
+  unique() %>% 
+  unnest()
+  
+
+f_performance <- case_studies %>%
+  select(-data, -assessment,-f_t) %>%
+  unnest() %>%
+  mutate(effort_data_weight = if_else(economic_model == 0, 99, effort_data_weight)) %>% mutate(effort_data_weight = factor(effort_data_weight))
+
+f_summary <- f_performance %>%
+  group_by(effort_data_weight, scenario, year) %>%
+  summarise(
+  lower = quantile(value, 0.1),
+  upper = quantile(value, 0.9),
+  mean_f = mean(value),
+  median_f = median(value)
+  ) %>%
+  ungroup() %>% 
+  mutate(effort_data_weight = factor(effort_data_weight))
+
+
+
+f_performance_plot <- f_summary %>%
+  ggplot()  +
+  geom_ribbon(aes(
+  year,
+  ymin = lower,
+  ymax = upper,
+  fill = effort_data_weight
+  ),
+  alpha = 0.25) +
+  geom_line(aes(year, mean_f, color =effort_data_weight )) +
+  geom_point(data = true_f %>% filter(year %in% unique(f_performance$year)), aes(year, f)) +
+    geom_line(data = true_f %>% filter(year %in% unique(f_performance$year)), aes(year, f)) +
+  facet_wrap(~ scenario) 
+
+```
+
+
+#phase 2
+
+
+So now, let's try passing the actual effort data in
+
+```{r}
+
+
+case_studies <- purrr::cross_df(list(scenario = c("complex"), 
+                                     economic_model = c(0),
+                                    effort_data_weight = c(0))) %>% 
+  filter(!(economic_model == 0 & effort_data_weight > 0))
+
+
+
+
+update_data <- function(prepped_fishery) {
+  prepped_fishery$scrooge_data <-
+  prepare_scrooge_data(
+  fish = prepped_fishery$fish,
+  fleet = prepped_fishery$fleet,
+  sim = prepped_fishery$simed_fishery,
+  bias = 0,
+  obs_error = 0,
+  economic_model = 0,
+  cv_effort = 0
+  )
+  
+  return(prepped_fishery)
+  
+}
+
+simple <- fisheries_sandbox %>%
+  filter(
+  sci_name == "Lutjanus campechanus",
+  steepness == 0.6,
+  sigma_r == min(sigma_r),
+  sigma_effort == min(sigma_effort),
+  price_cv == min(price_cv),
+  cost_cv == min(cost_cv),
+  q_cv == min(q_cv),
+  q_ac == min(q_ac),
+  obs_error == min(obs_error),
+  fleet_model == "constant-effort"
+  ) %>%
+    mutate(scenario = "simple") %>% 
+    mutate(prepped_fishery =  map(prepped_fishery, update_data))
+
+
+
+complex <- fisheries_sandbox %>% 
+  filter(sci_name == "Lutjanus campechanus",
+         steepness == max(steepness), 
+         sigma_r == max(sigma_r),
+         sigma_effort == max(sigma_effort),
+         price_cv == max(price_cv),
+         cost_cv == max(cost_cv),
+         q_cv == max(q_cv),
+         q_ac == max(q_ac),
+         obs_error == min(obs_error),
+         fleet_model == "open-access") %>% 
+  mutate(scenario = "complex") %>% 
+  mutate(prepped_fishery =  map(prepped_fishery, update_data))
+
+case_studies <- case_studies %>% 
+  left_join(simple %>% bind_rows(complex) %>% select(-economic_model) %>% nest(-scenario), by = "scenario")
+  
+
+case_studies <- case_studies %>%
+  slice(1) %>% 
+  mutate(assessment = pmap(
+    list(
+      fishery = data,
+      experiment = scenario,
+      economic_model = economic_model,
+      effort_data_weight = effort_data_weight
+    ),
+    run_and_judge_scrooge,
+    prop_years_lcomp_data = .1,
+    window = 10,
+    period = "middle",
+    max_f_v_fmsy_increase = 3,
+    cv_effort = .5,
+    scrooge_file = "scrooge_v2"
+  ))
+
+case_studies <- case_studies %>% 
+  mutate(f_t_hat = map(assessment, ~map_df(.x$processed_scrooge,"f_t")))
 
 
 case_studies <- case_studies %>% 
@@ -3365,6 +3504,23 @@ f_performance_plot <- f_summary %>%
   facet_wrap(~ scenario)
 
 ```
+
+idiot. no wonder the prior f thing is working so well: you're giving the model q!!!!! it needs to estimate or fix it. Whoops no that's not entirely right. At the moment, you hard wired 0.1 as q into prepare scrooge data. But, it is true that that the way you have it coded right now, if you were to pass it a time series of q, the non-economic model assessment would gain access to that information. So broadly, make sure that's not happening. 
+
+Regardless, at the moment, by fixing q at a number, you slide effort up and down to translate those qs into F, since the actual scale of effort doesn't really matter to you. 
+
+That presents a problem now though in the case where you are estimating the actual effort, since now q matters. So, you need to either estimate q, or estimate the trend in effort instead of the total effort itself. That seems like it might do the trick, since the idea is simply to say the effort data helps you with the trend, and the length data help you understand is that a lot or a little of effort.
+
+Once you have effort data, treating it as anything other than data doesn't make much sense. It can be used to inform a prior on a latent variable, but you're not really confronting a model with data if you try and fit to the effort, unless you think about as estimating observation error in the effort 
+
+So, without effort data, you're in friendly territory of using incentive priors. With effort data, you're faced with two general choices. You can treat it as data, and use it to improve your estimates of F. In that case, you'd need to translate between the effort to F by estimating q. Alternatively, you could do what you're doing now and use the effort data as another part of the likelihood, where you're saying given the length data and priors, what is the likelihood of the effort data? You'd still need to estimate q to make this work, and now you'd be estimating observation error in the effort data. Not really a big fan of this for a few reasons. Instead of using the effort data to guide your model, you're almost using the effort data to ask more of the length data alone. "given effort, predict effort" is a pretty silly statement. 
+
+So, you're back to what to do with the effort data that are given to you. At the moment, it's coming as a prior on the rate of change of effort. So, the effort you estimate, given the fixed q's dictates F, and this just helps guide where F should go year to year. 
+
+An alternative would be to say that effort data are effort data. Now, you need to translate those efforts into Fs, which you'd need to do by a q. So you'd need to either estimate a q, or a multiplier on effort to scale it relative to the q. Not bad, but gets comlicated to think about how to code that in, since you can't have if statements in the parameter block, so hard to say estimate q sometimes, and not others. 
+
+One option would be to set sigma effort to be very very low if you want to treat the percent change effort as closer to "data". That would really force effort to do exactly what you want it do to
+
 
 
 

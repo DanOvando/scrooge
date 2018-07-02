@@ -35,6 +35,8 @@ fit_scrooge <-
 
     data$r0 <- r0
 
+    data$h <- 0.8
+
     data$f_init_guess <- fish$m * init_f_v_m
 
     data$max_expansion <-  max_expansion
@@ -42,6 +44,12 @@ fit_scrooge <-
     data$max_window <-  max_window
 
     data$effort_data_weight <-  effort_data_weight
+
+    if (economic_model == 0){
+
+      data$q_t <- rep(mean(data$q_t), length(data$q_t))
+
+    }
 
     if (is.na(cv_effort) == F){
     data$cv_effort <-  cv_effort
@@ -165,18 +173,6 @@ fit_scrooge <-
           p_response = p_response * exp(rnorm(1, 0, .1))
         )
       )
-
-
-    # inits <-
-    #   map(
-    #     1:chains,
-    #     ~ list(
-    #       base_effort = 1 *  exp(rnorm(1, 0, .1)),
-    #       p_length_50_sel = 0.25 * exp(rnorm(1, 0, .1)),
-    #       p_response = p_response * exp(rnorm(1, 0, .1))
-    #     )
-    #   )
-
 
     fit <-
       rstan::stan(

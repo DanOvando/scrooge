@@ -1,6 +1,6 @@
 run_and_judge_scrooge <- function(fishery,
-                                  total_iterations = 4000,
-                                  warmup = 2000,
+                                  total_iterations = 2000,
+                                  warmup = 1000,
                                   adapt_delta = 0.8,
                                   chains = 1,
                                   economic_model = 1,

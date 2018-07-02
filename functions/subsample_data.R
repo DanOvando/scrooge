@@ -27,11 +27,14 @@ subsample_data <-
         length(sampled_years) - ceiling(length(sampled_years) * prop_years_lcomp_data)
       ))]
 
-
     prepped_fishery$sampled_years <- sampled_years
 
     prepped_fishery$scrooge_data$perc_change_effort <-
       prepped_fishery$scrooge_data$perc_change_effort[sampled_years]
+
+
+    prepped_fishery$scrooge_data$observed_effort <-
+      prepped_fishery$scrooge_data$observed_effort[sampled_years]
 
     prepped_fishery$scrooge_data$length_comps <-
       prepped_fishery$scrooge_data$length_comps %>%
@@ -58,6 +61,7 @@ subsample_data <-
 
     prepped_fishery$scrooge_data$cost_t <-
       prepped_fishery$scrooge_data$cost_t[sampled_years]
+
 
     return(prepped_fishery)
 

@@ -22,6 +22,9 @@ library(wesanderson)
 library(patchwork)
 extrafont::loadfonts()
 rstan::rstan_options(auto_write = TRUE)
+  functions <- list.files(here::here("functions"))
+
+  walk(functions, ~ here::here("functions", .x) %>% source()) # load local functions
 
 
   scrooge_theme <- theme_ipsum(base_size = 14, axis_title_size = 18)

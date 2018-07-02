@@ -37,6 +37,8 @@ int length_comps_years[n_lcomps]; // time steps in which length comps are availa
 
 //// economic data ////
 
+row_vector[nt] observed_effort;
+
 row_vector[nt] perc_change_effort;
 
 row_vector[nt] price_t;
@@ -97,20 +99,17 @@ transformed data{
 
 parameters{
 
-vector[nt]  log_effort_t; // effort in time t
-
-//vector<lower = 0.001, upper = 15>[nt]  effort_t; // effort in time t
+vector<lower = 0.001>[nt]  effort_t; // effort in time t
 
 vector[nt]  uc_rec_dev_t; //  recruitment deviates
 
 real <lower = 0> sigma_r; // standard deviation of recruitment deviates
 
-real <lower = 0> sigma_effort; // standard deviation of effort process error
+real <lower = 0> sigma_effort; // standard deviation of effort process
 
 real<lower = 0, upper = .9> p_length_50_sel; // length at 50% selectivity
 
 real<lower = 0, upper = 10> p_response;
-
 
 } // close parameters block
 
@@ -123,8 +122,6 @@ transformed parameters{
   real sel_delta;
 
   real length_50_sel;
-
-  vector[nt]  effort_t; //  base effort multiplier
 
   vector[nt]  rec_dev_t; //  base effort multiplier
 
@@ -155,8 +152,6 @@ transformed parameters{
   length_50_sel = loo * p_length_50_sel;
 
   sel_delta = 2;
-
-  effort_t = exp(log_effort_t);
 
   //sigma_r = exp(log_sigma_r);
 
@@ -272,10 +267,6 @@ real new_effort;
 
 real previous_max;
 
-//sigma_effort ~ normal(cv_effort,1); // cv of a lognormal distributed variable to sigma
-
-sigma_effort ~ normal(sqrt(log(cv_effort^2 + 1)),.25); // cv of a lognormal distributed variable to sigma
-
 //// length comps likelihood ////
 
 for (i in 1:(n_lcomps)){
@@ -286,22 +277,22 @@ for (i in 1:(n_lcomps)){
 
 //// effort prior ////
 
+sigma_effort ~ normal(cv_effort * mean(effort_t),1);
 
 if (economic_model == 1) {
 
   for (t in 2:nt){
 
-    //previous_max = max(effort_t[max(1,t - 1 - max_window):(t - 1)]);
+    previous_max = max(effort_t[max(1,t - 1 - max_window):(t - 1)]);
 
     oa_prediction = effort_t[t - 1] + e_msy * (p_response * (profit_t[t - 1] / p_msy));
-
-    //oa_prediction = fmax(1e-3,effort_t[t - 1] + e_msy * (p_response * (profit_t[t - 1] / p_msy)));
 
     effort_data_prediction =  effort_t[t - 1] * perc_change_effort[t - 1];
 
     new_effort = effort_data_weight * effort_data_prediction + (1 - effort_data_weight) * oa_prediction;
 
-    log_effort_t[t] ~ normal(log(new_effort),sigma_effort);
+
+    effort_t[t] ~ normal(new_effort,sigma_effort);
 
 }
 
@@ -310,12 +301,14 @@ if (economic_model == 1) {
   for (i in 2:nt){
 
 
-  log_effort_t[i] ~ normal(log(effort_t[i - 1]),sigma_effort);
+  effort_t[i] ~ normal(effort_t[i - 1],sigma_effort);
 
 }
 
+observed_effort ~ normal(effort_t, sigma_effort);
 
 } // close effort loop
+
 
 p_response ~ normal(p_response_guess,.1); // constrain p_response
 
@@ -325,11 +318,9 @@ uc_rec_dev_t ~ normal(0, 1);
 
 sigma_r ~ normal(sigma_r_guess, 0.1);
 
-//// selectivity likelihood ////
+//log_sigma_r ~ normal(log(sigma_r_guess), 1);
 
-// p_length_50_sel ~ normal(length_50_sel_guess/loo, .01);
 
-// sel_delta ~ normal(delta_guess, 2);
 
 
 } // close model block
@@ -339,10 +330,16 @@ generated quantities{
 
 int n_tl[nt, n_lbins];
 
+vector[nt] pp_effort_t;
+
 for (t in 1:nt){
 
 
     n_tl[t, 1:n_lbins] = multinomial_rng(to_vector(p_lbin_sampled[t, 1:n_lbins]),500); // generate length comp samples
+
+    pp_effort_t[t] = normal_rng(effort_t, sigma_effort,1); // posterior predictive of effort
+
+
 }
 
 } // close generated quantities block
