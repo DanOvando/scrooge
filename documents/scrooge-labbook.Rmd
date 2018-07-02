@@ -3522,6 +3522,74 @@ An alternative would be to say that effort data are effort data. Now, you need t
 One option would be to set sigma effort to be very very low if you want to treat the percent change effort as closer to "data". That would really force effort to do exactly what you want it do to
 
 
+# Last steps
+
+OK, no more wheel spinning, what are the last steps to do here?
+
+Everything seems to fit. The main time consuming part is running all the damn simulations for the mass performance review. So let's get that going this week so you can have it running while you're in wisconsin and have it ready to write about. 
+
+
+So what are the steps you need to make that happen? Let's explore a few improvements to the operating model open-access scenarios to see if you can allow them to be more responsive to price/cost/q (not automatically, but have that be a parameter). Is it worth also varying which data you include in the assessment? On one hand, the interesting comparison is all data vs none, on the other hand gradients of value of information are interesting. Histograms of RMSE as a function of which historic data you include. Lastly, double check that the effort thing is working well. Can explore as a later project using total effort data, but just seems like an esoteric use case. 
+
+## Making effort more responsive to profits
+
+So as a general case, if you think of change in effort as additive function of profits, 
+
+then 
+
+$$dE/dp = qEB$$
+
+$$dE/dc = -E^{\beta}$$
+
+and 
+
+$$dE/dq = pEB$$
+
+Just eyeballing these, all else equal q is going to be more impactful than p, since holding E and B constant p is going to be much bigger than q. 
+
+```{r}
+
+effort <- 0:100
+
+beta <- 1.3
+
+price <- 10000
+
+biomass <- 100
+
+dc <- -effort^beta
+
+dq <- price * effort * biomass
+
+data_frame(effort = effort, dc = dc, dq = dq) %>% 
+  gather(variable, marginal_effect, -effort) %>% 
+  ggplot(aes(effort, abs(marginal_effect), color = variable)) + 
+  geom_line()
+
+```
+
+
+
+So, for the range of levels for effort, price, biomass, etc q is going to matter a LOT more than important than either price or cost, so basically it goes q > c > p. 
+
+So, broadly you could play a bit with the max increase, with an idea of what a reasonable max increase in F/Fmsy might be. From there though, might be worth thinking about the relative magnitude of things. Rather than totally making things up, let's try and get some reasonable units using RAM and the price database. 
+
+get price per kg from melnychuck. Get r0 from RAM? if not, get a sense of the scale that you're talking about, and get weight in the right units to again make some kind of sense. So that gives you a sense of scale for price and r0, you can get a sense of q from RAM maybe? That leaves cost per unit effort as something to play with. I really like this idea just to stop making things up. Goal is getting the full run going by the time you get on the plane Wednesday. 
+
+So that's on the simulation side. On the fitting side then, what you want to do is carefully construct a pretty generic prior, with some ability to control things. e.g. set price a reasonably price per kg, and set the scale of the population at a reasonable thing. Then, set q to a reasonable level to get efforts in a range you want them, then tune costs to get you an open access biomass. 
+
+YOu're doing all this because scale matters in here: if effort is really big then costs can start to matter, but for the small efforts that you're talking about here then really the only thing that comes into play is q
+
+
+```{r}
+load("~/Dropbox/Prelim Database Files/Versions/RAM v4.40 (6-4-18)/DB Files With Model Fit Data/DBdata.RData")
+
+
+
+
+```
+
+
 
 
 
