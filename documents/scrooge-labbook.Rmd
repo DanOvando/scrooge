@@ -3584,15 +3584,114 @@ YOu're doing all this because scale matters in here: if effort is really big the
 ```{r}
 load("~/Dropbox/Prelim Database Files/Versions/RAM v4.40 (6-4-18)/DB Files With Model Fit Data/DBdata.RData")
 
+```
 
+ ## what are reasonable prices?
+ 
+```{r}
+ 
+fish_prices <-
+    readr::read_csv("~/Box Sync/Databases/Exvessel Prices/Exvessel Price Database.csv") %>%
+    filter(Year > 2010) %>%
+    group_by(scientific_name) %>%
+    summarise(mean_exvessel_price = mean(exvessel, na.rm = T)) %>% 
+  mutate(price_units = "usd_per_ton") %>% 
+  mutate(price_per_kg = mean_exvessel_price / 1000)
+
+fish_prices %>% 
+  ggplot(aes(price_per_kg)) + 
+  geom_histogram() + 
+  scale_x_continuous(labels = dollar)
+
+  
+```
+
+## what are reasonable ssb0?
+
+looks like you can use bioparams == SSB), and units  = MT to get tons of unfished SSB, see what that looks like. 
+
+Could also use R0 and units = E00
+
+```{r}
+
+
+r0 <- bioparams %>% 
+  filter(bioid == "R0-E00") %>% 
+  mutate(biovalue = as.numeric(biovalue))
+
+
+r0 %>% 
+  ggplot(aes(biovalue)) + 
+  geom_histogram() + 
+  scale_x_log10()
+
+```
+
+ 
+Cool, good as any, goes from small to bonkers big. 
+
+
+## q
+
+```{r}
+
+
+f <- er.data %>% 
+  mutate(year = rownames(.)) %>% 
+  select(year, everything()) %>% 
+  gather(stock, f, -year)
+
+effort <- effort.data %>% 
+  mutate(year = rownames(.)) %>% 
+  select(year, everything()) %>% 
+  gather(stock, effort, -year)
+
+
+e_and_f <- f %>% 
+  left_join(effort, by = c('year','stock')) %>% 
+  filter(is.na(f) == F & is.na(effort) == F) %>% 
+  mutate(q = f / effort) %>% 
+  mutate(year = as.numeric(year))
+
+e_and_f %>% 
+  ggplot(aes(year, q, color = stock)) + 
+  geom_line(show.legend = F) 
+
+e_and_f %>% 
+  ggplot(aes(q)) + 
+  geom_histogram()
+```
+
+
+## max expansion
+
+
+```{r}
+
+u <- divupref.data %>% 
+  mutate(year = rownames(.)) %>% 
+  select(year, everything()) %>% 
+  gather(stock, u_v_umsy, -year) %>%
+  mutate(year = as.numeric(year)) %>% 
+  arrange(stock, year) %>% 
+  group_by(stock) %>% 
+  mutate(lead_u = lead(u_v_umsy,1)) %>% 
+  filter(is.na(u_v_umsy) == F & is.na(lead_u) == F) %>% 
+  mutate(delta_u = lead_u - u_v_umsy)
+
+u %>% 
+  group_by(stock) %>% 
+  summarise(max_delta_u = max(delta_u, na.rm = T)) %>% 
+  ggplot(aes(max_delta_u)) + 
+  geom_histogram() + 
+  scale_x_log10()
 
 
 ```
 
+Boom, these are all just great. So then one option will be to draw randomly from these, another to bin?
 
-
-
-
+Binning seems more efficient. You're going to waste a lot of iterations pulling say 0.1 and 0.12 when the comparison isn't really all that interesting. 
 
 
 

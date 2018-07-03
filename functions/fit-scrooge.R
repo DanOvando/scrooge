@@ -29,6 +29,9 @@ fit_scrooge <-
            ) {
 
 
+    data$length_comps <- data$length_comps %>%
+      select(-year)
+
     data$economic_model <- economic_model
 
     data$sigma_r_guess <- 0.4
@@ -89,9 +92,13 @@ fit_scrooge <-
 
     msy <- -f_msy$objective
 
+    msy_profits_guess <- (fish$price * msy)*.25
+
+    cost_guess <- (fish$price * msy - msy_profits_guess) / e_msy^fleet$beta
+
     cost <-
       nlminb(
-        c_guess,
+        cost_guess,
         tune_costs,
         data = data,
         time = 200,

@@ -127,6 +127,8 @@
     data_dir <- "data/scrooge-data"
   }
 
+  # load some sample cdfw catches
+
   cdfw_data <- read_csv(file = file.path(data_dir, 'cfdw-catches.csv'))
 
 
@@ -158,23 +160,72 @@
     )) %>%
     unnest()
 
-  ram <- read_csv(here::here("processed_data","ram_data.csv"))
+  # load in prices
 
-  delta_f_v_fmsy = ram %>%
-    filter(is.na(udivumsypref) == F,udivumsypref < 4) %>%
-    select(stockid, year, udivumsypref) %>%
-    arrange(stockid, year) %>%
-    group_by(stockid) %>%
-    mutate(delta_year = year - lag(year),
-           delta_u = udivumsypref - lag(udivumsypref)) %>%
-    ungroup() %>%
-    filter(delta_year == 1, is.na(delta_u) == F, delta_u > 0)
+  fish_prices <-
+    readr::read_csv(here::here("data","Exvessel Price Database.csv")) %>%
+    filter(Year > 2010) %>%
+    group_by(scientific_name) %>%
+    summarise(mean_exvessel_price = mean(exvessel, na.rm = T)) %>%
+    mutate(price_units = "usd_per_ton") %>%
+    mutate(price_per_kg = mean_exvessel_price / 1000)
 
-  max_delta_u <- delta_f_v_fmsy %>%
-    group_by(stockid) %>%
-    summarise(max_delta_u = max(delta_u))
+  possible_prices <-na.omit(fish_prices$price_per_kg) %>% as.numeric()
 
-  max_f_v_fmsy_increase <- mean(max_delta_u$max_delta_u)
+
+  # load in some sample RAM data
+
+  load(here::here("data","DBdata.RData")) # as of copy, RAM v4.40 with model fits
+
+  # r0 in numbers
+
+  r0 <- bioparams %>%
+    filter(bioid == "R0-E00") %>%
+    mutate(biovalue = as.numeric(biovalue)) %>%
+    mutate(ptile_biovalue = percent_rank(biovalue)) %>%
+    filter(ptile_biovalue < 0.75, ptile_biovalue > 0.25)
+
+  possible_r0 <- r0$biovalue
+
+  # estiamtes of catchability
+
+  f <- er.data %>%
+    mutate(year = rownames(.)) %>%
+    select(year, everything()) %>%
+    gather(stock, f, -year)
+
+  effort <- effort.data %>%
+    mutate(year = rownames(.)) %>%
+    select(year, everything()) %>%
+    gather(stock, effort, -year)
+
+
+  e_and_f <- f %>%
+    left_join(effort, by = c('year','stock')) %>%
+    filter(is.na(f) == F & is.na(effort) == F) %>%
+    mutate(q = f / effort) %>%
+    mutate(year = as.numeric(year))
+
+  possible_q <- e_and_f$q
+
+
+  u <- divupref.data %>%
+    mutate(year = rownames(.)) %>%
+    select(year, everything()) %>%
+    gather(stock, u_v_umsy, -year) %>%
+    mutate(year = as.numeric(year)) %>%
+    arrange(stock, year) %>%
+    group_by(stock) %>%
+    mutate(lead_u = lead(u_v_umsy,1)) %>%
+    filter(is.na(u_v_umsy) == F & is.na(lead_u) == F) %>%
+    mutate(delta_u = lead_u - u_v_umsy) %>%
+    group_by(stock) %>%
+    summarise(max_delta_u = max(delta_u)) %>%
+    filter(max_delta_u > 0)
+
+  possible_delta_u <- u$max_delta_u
+
+  max_f_v_fmsy_increase <- mean(possible_delta_u)
 
   # create simulated fisheries ----------------------------------------------
 
@@ -182,34 +233,43 @@
   if (sim_fisheries == T)
   {
 
-    # sci_name = c("Atractoscion nobilis", "Scomber japonicus","Lutjanus campechanus"),
+    n_fisheries <- 100
 
-    fisheries_sandbox <-
-      purrr::cross_df(
-        list(
-          sci_name = c("Atractoscion nobilis", "Scomber japonicus","Lutjanus campechanus"),
-          fleet_model = c(
-            # "constant-catch",
-            "constant-effort",
-            "supplied-catch",
-            "open-access"
-          ),
-          sigma_r = c(0.1,0.4),
-          sigma_effort = c(0, 0.1),
-          price_cv = c(0, 0.5),
-          cost_cv = c(0,0.75),
-          price_ac = 0.75,
-          cost_ac = 0.75,
-          q_cv = c(0, 0.5),
-          q_ac = c(0,0.5),
-          economic_model = c(1),
-          steepness = c(0.6,0.9),
-          obs_error = c(0,0.2),
-          b_v_bmsy_oa = c(0.5)
-        )
-      )
-
-
+    fisheries_sandbox <- data_frame(
+      sci_name = sample(
+        c(
+          "Atractoscion nobilis",
+          "Scomber japonicus",
+          "Lutjanus campechanus"
+        ),
+        n_fisheries,
+        replace = T
+      ),
+      fleet_model = sample(
+        c("constant-effort",
+          "supplied-catch",
+          "open-access"),
+        n_fisheries,
+        replace = T
+      ),
+      sigma_r = runif(n_fisheries, 0.01,0.4),
+      sigma_effort = runif(n_fisheries, 0.01,0.4),
+      price_cv = runif(n_fisheries, 0,0.4),
+      cost_cv = runif(n_fisheries, 0,0.4),
+      price_ac = runif(n_fisheries, 0,0.75),
+      cost_ac = runif(n_fisheries, 0,0.75),
+      q_cv = runif(n_fisheries, 0,0.4),
+      q_ac = runif(n_fisheries, 0,0.75),
+      steepness = runif(n_fisheries, 0.6,0.9),
+      obs_error = runif(n_fisheries, 0,0.4),
+      b_v_bmsy_oa = runif(n_fisheries, 0.5,1.5),
+      price = sample(possible_prices, n_fisheries, replace = T),
+      r0 = sample(possible_r0, n_fisheries, replace = T),
+      q = sample(possible_q, n_fisheries, replace = T),
+      max_f_v_fmsy_increase = sample(possible_delta_u, n_fisheries, replace = T),
+      profit_lags = sample(1:4, n_fisheries, replace = T),
+      initial_f = sample(c(0.1,.5,1,1.5), n_fisheries, replace = T)
+    )
     fleet_model_params <- data_frame(
       fleet_model = c(
         "constant-catch",
@@ -219,17 +279,16 @@
       ),
       fleet_params = list(
         list(target_catch = 10000),
-        list(initial_effort = 200),
+        list(initial_effort = NA),
         list(catches = cdfw_catches$catch[cdfw_catches$sci_name == "semicossyphus pulcher"]),
-        list(theta = 0.5, initial_effort = 10)
+        list(theta = 0.5, initial_effort = NA)
       )
     )
 
-
-
-
     fisheries_sandbox <- fisheries_sandbox %>%
-      left_join(fleet_model_params, by = "fleet_model") #%>%
+      left_join(fleet_model_params, by = "fleet_model") %>%
+      filter(fleet_model == "open-access") %>%
+      slice(1)
       # slice(1:4)
 
     a <- Sys.time()
@@ -257,15 +316,16 @@
           q_ac = fisheries_sandbox$q_ac[i],
           steepness = fisheries_sandbox$steepness[i],
           obs_error = fisheries_sandbox$obs_error[i],
-          b_v_bmsy_oa = fisheries_sandbox$b_v_bmsy_oa[i],
+          b_v_bmsy_oa = 0.8,
+          initial_f = fisheries_sandbox$initial_f[i],
+          r0 = fisheries_sandbox$r0[i],
+          price = fisheries_sandbox$price[i],
+          q = fisheries_sandbox$q[i],
+          profit_lags = fisheries_sandbox$profit_lags[i],
+          max_f_v_fmsy_increase = fisheries_sandbox$max_f_v_fmsy_increase[i],
           mey_buffer = 20,
-        sim_years = 100,
-        burn_years = 25,
-        price = 10,
-        cost = 5,
-        profit_lags = 4,
-        query_price = F,
-        r0 = 10000
+          sim_years = 100,
+          burn_years = 25
       )
 
     } # close dopar
@@ -352,8 +412,8 @@ if (run_tests == T) {
       fish = map(prepped_fishery, "fish"),
       fleet = map(prepped_fishery, "fleet")),
       fit_scrooge,
-        iter = 8000,
-        warmup = 4000,
+        iter = 4000,
+        warmup = 2000,
         adapt_delta = 0.8,
         economic_model = 1,
         scrooge_file = "scrooge",
