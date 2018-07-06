@@ -162,8 +162,11 @@
 
   # load in prices
 
+
+
+
   fish_prices <-
-    readr::read_csv(here::here("data","Exvessel Price Database.csv")) %>%
+    readr::read_csv(file.path(data_dir,"Exvessel Price Database.csv")) %>%
     filter(Year > 2010) %>%
     group_by(scientific_name) %>%
     summarise(mean_exvessel_price = mean(exvessel, na.rm = T)) %>%
@@ -175,7 +178,7 @@
 
   # load in some sample RAM data
 
-  load(here::here("data","DBdata.RData")) # as of copy, RAM v4.40 with model fits
+  load(file.path(data_dir,"DBdata.RData")) # as of copy, RAM v4.40 with model fits
 
   # r0 in numbers
 
