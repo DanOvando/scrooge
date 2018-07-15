@@ -10,7 +10,8 @@ prepare_fishery <-
            cost_ac,
            q_cv = 0,
            q_ac = 0,
-           b_v_bmsy_oa = 0.5,
+           beta = 1.3,
+           max_cp_ratio = 0.75,
            time_step = 1,
            price = 1,
            initial_f = 0.1,
@@ -27,14 +28,12 @@ prepare_fishery <-
            economic_model = 1,
            steepness = 0.8,
            profit_lags = 1,
-           max_f_v_fmsy_increase = 1,
+           max_perc_change_f = 1,
            rec_ac = 0.25,
            query_price = T,
            bias = 0,
            obs_error = 0,
-           tune_costs = F,
            est_msy = F,
-           mey_buffer = 2,
            use_effort_data = 0,
            cv_effort = 0.25,
            cv_len = 0.1
@@ -119,20 +118,15 @@ prepare_fishery <-
         q_cv = q_cv,
         q_ac = q_ac,
         fleet_model = fleet_model,
-        theta = max_f_v_fmsy_increase,
-        cost = cost,
+        max_perc_change_f = max_perc_change_f,
+        max_cp_ratio = max_cp_ratio,
         sigma_effort = sigma_effort,
         length_50_sel = percnt_loo_selected * fish$linf,
         initial_effort = initial_effort,
         profit_lags =  profit_lags,
-        mey_buffer = mey_buffer
+        beta = beta
       )
-
-      tune_costs <- T
-
-      est_msy <- T
     }
-
 
     sim <- sim_fishery(
       fish = fish,
@@ -142,21 +136,23 @@ prepare_fishery <-
       sim_years = sim_years,
       burn_year = burn_years,
       time_step = fish$time_step,
-      est_msy = est_msy,
-      tune_costs = tune_costs,
-      b_v_bmsy_oa = b_v_bmsy_oa
+      est_msy = FALSE
     )
+
 #
 #     sim %>%
 #       group_by(year) %>%
-#       summarise(total_ssb = sum(ssb),
-#                 total_catch = sum(biomass_caught),
-#                 mean_f = mean(f),
-#                 total_effort = mean(effort)) %>%
-#       gather(variable, value, -year) %>%
-#       ggplot(aes(year, value)) +
-#         geom_point() +
-#       facet_wrap(~variable, scales = "free_y")
+#       summarise(te = unique(effort),
+#                 profits = sum(profits),
+#                 biomass = sum(biomass)) %>%
+#       ungroup() %>%
+#       mutate(ppue = profits / te) %>%
+#       gather(metric, value, -year) %>%
+#       ggplot(aes(year, value, color = metric)) +
+#       geom_line(show.legend = F) +
+#       geom_point() +
+#       facet_wrap(~metric, scales = "free_y")
+#
 
 
     scrooge_data <- prepare_scrooge_data(fish = fish,

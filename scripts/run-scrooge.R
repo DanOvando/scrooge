@@ -163,8 +163,6 @@
   # load in prices
 
 
-
-
   fish_prices <-
     readr::read_csv(file.path(data_dir,"Exvessel Price Database.csv")) %>%
     filter(Year > 2010) %>%
@@ -221,14 +219,14 @@
     group_by(stock) %>%
     mutate(lead_u = lead(u_v_umsy,1)) %>%
     filter(is.na(u_v_umsy) == F & is.na(lead_u) == F) %>%
-    mutate(delta_u = lead_u - u_v_umsy) %>%
+    mutate(delta_u = lead_u / u_v_umsy - 1) %>%
     group_by(stock) %>%
-    summarise(max_delta_u = max(delta_u)) %>%
-    filter(max_delta_u > 0)
+    summarise(max_delta_u = pmin(2,max(delta_u))) %>%
+    filter(max_delta_u > 0, is.finite(max_delta_u))
 
   possible_delta_u <- u$max_delta_u
 
-  max_f_v_fmsy_increase <- mean(possible_delta_u)
+  max_f_v_fmsy_increase <- median(possible_delta_u)
 
   # create simulated fisheries ----------------------------------------------
 
@@ -256,22 +254,23 @@
         replace = T
       ),
       sigma_r = runif(n_fisheries, 0.01,0.4),
-      sigma_effort = runif(n_fisheries, 0.01,0.4),
-      price_cv = runif(n_fisheries, 0,0.4),
-      cost_cv = runif(n_fisheries, 0,0.4),
+      sigma_effort = runif(n_fisheries, 0,0),
+      price_cv = runif(n_fisheries, 0,0.5),
+      cost_cv = runif(n_fisheries, 0,.5),
+      q_cv = runif(n_fisheries, 0,0.5),
       price_ac = runif(n_fisheries, 0,0.75),
       cost_ac = runif(n_fisheries, 0,0.75),
-      q_cv = runif(n_fisheries, 0,0.4),
       q_ac = runif(n_fisheries, 0,0.75),
       steepness = runif(n_fisheries, 0.6,0.9),
       obs_error = runif(n_fisheries, 0,0.4),
-      b_v_bmsy_oa = runif(n_fisheries, 0.5,1.5),
+      max_cp_ratio = runif(n_fisheries, 0.01,.95),
       price = sample(possible_prices, n_fisheries, replace = T),
       r0 = sample(possible_r0, n_fisheries, replace = T),
       q = sample(possible_q, n_fisheries, replace = T),
-      max_f_v_fmsy_increase = sample(possible_delta_u, n_fisheries, replace = T),
-      profit_lags = sample(1:4, n_fisheries, replace = T),
-      initial_f = sample(c(0.1,.5,1,1.5), n_fisheries, replace = T)
+      max_perc_change_f = sample(possible_delta_u, n_fisheries, replace = T),
+      profit_lags = sample(0:4, n_fisheries, replace = T),
+      initial_f = sample(c(0.01,.25,.5), n_fisheries, replace = T),
+      beta = runif(n_fisheries, 2,2)
     )
     fleet_model_params <- data_frame(
       fleet_model = c(
@@ -284,14 +283,14 @@
         list(target_catch = 10000),
         list(initial_effort = NA),
         list(catches = cdfw_catches$catch[cdfw_catches$sci_name == "semicossyphus pulcher"]),
-        list(theta = 0.5, initial_effort = NA)
+        list(theta = NA, initial_effort = NA)
       )
     )
 
     fisheries_sandbox <- fisheries_sandbox %>%
       left_join(fleet_model_params, by = "fleet_model") %>%
       filter(fleet_model == "open-access") %>%
-      slice(1)
+      slice(1:4)
       # slice(1:4)
 
     a <- Sys.time()
@@ -319,16 +318,16 @@
           q_ac = fisheries_sandbox$q_ac[i],
           steepness = fisheries_sandbox$steepness[i],
           obs_error = fisheries_sandbox$obs_error[i],
-          b_v_bmsy_oa = 0.8,
           initial_f = fisheries_sandbox$initial_f[i],
           r0 = fisheries_sandbox$r0[i],
           price = fisheries_sandbox$price[i],
           q = fisheries_sandbox$q[i],
           profit_lags = fisheries_sandbox$profit_lags[i],
-          max_f_v_fmsy_increase = fisheries_sandbox$max_f_v_fmsy_increase[i],
-          mey_buffer = 20,
+          max_perc_change_f = fisheries_sandbox$max_perc_change_f[i],
+          max_cp_ratio = fisheries_sandbox$max_cp_ratio[i],
+          beta = fisheries_sandbox$beta[i],
           sim_years = 100,
-          burn_years = 25
+          burn_years = 50
       )
 
     } # close dopar
@@ -637,7 +636,6 @@ if (fit_models == T) {
                              fishery = 1:nrow(fisheries_sandbox), stringsAsFactors = F)
 
   fisheries_sandbox <- fisheries_sandbox %>%
-    select(-economic_model) %>%
     mutate(fishery = 1:nrow(.)) %>%
     left_join(experiments, by = "fishery") %>%
     # filter(window == 10, fleet_model == "open-access", b_v_bmsy_oa == 0.5) %>%
@@ -646,7 +644,8 @@ if (fit_models == T) {
     mutate(prepped_fishery = pmap(list(
       prepped_fishery = prepped_fishery,
       window = window,
-      period = period), subsample_data))
+      period = period), subsample_data)) %>%
+    slice(1)
 
   fisheries_sandbox$experiment <- 1:nrow(fisheries_sandbox)
 
