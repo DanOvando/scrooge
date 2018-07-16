@@ -67,7 +67,7 @@
 
   # run options -------------------------------------------------------------
 
-  sim_fisheries <- F
+  sim_fisheries <- T
 
   fit_models <- T
 
@@ -234,7 +234,7 @@
   if (sim_fisheries == T)
   {
 
-    n_fisheries <- 100
+    n_fisheries <- 200
 
     fisheries_sandbox <- data_frame(
       sci_name = sample(
@@ -254,6 +254,7 @@
         replace = T
       ),
       sigma_r = runif(n_fisheries, 0.01,0.4),
+      rec_ac = runif(n_fisheries,0,0.75),
       sigma_effort = runif(n_fisheries, 0,0),
       price_cv = runif(n_fisheries, 0,0.5),
       cost_cv = runif(n_fisheries, 0,.5),
@@ -288,10 +289,10 @@
     )
 
     fisheries_sandbox <- fisheries_sandbox %>%
-      left_join(fleet_model_params, by = "fleet_model") %>%
-      filter(fleet_model == "open-access") %>%
-      slice(1:4)
+      left_join(fleet_model_params, by = "fleet_model")
       # slice(1:4)
+
+    if (file.exists("sim_progress.txt")){file.remove("sim_progress.txt")}
 
     a <- Sys.time()
     spf <- safely(prepare_fishery)
@@ -645,7 +646,7 @@ if (fit_models == T) {
       prepped_fishery = prepped_fishery,
       window = window,
       period = period), subsample_data)) %>%
-    slice(1)
+    slice(1:4)
 
   fisheries_sandbox$experiment <- 1:nrow(fisheries_sandbox)
 
