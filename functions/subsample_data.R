@@ -4,10 +4,12 @@ subsample_data <-
            window = 5,
            prop_years_lcomp_data = 1) {
 
+
     if (prop_years_lcomp_data > 1){
       stop("prop_years_lcomp_data must be <= 1")
     }
-    years <- prepped_fishery$length_comps$year %>% unique()
+
+    years <- prepped_fishery$scrooge_data$length_comps$year %>% unique()
 
     if (period == "beginning") {
       sampled_years <- 1:window

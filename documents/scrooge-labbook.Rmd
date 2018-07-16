@@ -3304,7 +3304,9 @@ case_studies <- case_studies %>%
   left_join(simple %>% bind_rows(complex) %>% select(-economic_model) %>% nest(-scenario), by = "scenario")
   
 
-case_studies <- case_studies %>%
+
+
+case_studies <- fisheries_sandbox %>%
   mutate(assessment = pmap(
     list(
       fishery = data,
@@ -3584,18 +3586,185 @@ YOu're doing all this because scale matters in here: if effort is really big the
 ```{r}
 load("~/Dropbox/Prelim Database Files/Versions/RAM v4.40 (6-4-18)/DB Files With Model Fit Data/DBdata.RData")
 
+```
 
+ ## what are reasonable prices?
+ 
+```{r}
+ 
+fish_prices <-
+    readr::read_csv("~/Box Sync/Databases/Exvessel Prices/Exvessel Price Database.csv") %>%
+    filter(Year > 2010) %>%
+    group_by(scientific_name) %>%
+    summarise(mean_exvessel_price = mean(exvessel, na.rm = T)) %>% 
+  mutate(price_units = "usd_per_ton") %>% 
+  mutate(price_per_kg = mean_exvessel_price / 1000)
+
+fish_prices %>% 
+  ggplot(aes(price_per_kg)) + 
+  geom_histogram() + 
+  scale_x_continuous(labels = dollar)
+
+  
+```
+
+## what are reasonable ssb0?
+
+looks like you can use bioparams == SSB), and units  = MT to get tons of unfished SSB, see what that looks like. 
+
+Could also use R0 and units = E00
+
+```{r}
+
+
+r0 <- bioparams %>% 
+  filter(bioid == "R0-E00") %>% 
+  mutate(biovalue = as.numeric(biovalue))
+
+
+r0 %>% 
+  ggplot(aes(biovalue)) + 
+  geom_histogram() + 
+  scale_x_log10()
+
+```
+
+ 
+Cool, good as any, goes from small to bonkers big. 
+
+
+## q
+
+```{r}
+
+
+f <- er.data %>% 
+  mutate(year = rownames(.)) %>% 
+  select(year, everything()) %>% 
+  gather(stock, f, -year)
+
+effort <- effort.data %>% 
+  mutate(year = rownames(.)) %>% 
+  select(year, everything()) %>% 
+  gather(stock, effort, -year)
+
+
+e_and_f <- f %>% 
+  left_join(effort, by = c('year','stock')) %>% 
+  filter(is.na(f) == F & is.na(effort) == F) %>% 
+  mutate(q = f / effort) %>% 
+  mutate(year = as.numeric(year))
+
+e_and_f %>% 
+  ggplot(aes(year, q, color = stock)) + 
+  geom_line(show.legend = F) 
+
+e_and_f %>% 
+  ggplot(aes(q)) + 
+  geom_histogram()
+```
+
+
+## max expansion
+
+
+```{r}
+
+u <- divupref.data %>% 
+  mutate(year = rownames(.)) %>% 
+  select(year, everything()) %>% 
+  gather(stock, u_v_umsy, -year) %>%
+  mutate(year = as.numeric(year)) %>% 
+  arrange(stock, year) %>% 
+  group_by(stock) %>% 
+  mutate(lead_u = lead(u_v_umsy,1)) %>% 
+  filter(is.na(u_v_umsy) == F & is.na(lead_u) == F) %>% 
+  mutate(delta_u = lead_u - u_v_umsy)
+
+u %>% 
+  group_by(stock) %>% 
+  summarise(max_delta_u = max(delta_u, na.rm = T)) %>% 
+  ggplot(aes(max_delta_u)) + 
+  geom_histogram() + 
+  scale_x_log10()
 
 
 ```
 
+Boom, these are all just great. So then one option will be to draw randomly from these, another to bin?
+
+Binning seems more efficient. You're going to waste a lot of iterations pulling say 0.1 and 0.12 when the comparison isn't really all that interesting. 
+
+
+# fixing spasm
+
+AHA. finally figured out why your fleet model is so out of whack. YOu're setting the seed before each fit and so that's making the results stable. But, that's one seed, and with stochasticity, you're just capturing the MSY, and the prices, costs etc. at a fairly arbitrary level. Whihc, hen you start simulating things out, doesn't translate. You get a totally different MSY and hence prices and costs. From the open access perspective, of course you end up in crazy new places. 
+
+With stochasticity in p,c,q, e_msy will change but MSY itself won't, though with sigma_r in place that of course changes that, since the MSY you estimate could be just a function of a light recruitment pulse. 
+
+So, what's the solution
+
+For MSY, you'd need to stop setting the seed, and then calcuate MSY a bunch of times to get a distribution of MSY and E_MSY and B_MSY. You could then find the biggest MSY, the smallest E_MSY (corresponding to the biggest q). So, that would give you everything you need except price. You could take price, and then as a buffer multiply it by some big value and then that would mean that c to r ratio under the most optimistic scenario would be something. 
+
+
+One option would be to simulate things out and take MSY as the mean value at EQ. 
 
 
 
 
+```{r}
+a <- fisheries_sandbox %>% 
+  mutate(experiment = 1:nrow(.)) %>% 
+  mutate(sim = map(prepped_fishery,'simed_fishery') ) %>% 
+  select(experiment, sim) %>% 
+  unnest()
+
+a %>% 
+  group_by(experiment, year) %>% 
+  summarise(price = unique(price),
+            cost = unique(cost),
+            q = unique(f / effort),
+            rec_dev = unique(rec_dev)) %>% 
+  gather(variable, value, -experiment, -year) %>% 
+  ungroup() %>% 
+  ggplot(aes(year, value, color = factor(experiment))) + 
+  geom_line(show.legend = F) + 
+  facet_wrap(~variable, scales = "free_y")
+
+b <- fisheries_sandbox %>% 
+  arrange(desc(price_cv))
+
+b$summary_plot[[1]]
+```
+
+that looks better. 
+
+# profit per unit effort
+
+Interesting though motivated by @Carozza2017, moving the fleet model to profit per unit effort instead of total profits. This has a few potential advantages. First, it seems plausible that this might be easier to tune and subject to less wild swings than pure profits, especially in the early years of the fishery as profits go up but effort increases at the same time. 
+
+In addition, gives you another thing to build into scrooge...
+
+Actual profits in the fishery, no way in hell. But what about profits per unit effort? That seem reasonable actually.
+
+Where would that come in? That you might actually be able to fit intot he likelihood. It's an outcome of the model itself that you could confront with data. 
+
+Could adjust the importance of it by weighting or by the prior on sigma. That's really the only part that makes much sense.... 
+
+Unless you took profit per unit effort, calculated profits based on the model, and then backed out effort and used that effort as a prior on the change in effort? seems a bit bass ackwards. 
+
+Another thing: Why don't you just feed the effort data in? Ah right you sort of can. If you feed in the percent change effort and set the prior on sigma_effort to be really tight, and the weighting all in the effort, that basically forces effort to be the effort you say it is, and just scales the magnitude of effort up and down. Let's play with this a bit. 
 
 
 
 
+Aha, it does make a difference. When things are crashing profits per unit effort and and profits per p_msu mirror each other. But, when the fishery is developing, there's a big difference. Profit per pmsy just mirrors profits and so increases exponentially, causing chaos. But, profit per unit effort actually slows down, dampening things. So it's worth doing. I think. Now, what would it actually entail... 
+
+
+so one option would be to simply skip alllllll the msy nonsense, just set a cost parameter that is in units of cost per unit effort. Or maybe something like.... suppose you started fishing at E ~ M right off the bat, see what reveunes are then, and then tune costs accordingly to get your cost to revenue ratio right, and then just use that one... but that still leaves the expansion parameter question up for debate; for a one unit increase in profit per unit effort how much does effort change? could just tool around with a range... all of that to basically speed up the simulation process a ton. Or maybe just something like an upper bound... if p per unit E at SSB0 is something, set cost so that holding new profits stable how long does it take to adjust to that level of profits. i.e. tune it so that it takes about ten years for effort to stabalize to zero 
+
+aha what abotu setting it in terms of cost per unit F, which is pretty stable, then converting things to effort
+
+Alternatively, you could say hey, it works for the most part, let's focus on getting scrogoe itself to converge better. that seems like a better use of your time since that's what needs to get run a lot more than the operatin models themselves. 
 
 

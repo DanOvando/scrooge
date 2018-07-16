@@ -30,7 +30,8 @@ plot_simmed_fishery <- function(prepped_fishery){
    geom_line() +
    geom_point()
 
- length_plot <- prepped_fishery$length_comps %>%
+
+ length_plot <- prepped_fishery$scrooge_data$length_comps %>%
    gather(length_bin, numbers, -year) %>%
    mutate(length_bin = as.numeric(length_bin)) %>%
    ungroup() %>%

@@ -2,8 +2,7 @@ process_lcomps <- function(observed,predicted, sampled_years){
 
   sampled_years <- observed$sampled_years
 
-  observed <- observed$length_comps
-
+  observed <- observed$scrooge_data$length_comps
 
   observed <- observed %>%
     gather(length_bin, numbers,-year) %>%
