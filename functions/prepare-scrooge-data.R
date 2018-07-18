@@ -7,7 +7,8 @@ prepare_scrooge_data <- function(fish,
                                  sample_type = "catch",
                                  percent_sampled = 1,
                                  cv_effort,
-                                 economic_model
+                                 economic_model,
+                                 beta = 2
                                  ) {
 
 
@@ -89,12 +90,12 @@ price_and_cost_history <- sim %>%
   group_by(year) %>%
   summarise(price = unique(price),
             cost = unique(cost),
-            q = 0.1) %>%
+            q = unique(unique(f) / unique(effort))) %>%
   gather(variable, value,-year) %>%
   ungroup() %>%
   mutate(value = value * exp(rnorm(nrow(.), rnorm(nrow(.),0, bias), obs_error))) %>%
   group_by(variable) %>%
-  mutate(centered_value = value / mean(value)) %>%
+  mutate(max_scaled_value = value / max(value)) %>%
   ungroup()
 
 price_t <- price_and_cost_history %>%
@@ -121,10 +122,10 @@ scrooge_data <- list(
   observed_effort = effort_t$effort,
   perc_change_effort = effort_t$perc_change_effort,
   length_comps_years  = length_comps$year,
-  price_t = price_t$centered_value,
-  cost_t = cost_t$centered_value,
-  q_t = q_t$centered_value,
-  beta = 1.3,
+  price_t = price_t$value,
+  cost_t = cost_t$max_scaled_value,
+  q_t = q_t$max_scaled_value,
+  beta = beta,
   length_50_sel_guess = fleet$length_50_sel * exp(rnorm(1, rnorm(1,0, bias), obs_error)),
   delta_guess = 2,
   n_lcomps = nrow(length_comps),

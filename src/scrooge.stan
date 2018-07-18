@@ -25,10 +25,6 @@ vector[n_ages] ages; // vector of ages
 
 int<lower = 0> economic_model; // 0 = no bioeconomic prior, 1 = bioeconomic prior,
 
-real max_expansion;
-
-int max_window;
-
 //// length data ////
 
 int length_comps[n_lcomps,n_lbins];
@@ -52,10 +48,6 @@ real length_50_sel_guess;
 real delta_guess;
 
 real<lower = 0> p_response_guess;
-
-real<lower = 0> p_msy;
-
-real<lower = 0> e_msy;
 
 real<lower = 0> cv_effort;
 
@@ -87,6 +79,8 @@ real t0; // t0
 
 real sigma_r_guess;
 
+real sd_sigma_r;
+
 }
 
 transformed data{
@@ -104,8 +98,6 @@ vector[nt]  log_effort_t; // effort in time t
 vector[nt]  uc_rec_dev_t; //  recruitment deviates
 
 real <lower = 0> sigma_r; // standard deviation of recruitment deviates
-
-real <lower = 0> sigma_effort; // standard deviation of effort process error
 
 real<lower = 0, upper = .9> p_length_50_sel; // length at 50% selectivity
 
@@ -151,6 +143,10 @@ transformed parameters{
   vector[n_ages] mean_selectivity_at_age; // mean selectivity at age
 
   row_vector[n_ages] p_age_sampled;
+
+  real sigma_effort;
+
+  sigma_effort = sqrt(log(cv_effort^2 + 1));
 
   length_50_sel = loo * p_length_50_sel;
 
@@ -274,7 +270,7 @@ real previous_max;
 
 //sigma_effort ~ normal(cv_effort,1); // cv of a lognormal distributed variable to sigma
 
-sigma_effort ~ normal(sqrt(log(cv_effort^2 + 1)),.25); // cv of a lognormal distributed variable to sigma
+// sigma_effort ~ normal(sqrt(log(cv_effort^2 + 1)),.25); // cv of a lognormal distributed variable to sigma
 
 //// length comps likelihood ////
 
@@ -293,7 +289,7 @@ if (economic_model == 1) {
 
     //previous_max = max(effort_t[max(1,t - 1 - max_window):(t - 1)]);
 
-    oa_prediction = effort_t[t - 1] + e_msy * (p_response * (profit_t[t - 1] / p_msy));
+    oa_prediction = effort_t[t - 1] + (p_response * (profit_t[t - 1] / effort_t[t - 1]));
 
     //oa_prediction = fmax(1e-3,effort_t[t - 1] + e_msy * (p_response * (profit_t[t - 1] / p_msy)));
 
@@ -317,17 +313,17 @@ if (economic_model == 1) {
 
 } // close effort loop
 
-p_response ~ normal(p_response_guess,.1); // constrain p_response
+p_response ~ normal(p_response_guess,.001); // constrain p_response
 
 //// recruitment prior ////
 
 uc_rec_dev_t ~ normal(0, 1);
 
-sigma_r ~ normal(sigma_r_guess, 0.1);
+sigma_r ~ normal(sigma_r_guess, sd_sigma_r);
 
 //// selectivity likelihood ////
 
-// p_length_50_sel ~ normal(length_50_sel_guess/loo, .01);
+p_length_50_sel ~ normal(length_50_sel_guess/loo, 5);
 
 // sel_delta ~ normal(delta_guess, 2);
 

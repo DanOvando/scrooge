@@ -73,7 +73,7 @@
 
   run_tests <- F
 
-  n_cores <- 1
+  n_cores <- 2
 
   if (in_clouds == T){
 
@@ -221,7 +221,7 @@
     filter(is.na(u_v_umsy) == F & is.na(lead_u) == F) %>%
     mutate(delta_u = lead_u / u_v_umsy - 1) %>%
     group_by(stock) %>%
-    summarise(max_delta_u = pmin(2,max(delta_u))) %>%
+    summarise(max_delta_u = pmin(.2,max(delta_u))) %>%
     filter(max_delta_u > 0, is.finite(max_delta_u))
 
   possible_delta_u <- u$max_delta_u
@@ -234,7 +234,10 @@
   if (sim_fisheries == T)
   {
 
-    n_fisheries <- 200
+    n_fisheries <- 10
+
+    # "constant-effort",
+    # "supplied-catch",
 
     fisheries_sandbox <- data_frame(
       sci_name = sample(
@@ -247,29 +250,28 @@
         replace = T
       ),
       fleet_model = sample(
-        c("constant-effort",
-          "supplied-catch",
+        c(
           "open-access"),
         n_fisheries,
         replace = T
       ),
       sigma_r = runif(n_fisheries, 0.01,0.4),
-      rec_ac = runif(n_fisheries,0,0.75),
+      rec_ac = runif(n_fisheries,0,0),
       sigma_effort = runif(n_fisheries, 0,0),
       price_cv = runif(n_fisheries, 0,0.5),
       cost_cv = runif(n_fisheries, 0,.5),
-      q_cv = runif(n_fisheries, 0,0.5),
+      q_cv = runif(n_fisheries, 0,0),
       price_ac = runif(n_fisheries, 0,0.75),
       cost_ac = runif(n_fisheries, 0,0.75),
       q_ac = runif(n_fisheries, 0,0.75),
       steepness = runif(n_fisheries, 0.6,0.9),
-      obs_error = runif(n_fisheries, 0,0.4),
+      obs_error = runif(n_fisheries, 0,0),
       max_cp_ratio = runif(n_fisheries, 0.01,.95),
       price = sample(possible_prices, n_fisheries, replace = T),
       r0 = sample(possible_r0, n_fisheries, replace = T),
       q = sample(possible_q, n_fisheries, replace = T),
       max_perc_change_f = sample(possible_delta_u, n_fisheries, replace = T),
-      profit_lags = sample(0:4, n_fisheries, replace = T),
+      profit_lags = sample(0, n_fisheries, replace = T),
       initial_f = sample(c(0.01,.25,.5), n_fisheries, replace = T),
       beta = runif(n_fisheries, 2,2)
     )
@@ -360,40 +362,8 @@
       load(file = here::here("data","scrooge-data","fisheries_sandbox.Rdata"))
 
     }
-  }
+  } # close sim fisheries stuff
 
-  # modify_scroogedata <- function(prepped, obs_error,linf_buffer = 1.5,percent_sampled = 1,
-  #                                cv_effort = 0.25,
-  #                                economic_model){
-  #
-  #   new_scd <- prepare_scrooge_data(
-  #     fish = prepped$fish,
-  #     fleet = prepped$fleet,
-  #     bias = 0,
-  #     obs_error = obs_error,
-  #     linf_buffer = linf_buffer,
-  #     sim = prepped$simed_fishery,
-  #     sample_type = "catch",
-  #     percent_sampled = percent_sampled,
-  #     cv_effort = cv_effort,
-  #     economic_model = economic_model
-  #   )
-  #
-  #   prepped$scrooge_data <- new_scd
-  #
-  #   return(prepped)
-  #
-  # }
-  #
-  #
-  # fisheries_sandbox <- fisheries_sandbox %>%
-  #   mutate(prepped_fishery = pmap(list(
-  #     prepped = prepped_fishery,
-  #     obs_error = obs_error,
-  #     economic_model = economic_model
-  #   ), modify_scroogedata))
-
-  # stop()
 # apply candidate assessment models ---------------------------------------
 
 # test three simple cases to verify core model performance
@@ -627,11 +597,11 @@ if (run_tests == T) {
 
 } # close test runs
 
-
 if (fit_models == T) {
 
+res <- fisheries_sandbox
 
-  experiments <- expand.grid(period = c("middle","end"), window = c(2,5,10),
+  experiments <- expand.grid(period = c("beginning","middle","end"), window = c(2,10),
                              economic_model = c(0,1),
                              effort_data_weight = c(0,1),
                              fishery = 1:nrow(fisheries_sandbox), stringsAsFactors = F)
@@ -645,8 +615,8 @@ if (fit_models == T) {
     mutate(prepped_fishery = pmap(list(
       prepped_fishery = prepped_fishery,
       window = window,
-      period = period), subsample_data)) %>%
-    slice(1:4)
+      period = period), subsample_data))  %>%
+    sample_n(10)
 
   fisheries_sandbox$experiment <- 1:nrow(fisheries_sandbox)
 
@@ -665,16 +635,16 @@ if (fit_models == T) {
       economic_model = fisheries_sandbox$economic_model[i],
       effort_data_weight = fisheries_sandbox$effort_data_weight[i],
       scrooge_file = "scrooge",
-      iter = 4000,
-      warmup = 2000,
+      iter = 2000,
+      warmup = 1000,
       adapt_delta = 0.8,
       max_treedepth = 12,
       in_clouds = in_clouds,
       cloud_dir = cloud_dir,
-      max_f_v_fmsy_increase = 0.5,
       chains = 1,
       cv_effort = 0.25,
-      max_expansion = 1.5
+      q_guess = mean(possible_q),
+      r0 = mean(possible_r0)
     )
 
   } # close fitting loop
@@ -726,15 +696,19 @@ if (fit_models == T) {
 
 scrooge_worked <- map(fisheries_sandbox$scrooge_fit,'error') %>% map_lgl(is.null)
 
-# lime_worked <- map_lgl(map(fisheries_sandbox$processed_lime,"error"), is.null)
 
-# stan_worked <-  map_lgl(map(fisheries_sandbox$scrooge_fit,
-#                             "result"),~!(nrow(.x) %>% is.null()))
+stan_worked <-  map_lgl(map(fisheries_sandbox$scrooge_fit,  "result"),~!(nrow(.x) %>% is.null()))
 
 
 fisheries_sandbox <- fisheries_sandbox %>%
   filter(scrooge_worked) %>%  #,stan_worked, lime_worked, period != "middle")
    mutate(scrooge_fit = map(scrooge_fit, "result"))
+
+scrooge_converged <- fisheries_sandbox$scrooge_fit %>%
+  map_lgl(~class(rstan::get_logposterior(.x)) == "list")
+
+fisheries_sandbox <- fisheries_sandbox %>%
+  filter(scrooge_converged)
 
 if(in_clouds == T){
 
@@ -749,9 +723,6 @@ if(in_clouds == T){
 
 
 processed_sandbox <-  fisheries_sandbox%>%
-  # slice(6) %>%
-  # mutate(scrooge_fit = map(scrooge_fit,"result")) %>%
-  # mutate(processed_lime = map(processed_lime, "result")) %>%
 mutate(processed_scrooge = map2(
     scrooge_fit,
     map(prepped_fishery, "sampled_years"),

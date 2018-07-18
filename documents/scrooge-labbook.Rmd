@@ -3767,4 +3767,142 @@ aha what abotu setting it in terms of cost per unit F, which is pretty stable, t
 
 Alternatively, you could say hey, it works for the most part, let's focus on getting scrogoe itself to converge better. that seems like a better use of your time since that's what needs to get run a lot more than the operatin models themselves. 
 
+# what's the value of ppue?
+
+
+
+```{r}
+
+library(tidyverse)
+library(FishLife)
+library(spasm)
+library(ggridges)
+set.seed(42)
+fish <-
+  create_fish(
+    scientific_name = "Lutjanus campechanus",
+    query_fishlife = T,
+    mat_mode = "length",
+    time_step = 1,
+    sigma_r = 0.25,
+    price = 100,
+    price_cv = 0.25,
+    price_ac = 0.5,
+    steepness = 0.6,
+    r0 = 1000,
+    rec_ac = 0.4,
+    density_movement_modifier = 0
+  )
+
+
+fleet <- create_fleet(
+  fish = fish,
+  cost_cv =  0.25,
+  cost_ac = 0.5,
+  q_cv = 0.25,
+  q_ac = 0.5,
+  fleet_model = "open-access",
+  sigma_effort = 0,
+  length_50_sel = 0.25 * fish$linf,
+  initial_effort = 100,
+  profit_lags =  0,
+  beta = 2,
+  max_cp_ratio = 0.25,
+  max_perc_change_f = 0.25
+)
+
+
+sim_noad <- spasm::sim_fishery(
+  fish = fish,
+  fleet = fleet,
+  manager = create_manager(mpa_size = 0.5),
+  num_patches = 1,
+  sim_years = 100,
+  burn_year = 50,
+  time_step = fish$time_step,
+  est_msy = F,
+  random_mpas = F
+)
+
+
+ a = sim_noad %>%
+  group_by(year) %>%
+  summarise(te = unique(effort),
+            f = unique(f),
+            profits = sum(profits),
+            biomass = sum(biomass),
+            catch = sum(biomass_caught)) %>%
+  ungroup() %>%
+   arrange(year) %>% 
+  mutate(ppue = profits / te,
+         cpue = catch / te) %>%
+   mutate(lag_ppue = lag(ppue),
+          lag_profits = lag(profits),
+          delta_f = f - lag(f),
+          delta_effort = te - lag(te)) 
+ 
+  
+ wtf <- a %>% 
+   filter(profits <0 & delta_effort > 0 )
+ 
+ a %>% 
+   ggplot(aes(lag_ppue, delta_effort)) + 
+   geom_point()
+
+   
+   a %>% 
+  gather(metric, value, -year) %>% 
+  ggplot(aes(year, value, color = metric)) +
+  geom_line(show.legend = F) +
+    facet_wrap(~metric, scales = "free_y")
+
+
+
+
+```
+
+profit per unit effort is directly proportional to the increase in F. So, that's where it can become useful in the likelihood. In the same way that qCPUE is useful, dPPUE can be useful then, where you estimate q to translate CPUE to abundance, and you estimate d to translate PPUE. 
+
+Or really, the reason that you don't just include the CPUE as data is that you are more interested in estiamting the unobserved biomass. In your case, you are interested in the F itself. 
+
+So one option would be to pass the profit per unit effort in as data, and just estimate the p_response to translate that into changes in effort. So, that would be explain the length composition data, given data on the relative change in profitability. 
+
+Another would be to use your same priors, but now take the profit per unit effort data as part of the likelihood. So, find the F, recruitment, etc. that best explain the length compision and the history of profit per unit effort in the fishery. 
+
+add an index on a random effect
+
+as a discussion point 
+
+DEFINITELY make effort or ppue data on the left hand side. BOOYA
+
+methot schirripa
+
+unique identifier for a different 
+
+Factor model for effort dynamics along metiers of fleets to look into which metiers are explaining F patterns
+
+multivariate gompertz model, in theory you could fit a two "species" model of effort and biomass for the species and see what that looks like. 
+
+hazard model on assessments the time between a stock becomes fished and when the first assessment comes, you can take that hazard model and transfer that into an annual varying propensity score. 
+
+# Final parameterization 
+
+OK, seems like you got things working fairly well again. Per Jim's point, definitely worth thinking about incorporating things on the right-hand side. 
+
+- If you only know price, cost, or some unit of
+  - Then it goes in the effort priors
+- If you **know** effort
+  - Input as data using economic weight of 1
+  - Fit to as data
+- If you have profits per unit effort
+  - Input as data 
+  - Fit to as data
+  
+Can you turn off parts of the likelihood?
+
+You can at least include an if statement there for different economic models... 
+
+I'd like to get away from the weighting since it's so arbitrary: how would you possible pick anything except zero or 1?
+
+
 
