@@ -255,15 +255,15 @@
         n_fisheries,
         replace = T
       ),
-      sigma_r = runif(n_fisheries, 0.01,0.4),
-      rec_ac = runif(n_fisheries,0,0),
+      sigma_r = runif(n_fisheries, 0,0),
+      rec_ac = runif(n_fisheries,0,.5),
       sigma_effort = runif(n_fisheries, 0,0),
-      price_cv = runif(n_fisheries, 0,0.5),
-      cost_cv = runif(n_fisheries, 0,.5),
+      price_cv = runif(n_fisheries, 0,0),
+      cost_cv = runif(n_fisheries, 0,0),
       q_cv = runif(n_fisheries, 0,0),
-      price_ac = runif(n_fisheries, 0,0.75),
-      cost_ac = runif(n_fisheries, 0,0.75),
-      q_ac = runif(n_fisheries, 0,0.75),
+      price_ac = runif(n_fisheries, 0.5,0.75),
+      cost_ac = runif(n_fisheries, 0.5,0.75),
+      q_ac = runif(n_fisheries, 0.5,0.75),
       steepness = runif(n_fisheries, 0.6,0.9),
       obs_error = runif(n_fisheries, 0,0),
       max_cp_ratio = runif(n_fisheries, 0.01,.95),
@@ -273,7 +273,8 @@
       max_perc_change_f = sample(possible_delta_u, n_fisheries, replace = T),
       profit_lags = sample(0, n_fisheries, replace = T),
       initial_f = sample(c(0.01,.25,.5), n_fisheries, replace = T),
-      beta = runif(n_fisheries, 2,2)
+      beta = runif(n_fisheries, 2,2),
+      percnt_loo_selected = runif(n_fisheries, 0.5, 0.5)
     )
     fleet_model_params <- data_frame(
       fleet_model = c(
@@ -311,7 +312,7 @@
           sci_name = fisheries_sandbox$sci_name[i],
           fleet_model = fisheries_sandbox$fleet_model[i],
           fleet_params = fisheries_sandbox$fleet_params[[i]],
-          sigma_r = fisheries_sandbox$sigma_r[i],
+          sigma_r = fisheries_sandbox$sigma_r[[i]],
           sigma_effort = fisheries_sandbox$sigma_effort[i],
           price_cv = fisheries_sandbox$price_cv[i],
           cost_cv = fisheries_sandbox$cost_cv[i],
@@ -320,6 +321,7 @@
           cost_ac = fisheries_sandbox$cost_ac[i],
           q_ac = fisheries_sandbox$q_ac[i],
           steepness = fisheries_sandbox$steepness[i],
+          percnt_loo_selected = fisheries_sandbox$percnt_loo_selected[i],
           obs_error = fisheries_sandbox$obs_error[i],
           initial_f = fisheries_sandbox$initial_f[i],
           r0 = fisheries_sandbox$r0[i],

@@ -37,7 +37,7 @@ row_vector[nt] perc_change_effort;
 
 row_vector[nt] price_t;
 
-row_vector[nt] cost_t;
+row_vector[nt] relative_cost_t;
 
 row_vector[nt] q_t;
 
@@ -90,23 +90,29 @@ transformed data{
 
 parameters{
 
-real log_burn_effort; // burn in effort
+real<lower = 0, upper = 2> burn_f; // burn in effort
 
-vector[nt]  log_effort_t; // effort in time t
+real<lower = 0, upper = 2> initial_f; // initial effort
 
-vector[nt]  uc_rec_dev_t; //  recruitment deviates
+// vector[nt - 1]  uc_effort_dev_t; // effort in time t
+
+vector[nt]  exp_rec_dev_t; //  recruitment deviates
 
 real <lower = 0> sigma_r; // standard deviation of recruitment deviates
 
-real<lower = 0> sigma_effort;
+// real log_cost_multiplier; //
 
-real<lower = 0, upper = .9> p_length_50_sel; // length at 50% selectivity
+// real<lower = 0> sigma_effort;
 
-real<lower = 0, upper = 10> p_response;
+// real<lower = 0, upper = .9> p_length_50_sel; // length at 50% selectivity
+
+// real<lower = 0> p_response;
 
 } // close parameters block
 
 transformed parameters{
+
+  // real penalty;
 
   real ssb0;
 
@@ -116,11 +122,19 @@ transformed parameters{
 
   real length_50_sel;
 
-  real burn_f;
+  // real burn_f;
 
-  vector[nt]  effort_t; //  base effort multiplier
+  real plus_group;
 
-  vector[nt]  rec_dev_t; //  base effort multiplier
+  row_vector[n_ages] temp_a;
+
+  row_vector[n_ages - 1] temp_a2;
+
+  vector[nt]  effort_t; // effort in time t
+
+  vector[nt]  rec_dev_t; //  recruitment deviats
+
+  // vector[nt - 1]  effort_dev_t; //  base effort multiplier
 
   matrix[n_burn, n_ages] n_a_init; // numbers at time and age
 
@@ -140,6 +154,8 @@ transformed parameters{
 
   vector[nt] f_t; // fishing mortality at time step
 
+  row_vector[nt] cost_t;
+
   vector[nt] profit_t; // profits
 
   vector[nt] ppue_hat_t; // profit per unit effort
@@ -148,17 +164,27 @@ transformed parameters{
 
   row_vector[n_ages] p_age_sampled;
 
-  length_50_sel = loo * p_length_50_sel;
+  // start filling things in //
+
+  // penalty = 0;
+
+  length_50_sel = length_50_sel_guess;
+
+  // length_50_sel = loo * p_length_50_sel;
 
   sel_delta = 2;
 
-  burn_f = q_t[1] * exp(log_burn_effort);
+   cost_t = relative_cost_t; // * exp(log_cost_multiplier);
 
-  effort_t = exp(log_effort_t);
+  // burn_f = q_t[1] * exp(log_burn_effort);
+
+  effort_t[1] = initial_f / q_t[1];
 
   //sigma_r = exp(log_sigma_r);
 
-  rec_dev_t = exp(sigma_r * uc_rec_dev_t - sigma_r^2/2);
+  // effort_dev_t = exp(sigma_effort * uc_effort_dev_t - sigma_effort^2/2);
+
+  rec_dev_t = exp(exp_rec_dev_t - sigma_r^2/2);
 
   // fill matrices with zeros //
 
@@ -180,9 +206,13 @@ transformed parameters{
 
   n_a_init[1,1:n_ages] = r0 * exp(-m * (ages - 1))';
 
-  n_a_init[1, n_ages] = n_a_init[1, n_ages - 1] * exp(-m) / (1 - exp(-m));  //plus group
+  plus_group = n_a_init[1, n_ages - 1] * exp(-m) / (1 - exp(-m));  //plus group
 
-  ssb_init[1, 1:n_ages] = n_a_init[1, 1:n_ages] .* mean_maturity_at_age'.* mean_weight_at_age'; // calculate ssb at age
+  n_a_init[1, n_ages] = plus_group;
+
+  temp_a = n_a_init[1, 1:n_ages] .* mean_maturity_at_age'.* mean_weight_at_age';
+
+  ssb_init[1, 1:n_ages] = temp_a; // calculate ssb at age
 
   ssb0 = sum(ssb_init[1, 1:n_ages]);
 
@@ -192,7 +222,9 @@ transformed parameters{
 
     n_a_init[t,1] = (0.8 * r0 * h *ssb_temp) / (0.2 * ssb0 * (1 - h) + (h - 0.2) * ssb_temp); //calculate recruitment
 
-    n_a_init[t , 2:n_ages] = n_a_init[t - 1, 1:(n_ages -1)] .* (exp(-(m + burn_f* mean_selectivity_at_age[1:(n_ages - 1)])))'; // grow and die
+  temp_a2 = n_a_init[t - 1, 1:(n_ages -1)] .* (exp(-(m + burn_f* mean_selectivity_at_age[1:(n_ages - 1)])))';
+
+    n_a_init[t , 2:n_ages] = temp_a2;  // grow and die
 
     n_a_init[t, n_ages] = n_a_init[t, n_ages] + n_a_init[t - 1, n_ages] .* (exp(-(m + burn_f * mean_selectivity_at_age[n_ages])))'; // assign to plus group
 
@@ -217,7 +249,9 @@ transformed parameters{
 
     n_ta[t,1] = ((0.8 * r0 * h *ssb_temp) / (0.2 * ssb0 * (1 - h) + (h - 0.2) * ssb_temp)) * rec_dev_t[t]; //calculate recruitment
 
-    n_ta[t , 2:n_ages] = n_ta[t - 1, 1:(n_ages -1)] .* (exp(-(m + f_t[t - 1] * mean_selectivity_at_age[1:(n_ages - 1)])))'; // grow and die
+    temp_a2 = n_ta[t - 1, 1:(n_ages -1)] .* (exp(-(m + f_t[t - 1] * mean_selectivity_at_age[1:(n_ages - 1)])))';
+
+    n_ta[t , 2:n_ages] = temp_a2; // grow and die
 
     n_ta[t, n_ages] = n_ta[t, n_ages] + n_ta[t - 1, n_ages] .* (exp(-(m + f_t[t - 1] * mean_selectivity_at_age[n_ages])))'; // assign to plus group
 
@@ -235,6 +269,16 @@ transformed parameters{
 
   ppue_hat_t[t - 1] = profit_t[t - 1] / effort_t[t - 1];
 
+  effort_t[t] =  initial_f / q_t[t];;
+
+  // effort_t[t] = (effort_t[t - 1] + (p_response_guess * (ppue_hat_t[t - 1])));// * effort_dev_t[t-1];
+
+  // if (effort_t[t] < 1e-3){
+  //   print("ruhroh")
+  //   effort_t[t] = 1e-3 / (2 - effort_t[t]/1e-3);
+  //   penalty += (.01 * (effort_t[t] - 1e-3)^2);
+  // }
+
   f_t[t] = effort_t[t] * q_t[t];
 
   // sample lengths //
@@ -242,7 +286,6 @@ transformed parameters{
   p_age_sampled = cn_ta[t - 1, 1:n_ages] / sum(cn_ta[t - 1, 1:n_ages]);
 
   p_lbin_sampled[t - 1, 1:n_lbins] = (p_age_sampled * length_at_age_key) / sum(p_age_sampled * length_at_age_key);  // calculate the proportion of the sampled catch in each length bin
-
 
   } // close time loop
 
@@ -266,13 +309,16 @@ transformed parameters{
 
 model{
 
-real oa_prediction;
+// real oa_prediction;
 
-real effort_data_prediction;
+// real effort_data_prediction;
 
-real new_effort;
+// real new_effort;
 
-real previous_max;
+// real previous_max;
+
+// target += penalty;
+
 
 //// length comps likelihood ////
 
@@ -284,54 +330,25 @@ for (i in 1:(n_lcomps)){
 
 //// effort prior ////
 
+// initial_f ~ normal(burn_f,0.1);
 
-if (economic_model == 1) { // open access priors
+// sigma_effort ~ normal(0,1);
 
-  for (t in 2:nt){
+// uc_effort_dev_t ~ normal(0,1);
 
-    new_effort = effort_t[t - 1] + (p_response * (ppue_hat_t[t - 1]));
-
-    log_effort_t[t] ~ normal(log(new_effort),sigma_effort);
-
-    } // close time loop
-
-} // close 1
-
-if (economic_model == 2){
-
-    for (t in 2:nt){
-
-    new_effort = effort_t[t - 1] * perc_change_effort[t - 1];
-
-    log_effort_t[t] ~ normal(log(new_effort),sigma_effort);
-
-    } // close time loop
-
-} // close 2
-
-if (economic_model == 0){
-
-  for (i in 2:nt){
-
-  log_effort_t[i] ~ normal(log(effort_t[i - 1]),sigma_effort);
-
-}
-
-} // close effort 0
-
-sigma_effort ~ cauchy(0,2.5);
-
-p_response ~ normal(p_response_guess,.001); // constrain p_response
+// p_response ~ normal(p_response_guess, .5*p_response_guess); // constrain p_response
 
 //// recruitment prior ////
 
-uc_rec_dev_t ~ normal(0, 1);
+// uc_rec_dev_t ~ normal(0, 1);
 
-sigma_r ~ normal(sigma_r_guess, sd_sigma_r);
+sigma_r ~ normal(0, 0.2);
+
+exp_rec_dev_t ~ normal(0, sigma_r);
 
 //// selectivity likelihood ////
 
-p_length_50_sel ~ normal(length_50_sel_guess/loo, 5);
+// p_length_50_sel ~ normal(.9*loo, 1e-3);
 
 // sel_delta ~ normal(delta_guess, 2);
 
@@ -344,8 +361,6 @@ generated quantities{
 int n_tl[nt, n_lbins];
 
 for (t in 1:nt){
-
-
     n_tl[t, 1:n_lbins] = multinomial_rng(to_vector(p_lbin_sampled[t, 1:n_lbins]),500); // generate length comp samples
 }
 

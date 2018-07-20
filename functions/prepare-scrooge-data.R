@@ -107,20 +107,25 @@ cost_t <- price_and_cost_history %>%
 q_t <- price_and_cost_history %>%
   filter(variable == "q")
 
-effort_t <- sim %>%
+data_t <- sim %>%
   group_by(year) %>%
-  summarise(effort = mean(effort)) %>%
-  mutate(effort = effort * exp(rnorm(nrow(.), rnorm(nrow(.),0, bias), obs_error))) %>%
+  summarise(profits = sum(profits),
+            effort = unique(effort)) %>%
+  mutate(ppue = profits / effort) %>%
+  mutate(effort = effort * exp(rnorm(nrow(.), rnorm(nrow(.),0, bias), obs_error)),
+         ppue = ppue * exp(rnorm(nrow(.), rnorm(nrow(.),0, bias), obs_error))) %>%
   ungroup() %>%
   mutate(lead_effort = lead(effort, default = 1)) %>%
   mutate(perc_change_effort = lead_effort/effort)
+
 
 scrooge_data <- list(
   economic_model = economic_model,
   estimate_recruits = 1,
   length_comps = length_comps,
-  observed_effort = effort_t$effort,
-  perc_change_effort = effort_t$perc_change_effort,
+  observed_effort = data_t$effort,
+  perc_change_effort = data_t$perc_change_effort,
+  ppue_t = data_t$ppue,
   length_comps_years  = length_comps$year,
   price_t = price_t$value,
   cost_t = cost_t$max_scaled_value,

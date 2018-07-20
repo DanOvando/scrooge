@@ -3904,5 +3904,31 @@ You can at least include an if statement there for different economic models...
 
 I'd like to get away from the weighting since it's so arbitrary: how would you possible pick anything except zero or 1?
 
+One option is just to fit to the PPUE, and take the price, cost, q, etc. as data. That would be assuming pure observation error
+
+The other way is observation and process error. That's what you're doing now more or less. The process error comes in between the vector of efforts and the priors, and the observation error comes in between the true effort and the "observed" effort. look at the state epace example from the schaefer model to convince yourself 
+
+ah though there you're estimating deviances, which is a bit different, interesting idea. 
+
+So your options. 
+
+I don't think it's kosher to both use the price, cost, and q data in the priors, and then fit to the ppue which is derived from those. Though, if you think about it, that's basically what a surplus production model is doing, in using the catch as data and then fitting to an index derived from the catch, so maybe it's OK? In that the PPUE is not a direct outcome of the costs etc. But, the question remains, why would you use the raw stuff if you have the PPUE itself. Why not just use the PPUE as data, and then allow effort deviates. 
+
+If you're including both priors and data, that is saying you're including both process and observation error on the economic side, so need to estiamte both. 
+
+of course, you idiot, when you tnink about it as process error, it's not a CV on how much effort can change, but how much it can deviate from the open access model itself. So, you should fix sigma r, which you can say you have reasonable means to predict, and estiamte sigma_effort_process, and observation if you need to.   
+
+- 1: p,c,q driven priors
+
+- 2: p,c,q driven priors, fit to PPUE
+  - either relative ppue or tune costs here to allow tht things to actually match up
+
+- 3: ppue based priors
+
+- 4:  p,c,q driven priors, fit to effort
+  - relative effort or tune q here to translate that effort into the right F
+  
+- 5: effort based priors - relative effort is fixed with deviates
 
 
+Whoops, locking in inital depletion with initial F is a problem, since it's not allowing you to have high F and high B, need a burn-in F. Fix that first. 

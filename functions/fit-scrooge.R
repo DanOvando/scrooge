@@ -22,7 +22,6 @@ fit_scrooge <-
            init_f_v_m = 0.8,
            cv_effort = 1.6,
            cp_guess = 0.75,
-           effort_data_weight = 0,
            h = 0.8,
            sd_sigma_r = 0.001
            ) {
@@ -40,8 +39,6 @@ fit_scrooge <-
     data$h <- h
 
     data$f_init_guess <- fish$m * init_f_v_m
-
-    data$effort_data_weight <-  effort_data_weight
 
     data$sd_sigma_r <- sd_sigma_r
 
@@ -87,7 +84,7 @@ fit_scrooge <-
 
     hyp_f <- fish$m #hypothetical f
 
-    hyp_effort <- hyp_f / max(data$q_t)
+    hyp_effort <- hyp_f / min(data$q_t)
 
     hyp_f_at_age <- hyp_f * fleet$sel_at_age
 
@@ -110,16 +107,34 @@ fit_scrooge <-
       map(
         1:chains,
         ~ list(
-          log_effort_t = jitter(log(rep(hyp_effort, data$nt))),
-          p_length_50_sel = 0.25 * exp(rnorm(1, 0, .1))
+          burn_f = jitter(fish$m),
+          initial_f = jitter((fish$m)),
+          sigma_r = 1e-6
         )
       )
 
-    # p_response = data$p_response_guess * exp(rnorm(1, 0, .1))
 
+    # inits <-
+    #   map(
+    #     1:chains,
+    #     ~ list(
+    #       log_burn_effort = jitter(log(hyp_effort)),
+    #       log_initial_effort = jitter(log(hyp_effort)),
+    #       p_length_50_sel = 0.25 * exp(rnorm(1, 0, .1)),
+    #       log_cost_multiplier = log(jitter(cost_guess,10))
+    #     )
+    #   )
 
-    # max_cost = cost_guess * exp(rnorm(1,0,0.1))
-
+    # inits <-
+    #   map(
+    #     1:chains,
+    #     ~ list(
+    #       log_burn_effort = jitter(log(hyp_effort)),
+    #       log_initial_effort = jitter(log(hyp_effort)),
+    #       p_length_50_sel = 0.25 * exp(rnorm(1, 0, .1))
+    #     )
+    #   )
+    #
 
     fit <-
       rstan::stan(
@@ -131,7 +146,8 @@ fit_scrooge <-
         iter = iter,
         warmup = warmup,
         control = list(adapt_delta = adapt_delta,
-                       max_treedepth = max_treedepth)
+                       max_treedepth = max_treedepth),
+        init = inits
       )
     # init = inits
 
