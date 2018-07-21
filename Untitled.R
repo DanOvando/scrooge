@@ -34,10 +34,10 @@ fits <- foreach::foreach(i = 1:nrow(fisheries_sandbox)) %dopar% {
     experiment = fisheries_sandbox$experiment[i],
     economic_model = 1,
     scrooge_file = "nc_scrooge",
-    iter = 2000,
-    warmup = 1000,
-    # adapt_delta = 0.8,
-    max_treedepth = 8,
+    iter = 5000,
+    warmup = 4000,
+    adapt_delta = 0.9,
+    max_treedepth = 12,
     max_perc_change_f = 0.2,
     in_clouds = in_clouds,
     cloud_dir = cloud_dir,
@@ -52,11 +52,25 @@ fits <- foreach::foreach(i = 1:nrow(fisheries_sandbox)) %dopar% {
 
 rstanarm::launch_shinystan(fits[[1]]$result)
 
-fits[[1]]$result ->a
+rstan::check_energy(a)
+
+fits[[1]]$result -> a
 
 wtf <- rstan::extract(a, "sigma_r", inc_warmup = TRUE, permuted = FALSE)
 
 plot(wtf)
+
+catch <- tidybayes::spread_samples(a, c_ta[year,age])
+
+catch <- catch %>%
+  group_by(year, age) %>%
+  summarise(mean_catch = mean(c_ta))
+
+
+ catch %>%
+  ggplot(aes(age, mean_catch, fill = factor(year))) +
+   geom_col(position = "dodge", show.legend = F)
+
 
 rec_devs <- tidybayes::spread_samples(a, rec_dev_t[year])
 
@@ -75,7 +89,10 @@ lcomps %>%
   ggplot(aes(lbin, mean_n, color = year, group = year)) +
   geom_line(show.legend = T)
 
+psel_50_selectivity <- tidybayes::spread_samples(a, p_length_50_sel)
 
+
+sel_50_selectivity <- tidybayes::spread_samples(a, length_50_sel)
 
 
 selectivity <- tidybayes::spread_samples(a, mean_selectivity_at_age[age])
@@ -139,8 +156,14 @@ fisheries_sandbox$prepped_fishery[[1]]$simed_fishery %>%
 pairs(fits[[1]]$result, pars = c("sigma_r", "sigma_effort"))
 
 
-pairs(fits[[1]]$result, pars = c("sigma_r", "energy__"))
+pairs(fits[[1]]$result, pars = c("sigma_r", "p_length_50_sel"))
 
+pairs(fits[[1]]$result, pars = c("p_length_50_sel","initial_f"))
+
+pairs(fits[[1]]$result, pars = c("sigma_r", "p_length_50_sel","burn_f","initial_f"))
+
+
+pairs(fits[[1]]$result, pars = c("sigma_r", "exp_rec_dev_t"))
 
 pairs(fits[[1]]$result, pars = c("sigma_effort", "oc_effort_t"))
 
@@ -185,7 +208,8 @@ processed_sandbox <-
   mutate(processed_scrooge = map2(
     scrooge_fit,
     map(prepped_fishery, "sampled_years"),
-    process_scrooge
+    process_scrooge,
+    to_tidy = c("f_t", "n_tl")
   )) %>%
   mutate(observed = map(prepped_fishery, "simed_fishery")) %>%
   mutate(scrooge_performance = pmap(
@@ -193,15 +217,15 @@ processed_sandbox <-
          predicted = processed_scrooge),
     judge_performance
   )) %>%
-  mutate(
-    scrooge_rec_performance = pmap(
-      list(observed = observed,
-           predicted = processed_scrooge),
-      judge_performance,
-      observed_variable = rec_dev,
-      predicted_variable = "rec_dev_t"
-    )
-  )  %>%
+  # mutate(
+  #   scrooge_rec_performance = pmap(
+  #     list(observed = observed,
+  #          predicted = processed_scrooge),
+  #     judge_performance,
+  #     observed_variable = rec_dev,
+  #     predicted_variable = "rec_dev_t"
+  #   )
+  # )  %>%
   # mutate(lime_performance = pmap(
   #   list(observed = observed,
   #        predicted = processed_lime),

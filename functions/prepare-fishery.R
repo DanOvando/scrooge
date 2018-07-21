@@ -139,21 +139,6 @@ prepare_fishery <-
       est_msy = FALSE
     )
 
-#
-#     sim %>%
-#       group_by(year) %>%
-#       summarise(te = unique(effort),
-#                 profits = sum(profits),
-#                 biomass = sum(biomass)) %>%
-#       ungroup() %>%
-#       mutate(ppue = profits / te) %>%
-#       gather(metric, value, -year) %>%
-#       ggplot(aes(year, value, color = metric)) +
-#       geom_line(show.legend = F) +
-#       geom_point() +
-#       facet_wrap(~metric, scales = "free_y")
-#
-
 
     scrooge_data <- prepare_scrooge_data(fish = fish,
                                      fleet = fleet,

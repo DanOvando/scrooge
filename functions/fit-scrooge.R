@@ -23,7 +23,8 @@ fit_scrooge <-
            cv_effort = 1.6,
            cp_guess = 0.75,
            h = 0.8,
-           sd_sigma_r = 0.001
+           sd_sigma_r = 0.001,
+           seed = 42
            ) {
 
 
@@ -34,9 +35,9 @@ fit_scrooge <-
 
     data$sigma_r_guess <- 0.4
 
-    data$r0 <- r0
+    data$r0 <- fish$r0
 
-    data$h <- h
+    data$h <- fish$steepness
 
     data$f_init_guess <- fish$m * init_f_v_m
 
@@ -107,9 +108,8 @@ fit_scrooge <-
       map(
         1:chains,
         ~ list(
-          burn_f = jitter(fish$m),
-          initial_f = jitter((fish$m)),
-          sigma_r = 1e-6
+          initial_f = jitter((fish$m*2)),
+          length_50_sel = 0.25*data$loo
         )
       )
 
@@ -136,7 +136,7 @@ fit_scrooge <-
     #   )
     #
 
-    fit <-
+  fit <-
       rstan::stan(
         file = here::here("src", paste0(scrooge_file, ".stan")),
         data = data,
@@ -147,7 +147,8 @@ fit_scrooge <-
         warmup = warmup,
         control = list(adapt_delta = adapt_delta,
                        max_treedepth = max_treedepth),
-        init = inits
+        init = inits,
+        seed = seed
       )
     # init = inits
 

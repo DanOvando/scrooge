@@ -73,7 +73,7 @@
 
   run_tests <- F
 
-  n_cores <- 2
+  n_cores <- 1
 
   if (in_clouds == T){
 
@@ -255,7 +255,7 @@
         n_fisheries,
         replace = T
       ),
-      sigma_r = runif(n_fisheries, 0,0),
+      sigma_r = runif(n_fisheries, 0.01,0.01),
       rec_ac = runif(n_fisheries,0,.5),
       sigma_effort = runif(n_fisheries, 0,0),
       price_cv = runif(n_fisheries, 0,0),
@@ -332,7 +332,8 @@
           max_cp_ratio = fisheries_sandbox$max_cp_ratio[i],
           beta = fisheries_sandbox$beta[i],
           sim_years = 100,
-          burn_years = 50
+          burn_years = 100,
+          cv_len = 0.01
       )
 
     } # close dopar

@@ -121,7 +121,6 @@ data_t <- sim %>%
 
 scrooge_data <- list(
   economic_model = economic_model,
-  estimate_recruits = 1,
   length_comps = length_comps,
   observed_effort = data_t$effort,
   perc_change_effort = data_t$perc_change_effort,

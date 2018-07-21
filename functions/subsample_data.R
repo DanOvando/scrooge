@@ -23,7 +23,6 @@ subsample_data <-
       sampled_years <- (max(years) - window):max(years)
 
     }
-
     if (prop_years_lcomp_data <1){
 
     length_years <-
