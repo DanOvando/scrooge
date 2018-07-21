@@ -255,7 +255,7 @@
         n_fisheries,
         replace = T
       ),
-      sigma_r = runif(n_fisheries, 0.01,0.01),
+      sigma_r = runif(n_fisheries, 0.01,.1),
       rec_ac = runif(n_fisheries,0,.5),
       sigma_effort = runif(n_fisheries, 0,0),
       price_cv = runif(n_fisheries, 0,0),

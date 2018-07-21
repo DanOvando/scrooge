@@ -36,7 +36,7 @@ fits <- foreach::foreach(i = 1:nrow(fisheries_sandbox)) %dopar% {
     scrooge_file = "nc_scrooge",
     iter = 5000,
     warmup = 4000,
-    adapt_delta = 0.9,
+    adapt_delta = 0.8,
     max_treedepth = 12,
     max_perc_change_f = 0.2,
     in_clouds = in_clouds,
@@ -52,9 +52,10 @@ fits <- foreach::foreach(i = 1:nrow(fisheries_sandbox)) %dopar% {
 
 rstanarm::launch_shinystan(fits[[1]]$result)
 
-rstan::check_energy(a)
 
 fits[[1]]$result -> a
+
+rstan::check_energy(a)
 
 wtf <- rstan::extract(a, "sigma_r", inc_warmup = TRUE, permuted = FALSE)
 
