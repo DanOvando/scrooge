@@ -24,6 +24,7 @@ fit_scrooge <-
            cp_guess = 0.75,
            h = 0.8,
            sd_sigma_r = 0.001,
+           sigma_effort_guess = 0.2,
            seed = 42,
            n_burn = 50
            ) {
@@ -39,7 +40,7 @@ fit_scrooge <-
 
     data$sigma_r_guess <- 0
 
-    data$r0 <- fish$r0
+    data$r0 <- r0
 
     data$h <- fish$steepness
 
@@ -108,20 +109,18 @@ fit_scrooge <-
 
     data$p_response_guess <- (max_perc_change_f * hyp_effort) / (hyp_profits_guess / hyp_effort)
 
-
-
-  data$sigma_effort_guess <- 0.1
+  data$sigma_effort_guess <- sigma_effort_guess
 
   data$ppue_t <- data$ppue_t/max(data$ppue_t)
-
-  browser()
 
   inits <-
     map(
       1:chains,
       ~ list(
-        burn_f = jitter(fish$m*2),
-        sigma_r = jitter(1e-3),
+        burn_f = jitter(fish$m/2),
+        f_t = rep(jitter(fish$m/2), data$nt),
+        sigma_r = jitter(.1),
+        p_length_50_sel = jitter(0.25),
         log_p_response = log(.1)
       )
     )

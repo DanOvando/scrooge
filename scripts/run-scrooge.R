@@ -234,16 +234,17 @@
   if (sim_fisheries == T)
   {
 
-    n_fisheries <- 10
+    n_fisheries <- 1
 
     # "constant-effort",
     # "supplied-catch",
 
+    # "Atractoscion nobilis",
+    # "Scomber japonicus",
+
     fisheries_sandbox <- data_frame(
       sci_name = sample(
         c(
-          "Atractoscion nobilis",
-          "Scomber japonicus",
           "Lutjanus campechanus"
         ),
         n_fisheries,
@@ -255,8 +256,8 @@
         n_fisheries,
         replace = T
       ),
-      sigma_r = runif(n_fisheries, 0.01,.1),
-      rec_ac = runif(n_fisheries,0,.4),
+      sigma_r = runif(n_fisheries, 0.7,.7),
+      rec_ac = runif(n_fisheries,0,0),
       sigma_effort = runif(n_fisheries, 0,0),
       price_cv = runif(n_fisheries, 0,0.1),
       cost_cv = runif(n_fisheries, 0,0.1),
@@ -274,7 +275,7 @@
       profit_lags = sample(0, n_fisheries, replace = T),
       initial_f = sample(c(0.01,.25,.5), n_fisheries, replace = T),
       beta = runif(n_fisheries, 2,2),
-      percnt_loo_selected = runif(n_fisheries, 0.25, 0.5)
+      percnt_loo_selected = runif(n_fisheries, .2, .2)
     )
     fleet_model_params <- data_frame(
       fleet_model = c(
@@ -333,7 +334,8 @@
           beta = fisheries_sandbox$beta[i],
           sim_years = 100,
           burn_years = 100,
-          cv_len = 0.1
+          cv_len = 0.1,
+          linf_buffer = 1.1
       )
 
     } # close dopar

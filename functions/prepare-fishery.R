@@ -24,7 +24,7 @@ prepare_fishery <-
            num_patches = 1,
            r0 = 10000,
            sample_type = "catch",
-           percent_sampled = 0.005,
+           percent_sampled = 500,
            economic_model = 1,
            steepness = 0.8,
            profit_lags = 1,

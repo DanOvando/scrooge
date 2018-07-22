@@ -110,7 +110,7 @@ real<lower = 0> sigma_ppue;
 
 real  log_p_response;
 
-real<lower = 0, upper = .9> p_length_50_sel; // length at 50% selectivity
+real<lower = 0> p_length_50_sel; // length at 50% selectivity
 
 // real<lower = 0, upper = 10> p_response;
 
@@ -349,7 +349,7 @@ if (economic_model == 0){
 
   for (i in 2:nt){
 
-  f_t[i] ~ normal(f_t[i - 1],sigma_effort);
+  // f_t[i] ~ normal(f_t[i - 1],sigma_effort);
 
 }
 
@@ -384,10 +384,9 @@ if (economic_model == 3){
 //
 // }
 
-
 sigma_ppue ~ cauchy(0, 2.5);
 
-// sigma_effort ~ normal(sigma_effort_guess,.1);
+// sigma_effort ~ normal(sigma_effort_guess,0.05);
 
 log_p_response ~ normal(log(.1),2);
 
@@ -401,7 +400,7 @@ sigma_r ~ normal(sigma_r_guess, sd_sigma_r);
 
 //// selectivity likelihood ////
 
-// p_length_50_sel ~ normal(length_50_sel_guess/loo, 5);
+p_length_50_sel ~ normal(length_50_sel_guess/loo, .05);
 
 // sel_delta ~ normal(delta_guess, 2);
 
