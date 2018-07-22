@@ -3936,3 +3936,254 @@ Whoops, locking in inital depletion with initial F is a problem, since it's not 
 # Fitting to ppue
 
 If you don't have any data on prices/cost etc, then you can estimate ppue hat has delta effort / theta, where theta is the profit expansion factor, and then estimate f and theta and confront with data from PPUE
+
+
+whoops, also, f in the last year is completely unidentified given the order of operations as they stand. You calculate F, and then apply that F to next years population. So, there's no signal of the current F in the current years's length comps, so you need to subtract one year off of the estimated F's
+
+```{r}
+
+a = fisheries_sandbox$prepped_fishery[[3]]$simed_fishery %>% 
+  group_by(year) %>% 
+  summarise(profits = sum(profits),
+            effort  = unique(effort),
+            f = unique(f)) %>% 
+  ungroup() %>% 
+  mutate(delta_effort = lead(effort) - effort,
+         delta_f = lead(f) - f) %>%
+  mutate(ppue = profits / effort) 
+
+lm(delta_effort ~ ppue, data = a)
+
+a %>% 
+  ggplot(aes(ppue, delta_f)) + 
+  geom_point()
+
+ b = fisheries_sandbox$prepped_fishery[[3]]$simed_fishery %>% 
+   group_by(year) %>% 
+   mutate(pn = numbers / sum(numbers)) %>% 
+   ggplot(aes(age, pn, color = year, group = year)) + 
+   geom_line()
+   
+ b
+ 
+fisheries_sandbox$prepped_fishery[[3]]$scrooge_data$length_comps %>%
+   gather(length, numbers, -year) %>%
+   mutate(length = as.numeric(length)) %>%
+   group_by(year) %>%
+   mutate(pn = numbers / sum(numbers)) %>%
+   ggplot(aes(length, pn, color = year, group = year)) +
+   geom_line()
+```
+
+
+checks to run
+
+1. is biomass increasing when F is zero
+
+2. Copy data and life history from LIME example, see if you can recover when model is in LIME mode
+
+```{r}
+
+lime_inputs <- readRDS("~/PhD/scrooge/data/lime_inputs.RDS")
+
+limecomps <- lime_inputs$LF %>% drop()
+
+limedata <- data
+
+limedata$length_comps <- limecomps
+
+limedata$length_comps_years <- 1:nrow(limecomps)
+
+limedata$n_lcomps <- nrow(limecomps)
+
+limedata$nt <- nrow(limecomps)
+
+limedata$n_ages <- length(lime_inputs$ages)
+
+limedata$n_lbins <- ncol(limecomps)
+
+limedata$ages <- lime_inputs$ages
+
+limedata$m <- lime_inputs$M
+
+limedata$h <- lime_inputs$h
+
+limedata$r0 <- lime_inputs$R0
+
+limedata$k <- lime_inputs$vbk
+
+limedata$loo <- lime_inputs$linf
+
+limedata$t0 <- lime_inputs$t0
+
+limedata$mean_length_at_age <- lime_inputs$L_a
+
+limedata$mean_weight_at_age <- lime_inputs$W_a
+
+limedata$mean_maturity_at_age <- lime_inputs$Mat_a
+
+length_at_age_key <- generate_length_at_age_key(
+  min_age = min(lime_inputs$ages),
+  max_age = max(lime_inputs$ages),
+  cv = lime_inputs$CVlen,
+  linf = lime_inputs$linf,
+  k = lime_inputs$vbk,
+  t0 = lime_inputs$t0,
+  time_step = 1,
+  linf_buffer = 1.25
+) %>%
+  ungroup() %>%
+  select(age, length_bin, p_bin) %>%
+  spread(length_bin, p_bin) %>%
+  select(-age)
+
+limedata$length_at_age_key <- length_at_age_key
+
+data$length_50_sel_guess <-  lime_inputs$SL50
+
+limedata$economic_model <- 0
+
+limedata$sigma_effort_guess <- lime_inputs$SigmaF
+
+length_at_age_key %>% 
+  mutate(age = 1:nrow(.)) %>% 
+  gather(length, prob, -age) %>% 
+  mutate(length = as.numeric(length)) %>% 
+  ggplot(aes(length, prob, color = age, group = age)) + 
+  geom_line()
+
+limedata$length_comps %>% 
+  as_data_frame() %>% 
+  mutate(year = 1:nrow(.)) %>% 
+  gather(lbin, number,-year) %>% 
+  mutate(lbin = as.numeric(lbin)) %>% 
+  ggplot(aes(lbin, number)) + 
+  geom_col() + 
+  facet_wrap(~year)
+
+saveRDS(limedata, "limedata.RDS")
+
+
+
+```
+
+
+
+```{r}
+
+data <- readRDS("../limedata.RDS")
+
+data$length_50_sel_guess <-  lime_inputs$SL50
+
+data$economic_model <- 0
+
+data$n_lcomps <- nrow(data$length_comps)
+
+data$perc_change_effort <- data$perc_change_effort[1:data$nt]
+
+data$observed_effort <- data$observed_effort[1:data$nt]
+
+data$ppue_t <- data$ppue_t[1:data$nt]
+
+data$price_t <- data$price_t[1:data$nt]
+
+data$cost_t <- data$cost_t[1:data$nt]
+
+data$q_t <- data$q_t[1:data$nt]
+
+data$sd_sigma_r <- 0.1
+
+chains <- 2
+
+refresh <- 25
+
+iter <- 6000
+
+warmup <-  4000
+
+seed <- 42
+
+cores <- 2
+
+adapt_delta <- 0.8
+
+max_treedepth <- 12
+
+scrooge_file <- "scrooge"
+
+inits <-
+  map(
+    1:chains,
+    ~ list(
+      log_initial_effort = jitter(log(data$observed_effort[1])),
+      sigma_r = jitter(1e-3)
+    )
+  )
+
+fit <-
+  rstan::stan(
+    file = here::here("src", paste0(scrooge_file, ".stan")),
+    data = data,
+    chains = chains,
+    refresh = refresh,
+    cores = cores,
+    iter = iter,
+    warmup = warmup,
+    control = list(adapt_delta = adapt_delta,
+                   max_treedepth = max_treedepth),
+    init = inits,
+    seed = seed
+  )
+
+
+sigma_r <- tidybayes::spread_samples(fit, sigma_r)
+
+hist(sigma_r$sigma_r)
+
+rec_devs <- tidybayes::spread_samples(fit, rec_dev_t[year])
+
+rec_devs %>%
+  ggplot(aes(year,rec_dev_t, group = .iteration)) +
+  geom_line(alpha = 0.25) + 
+  geom_hline(aes(yintercept = 1), color = "red") 
+
+
+f_t <- tidybayes::spread_samples(fit, f_t[year])
+
+f_t %>%
+  group_by(year) %>% 
+  summarise(mean_f = mean(f_t)) %>% 
+  ggplot(aes(year,mean_f)) +
+  geom_line() + 
+  ylim(c(0,.4))
+
+lcomps <- tidybayes::spread_samples(fit, p_lbin_sampled[year,lbin])
+
+observed_lcomps <- data$length_comps %>% 
+  as_data_frame() %>% 
+  mutate(year = 1:nrow(.)) %>% 
+  gather(lbin, numbers, -year) %>% 
+  mutate(lbin = as.numeric(lbin)) %>% 
+  group_by(year) %>% 
+  mutate(numbers = numbers / sum(numbers))
+
+lcomps %>%
+  group_by(year, lbin) %>%
+  summarise(mean_n = mean(p_lbin_sampled)) %>%
+  group_by(year) %>%
+  mutate(mean_n = mean_n / sum(mean_n)) %>%
+  ggplot() +
+  geom_line(aes(lbin, mean_n, color = year, group = year),show.legend = F) + 
+  geom_point(data = observed_lcomps, aes(lbin, numbers), size = .5, alpha = 0.5) +
+  facet_wrap(~year) + 
+  theme_classic()
+
+selectivity <- tidybayes::spread_samples(fit, mean_selectivity_at_age[age]) 
+
+selectivity%>% 
+  ggplot() +
+  geom_line(aes(age, mean_selectivity_at_age, group = .iteration),alpha = 0.5) 
+
+
+```
+

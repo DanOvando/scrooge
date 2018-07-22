@@ -108,16 +108,23 @@ fit_scrooge <-
 
     data$p_response_guess <- (max_perc_change_f * hyp_effort) / (hyp_profits_guess / hyp_effort)
 
-    inits <-
-      map(
-        1:chains,
-        ~ list(
-          burn_f = jitter(fish$m*2),
-          sigma_r = jitter(1e-3)
-        )
-      )
 
-  data$sigma_effort_guess <- .001
+
+  data$sigma_effort_guess <- 0.1
+
+  data$ppue_t <- data$ppue_t/max(data$ppue_t)
+
+  browser()
+
+  inits <-
+    map(
+      1:chains,
+      ~ list(
+        burn_f = jitter(fish$m*2),
+        sigma_r = jitter(1e-3),
+        log_p_response = log(.1)
+      )
+    )
 
   fit <-
       rstan::stan(

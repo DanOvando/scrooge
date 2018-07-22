@@ -260,7 +260,7 @@
       sigma_effort = runif(n_fisheries, 0,0),
       price_cv = runif(n_fisheries, 0,0.1),
       cost_cv = runif(n_fisheries, 0,0.1),
-      q_cv = runif(n_fisheries, 0,0.2),
+      q_cv = runif(n_fisheries, 0,0),
       price_ac = runif(n_fisheries, 0.5,0.75),
       cost_ac = runif(n_fisheries, 0.5,0.75),
       q_ac = runif(n_fisheries, 0.5,0.75),
@@ -328,12 +328,12 @@
           price = fisheries_sandbox$price[i],
           q = fisheries_sandbox$q[i],
           profit_lags = fisheries_sandbox$profit_lags[i],
-          max_perc_change_f = fisheries_sandbox$max_perc_change_f[i],
+          max_perc_change_f = 0.4,
           max_cp_ratio = fisheries_sandbox$max_cp_ratio[i],
           beta = fisheries_sandbox$beta[i],
           sim_years = 100,
           burn_years = 100,
-          cv_len = 0.01
+          cv_len = 0.1
       )
 
     } # close dopar

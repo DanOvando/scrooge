@@ -1,6 +1,6 @@
 
 
-experiments <- expand.grid(period = c("end"), window = c(5),
+experiments <- expand.grid(period = c("end"), window = c(20),
                            economic_model = c(0),
                            fishery = 1:nrow(fisheries_sandbox), stringsAsFactors = F)
 
@@ -31,7 +31,7 @@ fits <- foreach::foreach(i = 1:nrow(fisheries_sandbox)) %dopar% {
     fish = fisheries_sandbox$prepped_fishery[[i]]$fish,
     fleet = fisheries_sandbox$prepped_fishery[[i]]$fleet,
     experiment = fisheries_sandbox$experiment[i],
-    economic_model = 0,
+    economic_model = 3,
     scrooge_file = "scrooge",
     iter = 6000,
     warmup = 4000,
@@ -57,6 +57,25 @@ rstanarm::launch_shinystan(fits[[1]]$result)
 fits[[1]]$result -> a
 
 rstan::check_energy(a)
+
+ppue <- tidybayes::spread_samples(a, ppue_hat[year])
+
+true_ppue <- data_frame(year = 1:length(fisheries_sandbox$prepped_fishery[[1]]$scrooge_data$ppue_t
+), ppue = fisheries_sandbox$prepped_fishery[[1]]$scrooge_data$ppue_t
+)
+
+
+ppue %>%
+  left_join(true_ppue, by = "year") %>%
+  ggplot() +
+  geom_line(aes(year, ppue_hat, group = .iteration),alpha = 0.25) +
+  geom_point(data = true_ppue, aes(year, ppue), color = "red")
+
+ppue %>%
+  left_join(true_ppue, by = "year") %>%
+  ggplot() +
+  geom_point(aes(ppue, ppue_hat, group = .iteration),alpha = 0.25)
+
 
 wtf <- rstan::extract(a, "sigma_r", inc_warmup = TRUE, permuted = FALSE)
 
@@ -98,6 +117,12 @@ sel_50_selectivity <- tidybayes::spread_samples(a, length_50_sel)
 
 
 selectivity <- tidybayes::spread_samples(a, mean_selectivity_at_age[age])
+
+selectivity %>%
+  ggplot(aes(age,mean_selectivity_at_age, group = .iteration)) +
+  geom_line(alpha = 0.25)
+
+
 
 selectivity %>%
   ggplot(aes(age,mean_selectivity_at_age, group = .iteration)) +

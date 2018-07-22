@@ -104,9 +104,13 @@ vector[nt]  uc_rec_dev_t; //  recruitment deviates
 
 real <lower = 0> sigma_r; // standard deviation of recruitment deviates
 
-real<lower = 0> sigma_effort;
+// real<lower = 0> sigma_effort;
 
-// real<lower = 0, upper = .9> p_length_50_sel; // length at 50% selectivity
+real<lower = 0> sigma_ppue;
+
+real  log_p_response;
+
+real<lower = 0, upper = .9> p_length_50_sel; // length at 50% selectivity
 
 // real<lower = 0, upper = 10> p_response;
 
@@ -156,13 +160,21 @@ transformed parameters{
 
   row_vector[n_ages] p_age_sampled;
 
-  length_50_sel = length_50_sel_guess;
+  vector[nt - 1] delta_f;
 
-  // length_50_sel = loo * p_length_50_sel;
+  vector[nt - 1] ppue_hat;
+
+  real sigma_effort;
+
+  sigma_effort = sigma_effort_guess;
+
+  // length_50_sel = length_50_sel_guess;
+
+  length_50_sel = loo * p_length_50_sel;
 
   sel_delta = 2;
 
-  rec_dev_t = exp(uc_rec_dev_t - sigma_r^2/2);
+  rec_dev_t = exp(uc_rec_dev_t);
 
   // fill matrices with zeros //
 
@@ -245,7 +257,7 @@ transformed parameters{
 
   // run economic model
 
-  profit_t[t - 1] = price_t[t - 1] * c_t[t - 1] - cost_t[t - 1] * effort_t[t - 1] ^ beta;
+  profit_t[t - 1] = price_t[t - 1] * c_t[t - 1] - cost_t[t - 1] *         effort_t[t - 1] ^ beta;
 
   ppue_hat_t[t - 1] = profit_t[t - 1] / effort_t[t - 1];
 
@@ -276,6 +288,15 @@ transformed parameters{
 
   p_lbin_sampled[nt, 1:n_lbins] = (p_age_sampled * length_at_age_key) / sum(p_age_sampled * length_at_age_key);
 
+    for (t in 1:(nt - 1)){
+
+    delta_f[t] = effort_t[t + 1] - effort_t[t];
+
+    }
+
+  ppue_hat = delta_f / exp(log_p_response);
+
+
 }
 
 model{
@@ -287,6 +308,7 @@ real effort_data_prediction;
 real new_f;
 
 real previous_max;
+
 
 //// length comps likelihood ////
 
@@ -305,7 +327,7 @@ if (economic_model == 1) { // open access priors
 
     new_f = (effort_t[t - 1] + (p_response_guess * (ppue_hat_t[t - 1]))) * q_t[t];
 
-    f_t[t] ~ normal(new_f,sigma_effort);
+    f_t[t] ~ normal(new_f,1e-6);
 
     } // close time loop
 
@@ -333,7 +355,41 @@ if (economic_model == 0){
 
 } // close effort 0
 
-sigma_effort ~ normal(sigma_effort_guess,.1);
+if (economic_model == 3){
+
+  // for (i in 2:nt){
+  //
+  //   f_t[i] ~ normal(f_t[i - 1],sigma_effort);
+  //
+  // }
+
+  ppue_t[1:(nt - 1)] ~ normal(ppue_hat, sigma_ppue);
+
+    f_t[nt] ~ normal(f_t[nt - 1], .001);
+
+
+}
+
+// if (economic_model == 3){
+//
+//   // for (i in 2:nt){
+//   //
+//   //   f_t[i] ~ normal(f_t[i - 1],sigma_effort);
+//   //
+//   // }
+//
+//   ppue_t[1:(nt - 1)] ~ normal(ppue_hat, sigma_ppue);
+//
+//   f_t[nt] ~ normal(f_t[nt - 1], .001);
+//
+// }
+
+
+sigma_ppue ~ cauchy(0, 2.5);
+
+// sigma_effort ~ normal(sigma_effort_guess,.1);
+
+log_p_response ~ normal(log(.1),2);
 
 // p_response ~ normal(p_response_guess,.001); // constrain p_response
 
