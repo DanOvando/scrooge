@@ -3932,3 +3932,7 @@ of course, you idiot, when you tnink about it as process error, it's not a CV on
 
 
 Whoops, locking in inital depletion with initial F is a problem, since it's not allowing you to have high F and high B, need a burn-in F. Fix that first. 
+
+# Fitting to ppue
+
+If you don't have any data on prices/cost etc, then you can estimate ppue hat has delta effort / theta, where theta is the profit expansion factor, and then estimate f and theta and confront with data from PPUE

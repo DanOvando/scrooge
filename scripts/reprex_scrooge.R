@@ -45,4 +45,31 @@ fit <-
     seed = seed
   )
 
+selectivity <- rstan::extract(fit, c("length_50_sel"), inc_warmup = TRUE, permuted = FALSE) %>%
+  drop() %>%
+  as_data_frame() %>%
+  gather(chain, value) %>%
+  group_by(chain) %>%
+  mutate(iteration = 1:length(value),
+        variable =  "length_50_sel") %>%
+  ungroup()
+
+sigma_r <- rstan::extract(fit, c("sigma_r"), inc_warmup = TRUE, permuted = FALSE) %>%
+  drop() %>%
+  as_data_frame() %>%
+  gather(chain, value) %>%
+  group_by(chain) %>%
+  mutate(iteration = 1:length(value),
+         variable =  "sigma_r") %>%
+  ungroup()
+
+compare <- selectivity %>%
+  bind_rows(sigma_r) %>%
+  mutate(warmup = iteration <= warmup) %>%
+  filter(warmup == T) %>%
+  ggplot(aes(iteration,value, color = chain)) +
+  geom_line() +
+  facet_grid(variable~chain, scales = "free_y")
+
+compare
 

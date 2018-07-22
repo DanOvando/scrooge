@@ -6,7 +6,7 @@ experiments <- expand.grid(period = c("end"), window = c(5),
 
 fisheries_sandbox <- fisheries_sandbox %>%
   mutate(fishery = 1:nrow(.)) %>%
-  slice(1) %>%
+  slice(3) %>%
   left_join(experiments, by = "fishery") %>%
   mutate(prepped_fishery = pmap(list(
     prepped_fishery = prepped_fishery,
@@ -44,7 +44,7 @@ fits <- foreach::foreach(i = 1:nrow(fisheries_sandbox)) %dopar% {
     cv_effort = 0.5,
     q_guess = mean(possible_q),
     r0 = mean(possible_r0),
-    sd_sigma_r = .2,
+    sd_sigma_r = .4,
     cores = 1
   )
 

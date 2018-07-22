@@ -104,7 +104,7 @@ vector[nt]  uc_rec_dev_t; //  recruitment deviates
 
 real <lower = 0> sigma_r; // standard deviation of recruitment deviates
 
-// real<lower = 0> sigma_effort;
+real<lower = 0> sigma_effort;
 
 // real<lower = 0, upper = .9> p_length_50_sel; // length at 50% selectivity
 
