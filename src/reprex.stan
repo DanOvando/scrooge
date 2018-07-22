@@ -1,9 +1,8 @@
-/*scrooge_v3.0
-
-A model for integrating economic data into length-based stock assessment
-
+/*
+scrooge_v3.0
+A reprex version of scrooge model
+to figure out speed issues
 */
-
 
   data{
 
@@ -225,8 +224,6 @@ model{
 
   vector[n_lbins] temp;
 
-  //// length comps likelihood ////
-
   for (i in 1:(n_lcomps)){
 
     temp = to_vector(p_lbin_sampled[length_comps_years[i], 1:n_lbins]);
@@ -234,6 +231,8 @@ model{
     length_comps[i, 1:n_lbins] ~ multinomial(temp);
 
   } // close length likelihood
+
+  //// recruitment prior ////
 
   exp_rec_dev_t ~ normal(0, sigma_r);
 

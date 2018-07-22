@@ -1,23 +1,22 @@
 
 
-experiments <- expand.grid(period = c("end"), window = c(20),
-                           economic_model = c(1),
+experiments <- expand.grid(period = c("end"), window = c(5),
+                           economic_model = c(0),
                            fishery = 1:nrow(fisheries_sandbox), stringsAsFactors = F)
 
 fisheries_sandbox <- fisheries_sandbox %>%
   mutate(fishery = 1:nrow(.)) %>%
-  slice(3) %>%
+  slice(1) %>%
   left_join(experiments, by = "fishery") %>%
   mutate(prepped_fishery = pmap(list(
     prepped_fishery = prepped_fishery,
     window = window,
     period = period,
-    prop_years_lcomp_data = 1), subsample_data)) %>%
-  slice(1)
+    prop_years_lcomp_data = 1), subsample_data))
 
 fisheries_sandbox$experiment <- 1:nrow(fisheries_sandbox)
 
-# fisheries_sandbox <- fisheries_sandbox %>% sample(10)
+fisheries_sandbox <- fisheries_sandbox %>% filter(economic_model == 0)
 
 sfs <- safely(fit_scrooge)
 
@@ -32,9 +31,9 @@ fits <- foreach::foreach(i = 1:nrow(fisheries_sandbox)) %dopar% {
     fish = fisheries_sandbox$prepped_fishery[[i]]$fish,
     fleet = fisheries_sandbox$prepped_fishery[[i]]$fleet,
     experiment = fisheries_sandbox$experiment[i],
-    economic_model = 1,
-    scrooge_file = "nc_scrooge",
-    iter = 5000,
+    economic_model = 0,
+    scrooge_file = "scrooge",
+    iter = 6000,
     warmup = 4000,
     adapt_delta = 0.8,
     max_treedepth = 12,
@@ -45,11 +44,13 @@ fits <- foreach::foreach(i = 1:nrow(fisheries_sandbox)) %dopar% {
     cv_effort = 0.5,
     q_guess = mean(possible_q),
     r0 = mean(possible_r0),
-    sd_sigma_r = 4
+    sd_sigma_r = .2,
+    cores = 1
   )
 
 } # close fitting loop
 
+#was getting stuck in the low thousand range
 rstanarm::launch_shinystan(fits[[1]]$result)
 
 
@@ -168,6 +169,9 @@ pairs(fits[[1]]$result, pars = c("sigma_r", "exp_rec_dev_t"))
 
 pairs(fits[[1]]$result, pars = c("sigma_effort", "oc_effort_t"))
 
+fisheries_sandbox <- fisheries_sandbox %>%
+  slice(1)
+
 fisheries_sandbox$scrooge_fit <- fits
 
 scrooge_worked <-
@@ -210,7 +214,7 @@ processed_sandbox <-
     scrooge_fit,
     map(prepped_fishery, "sampled_years"),
     process_scrooge,
-    to_tidy = c("f_t", "n_tl")
+    to_tidy = c("f_t", "n_tl","rec_dev_t")
   )) %>%
   mutate(observed = map(prepped_fishery, "simed_fishery")) %>%
   mutate(scrooge_performance = pmap(
@@ -218,15 +222,15 @@ processed_sandbox <-
          predicted = processed_scrooge),
     judge_performance
   )) %>%
-  # mutate(
-  #   scrooge_rec_performance = pmap(
-  #     list(observed = observed,
-  #          predicted = processed_scrooge),
-  #     judge_performance,
-  #     observed_variable = rec_dev,
-  #     predicted_variable = "rec_dev_t"
-  #   )
-  # )  %>%
+  mutate(
+    scrooge_rec_performance = pmap(
+      list(observed = observed,
+           predicted = processed_scrooge),
+      judge_performance,
+      observed_variable = rec_dev,
+      predicted_variable = "rec_dev_t"
+    )
+  )  %>%
   # mutate(lime_performance = pmap(
   #   list(observed = observed,
   #        predicted = processed_lime),

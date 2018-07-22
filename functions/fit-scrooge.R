@@ -24,16 +24,20 @@ fit_scrooge <-
            cp_guess = 0.75,
            h = 0.8,
            sd_sigma_r = 0.001,
-           seed = 42
+           seed = 42,
+           n_burn = 50
            ) {
 
+
+
+    data$n_burn <-  n_burn
 
     data$length_comps <- data$length_comps %>%
       select(-year)
 
     data$economic_model <- economic_model
 
-    data$sigma_r_guess <- 0.4
+    data$sigma_r_guess <- 0
 
     data$r0 <- fish$r0
 
@@ -108,33 +112,12 @@ fit_scrooge <-
       map(
         1:chains,
         ~ list(
-          initial_f = jitter((fish$m*2)),
-          length_50_sel = 0.25*data$loo
+          burn_f = jitter(fish$m*2),
+          sigma_r = jitter(1e-3)
         )
       )
 
-
-    # inits <-
-    #   map(
-    #     1:chains,
-    #     ~ list(
-    #       log_burn_effort = jitter(log(hyp_effort)),
-    #       log_initial_effort = jitter(log(hyp_effort)),
-    #       p_length_50_sel = 0.25 * exp(rnorm(1, 0, .1)),
-    #       log_cost_multiplier = log(jitter(cost_guess,10))
-    #     )
-    #   )
-
-    # inits <-
-    #   map(
-    #     1:chains,
-    #     ~ list(
-    #       log_burn_effort = jitter(log(hyp_effort)),
-    #       log_initial_effort = jitter(log(hyp_effort)),
-    #       p_length_50_sel = 0.25 * exp(rnorm(1, 0, .1))
-    #     )
-    #   )
-    #
+  data$sigma_effort_guess <- .001
 
   fit <-
       rstan::stan(

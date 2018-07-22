@@ -92,8 +92,9 @@ parameters{
 
 // real<lower = 0, upper = 2> burn_f; // burn in effort
 
-real<lower = 1e-6, upper = 1> initial_f; // initial effort
+real log_initial_effort; // initial effort
 
+vector<lower = -1, upper = 1>[nt] log_effort_t;
 // vector[nt - 1]  uc_effort_dev_t; // effort in time t
 
 vector[nt - 1]  exp_rec_dev_t; //  recruitment deviates
@@ -104,7 +105,7 @@ real <lower = 0> sigma_r; // standard deviation of recruitment deviates
 
 // real<lower = 0> sigma_effort;
 
-real<lower = 1e-6> length_50_sel; // length at 50% selectivity
+// real<lower = 1e-6> length_50_sel; // length at 50% selectivity
 
 // real<lower = 0> p_response;
 
@@ -120,7 +121,9 @@ transformed parameters{
 
   real sel_delta;
 
-  // real length_50_sel;
+  real initial_f;
+
+  real length_50_sel;
 
   // real burn_f;
 
@@ -168,7 +171,7 @@ transformed parameters{
 
   // penalty = 0;
 
-  // length_50_sel = length_50_sel_guess;
+  length_50_sel = length_50_sel_guess;
 
   // length_50_sel = loo * p_length_50_sel;
 
@@ -178,7 +181,7 @@ transformed parameters{
 
   // burn_f = q_t[1] * exp(log_burn_effort);
 
-  effort_t[1] = initial_f / q_t[1];
+  effort_t = exp(log_effort_t);
 
   // effort_dev_t = exp(sigma_effort * uc_effort_dev_t - sigma_effort^2/2);
 
@@ -201,6 +204,8 @@ transformed parameters{
 // set up initial population //
 
   f_t[1] = effort_t[1] .* q_t[1];
+
+  initial_f = exp(log_initial_effort) / q_t[1];
 
   n_a_init[1,1:n_ages] = r0 * exp(-m * (ages - 1))';
 
@@ -267,8 +272,6 @@ transformed parameters{
 
   ppue_hat_t[t - 1] = profit_t[t - 1] / effort_t[t - 1];
 
-  effort_t[t] =  initial_f / q_t[t];;
-
   // effort_t[t] = (effort_t[t - 1] + (p_response_guess * (ppue_hat_t[t - 1])));// * effort_dev_t[t-1];
 
   // if (effort_t[t] < 1e-3){
@@ -326,6 +329,8 @@ for (i in 1:(n_lcomps)){
 
 //// effort prior ////
 
+log_initial_effort ~ normal(log(m / max(q_t)),1);
+
 // initial_f ~ normal(burn_f,0.1);
 
 // sigma_effort ~ normal(0,1);
@@ -340,7 +345,8 @@ for (i in 1:(n_lcomps)){
 
 exp_rec_dev_t ~ normal(0, sigma_r);
 
-sigma_r ~ normal(0, 0.2);
+sigma_r ~ normal(0, 0.1);
+
 
 
 //// selectivity likelihood ////
