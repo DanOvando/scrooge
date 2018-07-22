@@ -4091,6 +4091,8 @@ data$q_t <- data$q_t[1:data$nt]
 
 data$sd_sigma_r <- 0.1
 
+data$burn_f <- 0.2
+
 chains <- 2
 
 refresh <- 25
@@ -4284,7 +4286,8 @@ fits <- foreach::foreach(i = 1:nrow(temp)) %dopar% {
     r0 = 100,
     sd_sigma_r = 0.1,
     cores = 1,
-    sigma_effort_guess = 0.1
+    sigma_effort_guess = 0.1,
+    burn_f = 0.12
   )
 
 } # close fitting loop

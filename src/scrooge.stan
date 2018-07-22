@@ -55,6 +55,7 @@ real<lower = 0> cv_effort;
 
 //// biology ////
 
+real burn_f;
 
 vector<lower=0>[n_ages] mean_length_at_age;
 
@@ -96,7 +97,7 @@ parameters{
 
 // vector[nt]  log_effort_t; // effort in time t
 
-real<lower = 0> burn_f;
+// real<lower = 0> burn_f;
 
 vector<lower = 0>[nt]  f_t; // f in time t
 

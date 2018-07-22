@@ -26,10 +26,13 @@ fit_scrooge <-
            sd_sigma_r = 0.001,
            sigma_effort_guess = 0.2,
            seed = 42,
-           n_burn = 50
+           n_burn = 50,
+           burn_f = 0.2
            ) {
 
 
+
+    data$burn_f <- burn_f
 
     data$n_burn <-  n_burn
 
@@ -113,11 +116,12 @@ fit_scrooge <-
 
   data$ppue_t <- data$ppue_t/max(data$ppue_t)
 
+  # burn_f = jitter(fish$m/2),
+
   inits <-
     map(
       1:chains,
       ~ list(
-        burn_f = jitter(fish$m/2),
         f_t = rep(jitter(fish$m/2), data$nt),
         sigma_r = jitter(.1),
         p_length_50_sel = jitter(0.25),
