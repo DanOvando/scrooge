@@ -4501,6 +4501,22 @@ ppue %>%
   geom_point(data = true_ppue, aes(year, ppue), color = "red") 
 
 
+# check posterior predictive 
+
+pp_n_tl <- tidybayes::spread_samples(fit, n_tl[year,length_bin]) 
+
+pp_n_tl %>% 
+  group_by(year, .chain,.iteration) %>% 
+  mutate(p_n_tl = n_tl / sum(n_tl)) %>% 
+  group_by(year, .chain, length_bin) %>% 
+  summarise(lower_90 = quantile(p_n_tl,0.05),
+            upper_90 = quantile(p_n_tl,0.95)) %>% 
+  ggplot() + 
+  geom_ribbon(aes(x = length_bin, ymin = lower_90, ymax = upper_90), fill = "lightgrey") +
+  facet_wrap(~year) + 
+  theme_minimal() +
+    geom_point(data = observed_lcomps, aes(lbin, numbers), size = .5, alpha = 0.5, color = "red")
+
 
 ```
 
