@@ -4228,7 +4228,7 @@ temp <- fisheries_sandbox %>%
     prepped_fishery = prepped_fishery,
     window = window,
     period = period,
-    prop_years_lcomp_data = 1), subsample_data))
+    prop_years_lcomp_data = 0.25), subsample_data))
 
 temp$experiment <- 1:nrow(temp)
 
@@ -4462,7 +4462,7 @@ lcomps <- tidybayes::spread_samples(fit, p_lbin_sampled[year,lbin])
 
 observed_lcomps <- temp$prepped_fishery[[1]]$scrooge_data$length_comps %>% 
   as_data_frame() %>% 
-  mutate(year = 1:nrow(.)) %>% 
+  mutate(year = temp$prepped_fishery[[1]]$scrooge_data$length_comps_years)%>% 
   gather(lbin, numbers, -year) %>% 
   mutate(lbin = as.numeric(lbin)) %>% 
   group_by(year) %>% 
