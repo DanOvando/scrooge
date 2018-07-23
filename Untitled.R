@@ -163,7 +163,7 @@ wtf <- pop %>%
   filter(ssb > 7.5e7, lead(recruits) < 22500000)
 
 pop %>%
-  ggplot(aes(ssb, lr, group = .iteration)) +
+  ggplot(aes(year, n, group = .iteration)) +
   geom_line(alpha = 0.5) +
   geom_point()
 

@@ -55,7 +55,7 @@ real<lower = 0> cv_effort;
 
 //// biology ////
 
-real burn_f;
+// real burn_f;
 
 vector<lower=0>[n_ages] mean_length_at_age;
 
@@ -119,6 +119,8 @@ real<lower = 0> p_length_50_sel; // length at 50% selectivity
 
 transformed parameters{
 
+  real burn_f;
+
   real ssb0;
 
   real ssb_temp;
@@ -166,6 +168,8 @@ transformed parameters{
   vector[nt - 1] ppue_hat;
 
   real sigma_effort;
+
+  burn_f = f_t[1];
 
   sigma_effort = sigma_effort_guess;
 
@@ -358,16 +362,7 @@ if (economic_model == 0){
 
 if (economic_model == 3){
 
-  // for (i in 2:nt){
-  //
-  //   f_t[i] ~ normal(f_t[i - 1],sigma_effort);
-  //
-  // }
-
   ppue_t[1:(nt - 1)] ~ normal(ppue_hat, sigma_ppue);
-
-    f_t[nt] ~ normal(f_t[nt - 1], .001);
-
 
 }
 
@@ -384,6 +379,8 @@ if (economic_model == 3){
 //   f_t[nt] ~ normal(f_t[nt - 1], .001);
 //
 // }
+
+f_t ~ cauchy(0,2.5);
 
 sigma_ppue ~ cauchy(0, 2.5);
 
