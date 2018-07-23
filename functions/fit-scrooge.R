@@ -24,17 +24,18 @@ fit_scrooge <-
            cp_guess = 0.75,
            h = 0.8,
            sd_sigma_r = 0.001,
-           sigma_effort_guess = 0.2,
            seed = 42,
            n_burn = 50,
-           burn_f = 0.2
+           sigma_f = 0.2
            ) {
 
+    data$bin_mids <- as.numeric(colnames(data$length_at_age_key))
 
-
-    data$burn_f <- burn_f
+    data$bin_mids <- data$bin_mids + ((data$bin_mids[2] - data$bin_mids[1])/2)
 
     data$n_burn <-  n_burn
+
+    data$sigma_f <- sigma_f
 
     data$length_comps <- data$length_comps %>%
       select(-year)
@@ -112,9 +113,14 @@ fit_scrooge <-
 
     data$p_response_guess <- (max_perc_change_f * hyp_effort) / (hyp_profits_guess / hyp_effort)
 
-  data$sigma_effort_guess <- sigma_effort_guess
-
+  if (max(data$ppue_t) > 0){
   data$ppue_t <- data$ppue_t/max(data$ppue_t)
+  } else{
+
+    data$ppue_t <- data$ppue_t/mean(data$ppue_t)
+
+  }
+
 
   # burn_f = jitter(fish$m/2),
 

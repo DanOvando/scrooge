@@ -69,7 +69,7 @@
 
   sim_fisheries <- T
 
-  fit_models <- T
+  fit_models <- F
 
   run_tests <- F
 
@@ -221,7 +221,7 @@
     filter(is.na(u_v_umsy) == F & is.na(lead_u) == F) %>%
     mutate(delta_u = lead_u / u_v_umsy - 1) %>%
     group_by(stock) %>%
-    summarise(max_delta_u = pmin(.2,max(delta_u))) %>%
+    summarise(max_delta_u = pmin(.4,max(delta_u))) %>%
     filter(max_delta_u > 0, is.finite(max_delta_u))
 
   possible_delta_u <- u$max_delta_u
@@ -258,12 +258,12 @@
       sigma_r = runif(n_fisheries, 0.01,.7),
       rec_ac = runif(n_fisheries,0,0.4),
       sigma_effort = runif(n_fisheries, 0,0),
-      price_cv = runif(n_fisheries, 0,0.1),
-      cost_cv = runif(n_fisheries, 0,0.1),
+      price_cv = runif(n_fisheries, 0,0.2),
+      cost_cv = runif(n_fisheries, 0,0.2),
       q_cv = runif(n_fisheries, 0,0.2),
-      price_slope = runif(n_fisheries, -0.005,0.005),
+      price_slope = runif(n_fisheries, 0,0.005),
       cost_slope = runif(n_fisheries, -0.005,0.005),
-      q_slope = runif(n_fisheries, -0.005,0.005),
+      q_slope = runif(n_fisheries, 0,0.005),
       price_ac = runif(n_fisheries, 0.5,0.75),
       cost_ac = runif(n_fisheries, 0.5,0.75),
       q_ac = runif(n_fisheries, 0.5,0.75),
@@ -275,7 +275,7 @@
       q = sample(possible_q, n_fisheries, replace = T),
       max_perc_change_f = sample(possible_delta_u, n_fisheries, replace = T),
       profit_lags = sample(0, n_fisheries, replace = T),
-      initial_f = sample(c(0.01,.25,.5), n_fisheries, replace = T),
+      initial_f = sample(c(0.01,.1), n_fisheries, replace = T),
       beta = runif(n_fisheries, 2,2),
       percnt_loo_selected = runif(n_fisheries, 0.1, 0.6)
     )
@@ -334,12 +334,12 @@
           price = fisheries_sandbox$price[i],
           q = fisheries_sandbox$q[i],
           profit_lags = fisheries_sandbox$profit_lags[i],
-          max_perc_change_f = 0.4,
+          max_perc_change_f = fisheries_sandbox$max_perc_change_f[i],
           max_cp_ratio = fisheries_sandbox$max_cp_ratio[i],
           beta = fisheries_sandbox$beta[i],
           sim_years = 100,
           burn_years = 100,
-          cv_len = 0.1,
+          cv_len = 0.2,
           linf_buffer = 1.1
       )
 
@@ -772,13 +772,16 @@ mutate(processed_scrooge = map2(
 
 
 processed_sandbox %>%
-  ggplot(aes(rmse, fill = economic_model == 1)) +
-  geom_density(alpha = 0.5)
+  ggplot(aes(factor(economic_model), rmse)) +
+  geom_boxplot(alpha = 0.5) +
+  ggbeeswarm::geom_beeswarm()
 
 processed_sandbox %>%
-  filter(percent_rank(bias) < 0.8) %>%
-  ggplot(aes(bias, fill = economic_model == 1)) +
-  geom_density(alpha = 0.5)
+  ggplot(aes(factor(economic_model), bias)) +
+  geom_boxplot(alpha = 0.5) +
+  ggbeeswarm::geom_beeswarm()
+
+
 
 
 

@@ -4091,6 +4091,12 @@ data$q_t <- data$q_t[1:data$nt]
 
 data$sd_sigma_r <- 0.1
 
+data$sigma_f <- 0.2
+
+data$bin_mids <- as.numeric(colnames(data$length_at_age_key)) 
+
+data$bin_mids <- data$bin_mids + ((data$bin_mids[2] - data$bin_mids[1])/2)
+
 data$burn_f <- 0.2
 
 chains <- 2
@@ -4285,9 +4291,8 @@ fits <- foreach::foreach(i = 1:nrow(temp)) %dopar% {
     q_guess = mean(possible_q),
     r0 = 100,
     sd_sigma_r = 0.1,
-    cores = 1,
-    sigma_effort_guess = 0.1,
-    burn_f = 0.12
+    sigma_f = 0.1,
+    cores = 1
   )
 
 } # close fitting loop
@@ -4400,8 +4405,7 @@ fits <- foreach::foreach(i = 1:nrow(temp)) %dopar% {
     r0 = 100,
     sd_sigma_r = 0.1,
     cores = 1,
-    sigma_effort_guess = 0.1,
-    burn_f = 0.12
+    sigma_f = 0.2
   )
 
 } # close fitting loop
@@ -4485,15 +4489,14 @@ ppue <- tidybayes::spread_samples(fit, ppue_hat[year])
 true_ppue <- data_frame(year = 1:length(temp$prepped_fishery[[1]]$scrooge_data$ppue_t
 ), ppue = temp$prepped_fishery[[1]]$scrooge_data$ppue_t
 ) %>% 
-  mutate(ppue = ppue / max(ppue))
+  ungroup()
 
 
 ppue %>%
   left_join(true_ppue, by = "year") %>%
   ggplot() +
   geom_line(aes(year, ppue_hat, group = .iteration),alpha = 0.25) +
-  geom_point(data = true_ppue, aes(year, ppue), color = "red") + 
-  coord_cartesian(ylim = c(-2,2))
+  geom_point(data = true_ppue, aes(year, ppue), color = "red") 
 
 
 
@@ -4529,9 +4532,7 @@ fits <- foreach::foreach(i = 1:nrow(temp)) %dopar% {
     q_guess = mean(possible_q),
     r0 = 100,
     sd_sigma_r = 0.1,
-    cores = 1,
-    sigma_effort_guess = 0.1,
-    burn_f = 0.12
+    cores = 1
   )
 
 } # close fitting loop
@@ -4656,9 +4657,7 @@ fits <- foreach::foreach(i = 1:nrow(temp)) %dopar% {
     q_guess = mean(possible_q),
     r0 = 100,
     sd_sigma_r = 0.1,
-    cores = 1,
-    sigma_effort_guess = 0.1,
-    burn_f = 0.12
+    cores = 1
   )
 
 } # close fitting loop
@@ -4756,3 +4755,11 @@ ppue %>%
 # pathology with random walk
 
 So I think the problem was that the prior was overwhemling the data in the random walk. It was happiest when making F and sigma F really low, basically keeping it constant, since this made the prior happy, but made the surface really hard to explore. 
+
+# final tuning
+
+Oh of course, the model has a really hard time dealing with recruitment pulses in the early years since the pulse that cause it isn't in the data, especially if selectivity is higher! and so, it wants to compensate with F. Interesting. Is there a way to add a few buffer years of recruitment to the burn-in period? There must be. So the idea here would be to estimate a few more years of recruitment data during the burn-in period to account for the early pulses you see moving through the first years of the length comps. 
+Pretty easy to make that dynamic given likely age at selectivity. I.e. 
+
+Also need to do a bit of tuning of the fishery simulator now. Could 
+

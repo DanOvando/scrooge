@@ -71,6 +71,7 @@ prepare_fishery <-
       q_cv = q_cv,
       q_ac = q_ac,
       q_slope = q_slope,
+      price_slope = price_slope,
       fleet_model = fleet_model,
       target_catch = fleet_params$target_catch,
       cost = cost,
