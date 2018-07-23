@@ -330,9 +330,9 @@ if (economic_model == 1) { // open access priors
 
   for (t in 2:nt){
 
-    new_f = (effort_t[t - 1] + (p_response_guess * (ppue_hat_t[t - 1]))) * q_t[t];
+    new_f = (effort_t[t - 1] + (exp(log_p_response) * (ppue_hat_t[t - 1]))) * q_t[t];
 
-    f_t[t] ~ normal(new_f,1e-6);
+    f_t[t] ~ normal(new_f,1);
 
     } // close time loop
 
@@ -344,7 +344,7 @@ if (economic_model == 2){
 
     new_f = q_t[t] * effort_t[t - 1] * perc_change_effort[t - 1];
 
-    f_t[t] ~ normal(new_f , sigma_effort);
+    f_t[t] ~ normal(new_f , 0.5);
 
     } // close time loop
 
@@ -352,11 +352,6 @@ if (economic_model == 2){
 
 if (economic_model == 0){
 
-  for (i in 2:nt){
-
-  // f_t[i] ~ normal(f_t[i - 1],sigma_effort);
-
-}
 
 } // close effort 0
 
@@ -366,29 +361,26 @@ if (economic_model == 3){
 
 }
 
-// if (economic_model == 3){
-//
-//   // for (i in 2:nt){
-//   //
-//   //   f_t[i] ~ normal(f_t[i - 1],sigma_effort);
-//   //
-//   // }
-//
-//   ppue_t[1:(nt - 1)] ~ normal(ppue_hat, sigma_ppue);
-//
-//   f_t[nt] ~ normal(f_t[nt - 1], .001);
-//
-// }
+
+if (economic_model == 4){
+
+  for (t in 2:nt){
+
+    new_f = (effort_t[t - 1] + (exp(log_p_response) * (ppue_hat_t[t - 1]))) * q_t[t];
+
+    f_t[t] ~ normal(new_f,1);
+
+    } // close time loop
+
+  ppue_t[1:(nt - 1)] ~ normal(ppue_hat, sigma_ppue);
+
+}
 
 f_t ~ cauchy(0,2.5);
 
 sigma_ppue ~ cauchy(0, 2.5);
 
-// sigma_effort ~ normal(sigma_effort_guess,0.05);
-
 log_p_response ~ normal(log(.1),2);
-
-// p_response ~ normal(p_response_guess,.001); // constrain p_response
 
 //// recruitment prior ////
 
