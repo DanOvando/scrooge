@@ -13,40 +13,46 @@ fit_scrooge <-
            economic_model = 1,
            model_type = "scrooge",
            max_treedepth = 10,
-           max_f_v_fmsy_increase = 0.5,
+           max_perc_change_f = 0.5,
            in_clouds = F,
            cloud_dir = "results/scrooge_results",
            price = 2,
-           q = 0.1,
+           q_guess = 0.1,
            r0 = 1000,
-           b_v_bmsy_oa = 0.5,
            init_f_v_m = 0.8,
            cv_effort = 1.6,
-           c_guess = 1,
-           max_window = 10,
-           max_expansion = 1.25,
-           effort_data_weight = 0
+           cp_guess = 0.75,
+           h = 0.8,
+           sd_sigma_r = 0.001,
+           seed = 42,
+           n_burn = 50,
+           sigma_f = 0.2
            ) {
 
+    data$age_sel <- floor((log(1-pmin(data$length_50_sel_guess, data$loo*.99)/data$loo)/-data$k)+data$t0)
+
+    data$bin_mids <- as.numeric(colnames(data$length_at_age_key))
+
+    data$bin_mids <- data$bin_mids + ((data$bin_mids[2] - data$bin_mids[1])/2)
+
+    data$n_burn <-  n_burn
+
+    data$sigma_f <- sigma_f
 
     data$length_comps <- data$length_comps %>%
       select(-year)
 
     data$economic_model <- economic_model
 
-    data$sigma_r_guess <- 0.4
+    data$sigma_r_guess <- 0
 
     data$r0 <- r0
 
-    data$h <- 0.8
+    data$h <- fish$steepness
 
     data$f_init_guess <- fish$m * init_f_v_m
 
-    data$max_expansion <-  max_expansion
-
-    data$max_window <-  max_window
-
-    data$effort_data_weight <-  effort_data_weight
+    data$sd_sigma_r <- sd_sigma_r
 
     if (economic_model == 0){
 
@@ -57,8 +63,6 @@ fit_scrooge <-
     if (is.na(cv_effort) == F){
     data$cv_effort <-  cv_effort
     }
-
-    p_response <- max_f_v_fmsy_increase
 
     f_msy <-
       nlminb(
@@ -80,108 +84,57 @@ fit_scrooge <-
                      time = 100,
                      use = "else")
 
-    # fs <- seq(0,2, by = 0.02)
-    #
-    # test <- NA
-    # for (i in seq_along(fs)){
-    #   test[i] <- est_msy(fs[i], data = data, time = 100, use = "fit")
-    #
-    # }
+    data$q_t <- q_guess * data$q_t
 
-    e_msy <- (f_msy$par / q)
+    n0_at_age <-
+      r0  * exp(-fish$m * seq(fish$min_age, fish$max_age, fish$time_step))
 
-    msy <- -f_msy$objective
+    n0_at_age[fish$max_age + 1] <-
+      n0_at_age[fish$max_age + 1] / (1 - exp(-fish$m))
 
-    msy_profits_guess <- (fish$price * msy)*.25
+    b0_at_age <- n0_at_age * fish$weight_at_age
 
-    cost_guess <- (fish$price * msy - msy_profits_guess) / e_msy^fleet$beta
+    hyp_f <- fish$m #hypothetical f
 
-    cost <-
-      nlminb(
-        cost_guess,
-        tune_costs,
-        data = data,
-        time = 200,
-        lower = 0,
-        p_response = p_response,
-        b_v_bmsy_oa = b_v_bmsy_oa,
-        msy = msy,
-        e_msy = e_msy,
-        b_msy = b_msy,
-        price = price,
-        q = q
+    hyp_effort <- hyp_f / min(data$q_t)
+
+    hyp_f_at_age <- hyp_f * fleet$sel_at_age
+
+    hyp_b0_catch <- sum((hyp_f_at_age / (hyp_f_at_age + fish$m))  * b0_at_age * (1 - exp(-(hyp_f_at_age + fish$m))))
+
+    b0_revenue <- max(data$price_t) * hyp_b0_catch
+
+    hyp_profits_guess <- b0_revenue * (1 - cp_guess)
+
+    cost_guess <-
+      (b0_revenue - hyp_profits_guess) / hyp_effort ^ fleet$beta
+
+    data$max_cost_guess <- cost_guess
+
+    data$relative_cost_t <-  data$cost_t
+
+    data$p_response_guess <- (max_perc_change_f * hyp_effort) / (hyp_profits_guess / hyp_effort)
+
+  if (max(data$ppue_t) > 0){
+  data$ppue_t <- data$ppue_t/max(data$ppue_t)
+  } else{
+
+    data$ppue_t <- data$ppue_t/mean(data$ppue_t)
+
+  }
+
+  inits <-
+    map(
+      1:chains,
+      ~ list(
+        f_t = rep(jitter(fish$m/2), data$nt),
+        sigma_r = jitter(.1),
+        p_length_50_sel = jitter(0.25),
+        log_p_response = log(.1)
       )
+    )
 
-    counter <- 0
-
-    if (cost$objective < 0.01){
-      counter <- 6
-    }
-
-    while (cost$objective > 0.1 & counter < 10){
-
-      c_guess <- c_guess * 2
-
-      cost <-
-        nlminb(
-          c_guess * 10,
-          tune_costs,
-          data = data,
-          time = 200,
-          lower = 0,
-          p_response = p_response,
-          b_v_bmsy_oa = b_v_bmsy_oa,
-          msy = msy,
-          e_msy = e_msy,
-          b_msy = b_msy,
-          price = price,
-          q = q
-        )
-      counter <- counter + 1
-    }
-
-    if (cost$objective > 0.1){
-      stop("check cost convergence")
-    }
-
-    # check <- tune_costs(
-    #   cost = cost$par,
-    #     data = data,
-    #     time = 200,
-    #     p_response = p_response,
-    #     b_v_bmsy_oa = 1.5,
-    #     msy = msy,
-    #     e_msy = e_msy,
-    #     b_msy = b_msy,
-    #     price = price,
-    #     q = q,
-    #   use = "blah"
-    #   )
-
-    data$cost_t <- cost$par * data$cost_t
-
-    data$price_t <- price * data$price_t
-
-    data$q_t <- q * data$q_t
-
-    p_msy <- price*msy - cost$par * e_msy ^ data$beta
-
-    data$p_msy <- p_msy
-
-    data$e_msy <- e_msy
-
-    data$p_response_guess <- p_response
-
-    inits <-
-      map(
-        1:chains,
-        ~ list(
-          p_length_50_sel = 0.25 * exp(rnorm(1, 0, .1)),
-          p_response = p_response * exp(rnorm(1, 0, .1))
-        )
-      )
-
-    fit <-
+  fit <-
       rstan::stan(
         file = here::here("src", paste0(scrooge_file, ".stan")),
         data = data,
@@ -192,9 +145,10 @@ fit_scrooge <-
         warmup = warmup,
         control = list(adapt_delta = adapt_delta,
                        max_treedepth = max_treedepth),
-        init = inits
+        init = inits,
+        seed = seed
       )
-
+    # init = inits
 
 
     # clean up old DLLS per https://github.com/stan-dev/rstan/issues/448

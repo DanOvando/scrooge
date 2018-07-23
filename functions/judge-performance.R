@@ -15,6 +15,11 @@ judge_performance <-
       summarise(observed = mean(!!observed_variable)) %>%
       mutate(year = year - min(year) + 1)
 
+    if (predicted_variable == "rec_dev_t"){
+
+      observed_values$observed = exp(observed_values$observed)
+    }
+
 
       comparison <- observed_values %>%
       left_join(predicted_values, by = "year") %>%

@@ -6,10 +6,13 @@ prepare_fishery <-
            sigma_effort,
            price_cv,
            cost_cv,
+           q_cv = 0,
            price_ac,
            cost_ac,
-           q_cv = 0,
            q_ac = 0,
+           price_slope = 0,
+           cost_slope = 0,
+           q_slope = 0,
            beta = 1.3,
            max_cp_ratio = 0.75,
            time_step = 1,
@@ -24,7 +27,7 @@ prepare_fishery <-
            num_patches = 1,
            r0 = 10000,
            sample_type = "catch",
-           percent_sampled = 1,
+           percent_sampled = 500,
            economic_model = 1,
            steepness = 0.8,
            profit_lags = 1,
@@ -51,6 +54,7 @@ prepare_fishery <-
         price = price,
         price_cv = price_cv,
         price_ac = price_ac,
+        price_slope = price_slope,
         steepness = steepness,
         r0 = r0,
         rec_ac = rec_ac,
@@ -63,8 +67,11 @@ prepare_fishery <-
       fish = fish,
       cost_cv =  cost_cv,
       cost_ac = cost_ac,
+      cost_slope = cost_slope,
       q_cv = q_cv,
       q_ac = q_ac,
+      q_slope = q_slope,
+      price_slope = price_slope,
       fleet_model = fleet_model,
       target_catch = fleet_params$target_catch,
       cost = cost,
@@ -81,6 +88,8 @@ prepare_fishery <-
         cost_ac = cost_ac,
         q_cv = q_cv,
         q_ac = q_ac,
+        cost_slope = cost_slope,
+        q_slope = q_slope,
         fleet_model = fleet_model,
         initial_effort = initial_effort,
         cost = cost,
@@ -96,6 +105,8 @@ prepare_fishery <-
         cost_ac = cost_ac,
         q_cv = q_cv,
         q_ac = q_ac,
+        cost_slope = cost_slope,
+        q_slope = q_slope,
         fleet_model = fleet_model,
         catches = fleet_params$catches,
         cost = cost,
@@ -117,6 +128,8 @@ prepare_fishery <-
         q = q,
         q_cv = q_cv,
         q_ac = q_ac,
+        cost_slope = cost_slope,
+        q_slope = q_slope,
         fleet_model = fleet_model,
         max_perc_change_f = max_perc_change_f,
         max_cp_ratio = max_cp_ratio,
@@ -138,21 +151,6 @@ prepare_fishery <-
       time_step = fish$time_step,
       est_msy = FALSE
     )
-
-#
-#     sim %>%
-#       group_by(year) %>%
-#       summarise(te = unique(effort),
-#                 profits = sum(profits),
-#                 biomass = sum(biomass)) %>%
-#       ungroup() %>%
-#       mutate(ppue = profits / te) %>%
-#       gather(metric, value, -year) %>%
-#       ggplot(aes(year, value, color = metric)) +
-#       geom_line(show.legend = F) +
-#       geom_point() +
-#       facet_wrap(~metric, scales = "free_y")
-#
 
 
     scrooge_data <- prepare_scrooge_data(fish = fish,

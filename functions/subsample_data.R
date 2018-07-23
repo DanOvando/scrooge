@@ -23,11 +23,15 @@ subsample_data <-
       sampled_years <- (max(years) - window):max(years)
 
     }
+    if (prop_years_lcomp_data <1){
 
     length_years <-
       sampled_years[-(1:(
         length(sampled_years) - ceiling(length(sampled_years) * prop_years_lcomp_data)
       ))]
+    } else{
+      length_years <- sampled_years
+    }
 
     prepped_fishery$sampled_years <- sampled_years
 
@@ -37,6 +41,10 @@ subsample_data <-
 
     prepped_fishery$scrooge_data$observed_effort <-
       prepped_fishery$scrooge_data$observed_effort[sampled_years]
+
+
+    prepped_fishery$scrooge_data$ppue_t <-
+      prepped_fishery$scrooge_data$ppue_t[sampled_years]
 
     prepped_fishery$scrooge_data$length_comps <-
       prepped_fishery$scrooge_data$length_comps %>%
@@ -59,10 +67,10 @@ subsample_data <-
       prepped_fishery$scrooge_data$price_t[sampled_years]
 
     prepped_fishery$scrooge_data$q_t <-
-      prepped_fishery$scrooge_data$q_t[sampled_years]
+      prepped_fishery$scrooge_data$q_t[sampled_years]/(prepped_fishery$scrooge_data$q_t[sampled_years])
 
     prepped_fishery$scrooge_data$cost_t <-
-      prepped_fishery$scrooge_data$cost_t[sampled_years]
+      prepped_fishery$scrooge_data$cost_t[sampled_years]/max(prepped_fishery$scrooge_data$cost_t[sampled_years])
 
 
     return(prepped_fishery)

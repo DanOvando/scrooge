@@ -3767,4 +3767,1017 @@ aha what abotu setting it in terms of cost per unit F, which is pretty stable, t
 
 Alternatively, you could say hey, it works for the most part, let's focus on getting scrogoe itself to converge better. that seems like a better use of your time since that's what needs to get run a lot more than the operatin models themselves. 
 
+# what's the value of ppue?
+
+
+
+```{r}
+
+library(tidyverse)
+library(FishLife)
+library(spasm)
+library(ggridges)
+set.seed(42)
+fish <-
+  create_fish(
+    scientific_name = "Lutjanus campechanus",
+    query_fishlife = T,
+    mat_mode = "length",
+    time_step = 1,
+    sigma_r = 0.25,
+    price = 100,
+    price_cv = 0.25,
+    price_ac = 0.5,
+    steepness = 0.6,
+    r0 = 1000,
+    rec_ac = 0.4,
+    density_movement_modifier = 0
+  )
+
+
+fleet <- create_fleet(
+  fish = fish,
+  cost_cv =  0.25,
+  cost_ac = 0.5,
+  q_cv = 0.25,
+  q_ac = 0.5,
+  fleet_model = "open-access",
+  sigma_effort = 0,
+  length_50_sel = 0.25 * fish$linf,
+  initial_effort = 100,
+  profit_lags =  0,
+  beta = 2,
+  max_cp_ratio = 0.25,
+  max_perc_change_f = 0.25
+)
+
+
+sim_noad <- spasm::sim_fishery(
+  fish = fish,
+  fleet = fleet,
+  manager = create_manager(mpa_size = 0.5),
+  num_patches = 1,
+  sim_years = 100,
+  burn_year = 50,
+  time_step = fish$time_step,
+  est_msy = F,
+  random_mpas = F
+)
+
+
+ a = sim_noad %>%
+  group_by(year) %>%
+  summarise(te = unique(effort),
+            f = unique(f),
+            profits = sum(profits),
+            biomass = sum(biomass),
+            catch = sum(biomass_caught)) %>%
+  ungroup() %>%
+   arrange(year) %>% 
+  mutate(ppue = profits / te,
+         cpue = catch / te) %>%
+   mutate(lag_ppue = lag(ppue),
+          lag_profits = lag(profits),
+          delta_f = f - lag(f),
+          delta_effort = te - lag(te)) 
+ 
+  
+ wtf <- a %>% 
+   filter(profits <0 & delta_effort > 0 )
+ 
+ a %>% 
+   ggplot(aes(lag_ppue, delta_effort)) + 
+   geom_point()
+
+   
+   a %>% 
+  gather(metric, value, -year) %>% 
+  ggplot(aes(year, value, color = metric)) +
+  geom_line(show.legend = F) +
+    facet_wrap(~metric, scales = "free_y")
+
+
+
+
+```
+
+profit per unit effort is directly proportional to the increase in F. So, that's where it can become useful in the likelihood. In the same way that qCPUE is useful, dPPUE can be useful then, where you estimate q to translate CPUE to abundance, and you estimate d to translate PPUE. 
+
+Or really, the reason that you don't just include the CPUE as data is that you are more interested in estiamting the unobserved biomass. In your case, you are interested in the F itself. 
+
+So one option would be to pass the profit per unit effort in as data, and just estimate the p_response to translate that into changes in effort. So, that would be explain the length composition data, given data on the relative change in profitability. 
+
+Another would be to use your same priors, but now take the profit per unit effort data as part of the likelihood. So, find the F, recruitment, etc. that best explain the length compision and the history of profit per unit effort in the fishery. 
+
+add an index on a random effect
+
+as a discussion point 
+
+DEFINITELY make effort or ppue data on the left hand side. BOOYA
+
+methot schirripa
+
+unique identifier for a different 
+
+Factor model for effort dynamics along metiers of fleets to look into which metiers are explaining F patterns
+
+multivariate gompertz model, in theory you could fit a two "species" model of effort and biomass for the species and see what that looks like. 
+
+hazard model on assessments the time between a stock becomes fished and when the first assessment comes, you can take that hazard model and transfer that into an annual varying propensity score. 
+
+# Final parameterization 
+
+OK, seems like you got things working fairly well again. Per Jim's point, definitely worth thinking about incorporating things on the right-hand side. 
+
+- If you only know price, cost, or some unit of
+  - Then it goes in the effort priors
+- If you **know** effort
+  - Input as data using economic weight of 1
+  - Fit to as data
+- If you have profits per unit effort
+  - Input as data 
+  - Fit to as data
+  
+Can you turn off parts of the likelihood?
+
+You can at least include an if statement there for different economic models... 
+
+I'd like to get away from the weighting since it's so arbitrary: how would you possible pick anything except zero or 1?
+
+One option is just to fit to the PPUE, and take the price, cost, q, etc. as data. That would be assuming pure observation error
+
+The other way is observation and process error. That's what you're doing now more or less. The process error comes in between the vector of efforts and the priors, and the observation error comes in between the true effort and the "observed" effort. look at the state epace example from the schaefer model to convince yourself 
+
+ah though there you're estimating deviances, which is a bit different, interesting idea. 
+
+So your options. 
+
+I don't think it's kosher to both use the price, cost, and q data in the priors, and then fit to the ppue which is derived from those. Though, if you think about it, that's basically what a surplus production model is doing, in using the catch as data and then fitting to an index derived from the catch, so maybe it's OK? In that the PPUE is not a direct outcome of the costs etc. But, the question remains, why would you use the raw stuff if you have the PPUE itself. Why not just use the PPUE as data, and then allow effort deviates. 
+
+If you're including both priors and data, that is saying you're including both process and observation error on the economic side, so need to estiamte both. 
+
+of course, you idiot, when you tnink about it as process error, it's not a CV on how much effort can change, but how much it can deviate from the open access model itself. So, you should fix sigma r, which you can say you have reasonable means to predict, and estiamte sigma_effort_process, and observation if you need to.   
+
+- 1: p,c,q driven priors
+
+- 2: p,c,q driven priors, fit to PPUE
+  - either relative ppue or tune costs here to allow tht things to actually match up
+
+- 3: ppue based priors
+
+- 4:  p,c,q driven priors, fit to effort
+  - relative effort or tune q here to translate that effort into the right F
+  
+- 5: effort based priors - relative effort is fixed with deviates
+
+
+Whoops, locking in inital depletion with initial F is a problem, since it's not allowing you to have high F and high B, need a burn-in F. Fix that first. 
+
+# Fitting to ppue
+
+If you don't have any data on prices/cost etc, then you can estimate ppue hat has delta effort / theta, where theta is the profit expansion factor, and then estimate f and theta and confront with data from PPUE
+
+
+whoops, also, f in the last year is completely unidentified given the order of operations as they stand. You calculate F, and then apply that F to next years population. So, there's no signal of the current F in the current years's length comps, so you need to subtract one year off of the estimated F's
+
+```{r}
+
+a = fisheries_sandbox$prepped_fishery[[3]]$simed_fishery %>% 
+  group_by(year) %>% 
+  summarise(profits = sum(profits),
+            effort  = unique(effort),
+            f = unique(f)) %>% 
+  ungroup() %>% 
+  mutate(delta_effort = lead(effort) - effort,
+         delta_f = lead(f) - f) %>%
+  mutate(ppue = profits / effort) 
+
+lm(delta_effort ~ ppue, data = a)
+
+a %>% 
+  ggplot(aes(ppue, delta_f)) + 
+  geom_point()
+
+ b = fisheries_sandbox$prepped_fishery[[3]]$simed_fishery %>% 
+   group_by(year) %>% 
+   mutate(pn = numbers / sum(numbers)) %>% 
+   ggplot(aes(age, pn, color = year, group = year)) + 
+   geom_line()
+   
+ b
+ 
+fisheries_sandbox$prepped_fishery[[3]]$scrooge_data$length_comps %>%
+   gather(length, numbers, -year) %>%
+   mutate(length = as.numeric(length)) %>%
+   group_by(year) %>%
+   mutate(pn = numbers / sum(numbers)) %>%
+   ggplot(aes(length, pn, color = year, group = year)) +
+   geom_line()
+```
+
+
+checks to run
+
+1. is biomass increasing when F is zero
+
+2. Copy data and life history from LIME example, see if you can recover when model is in LIME mode
+
+```{r}
+
+lime_inputs <- readRDS("~/PhD/scrooge/data/lime_inputs.RDS")
+
+limecomps <- lime_inputs$LF %>% drop()
+
+limedata <- data
+
+limedata$length_comps <- limecomps
+
+limedata$length_comps_years <- 1:nrow(limecomps)
+
+limedata$n_lcomps <- nrow(limecomps)
+
+limedata$nt <- nrow(limecomps)
+
+limedata$n_ages <- length(lime_inputs$ages)
+
+limedata$n_lbins <- ncol(limecomps)
+
+limedata$ages <- lime_inputs$ages
+
+limedata$m <- lime_inputs$M
+
+limedata$h <- lime_inputs$h
+
+limedata$r0 <- lime_inputs$R0
+
+limedata$k <- lime_inputs$vbk
+
+limedata$loo <- lime_inputs$linf
+
+limedata$t0 <- lime_inputs$t0
+
+limedata$mean_length_at_age <- lime_inputs$L_a
+
+limedata$mean_weight_at_age <- lime_inputs$W_a
+
+limedata$mean_maturity_at_age <- lime_inputs$Mat_a
+
+length_at_age_key <- generate_length_at_age_key(
+  min_age = min(lime_inputs$ages),
+  max_age = max(lime_inputs$ages),
+  cv = lime_inputs$CVlen,
+  linf = lime_inputs$linf,
+  k = lime_inputs$vbk,
+  t0 = lime_inputs$t0,
+  time_step = 1,
+  linf_buffer = 1.25
+) %>%
+  ungroup() %>%
+  select(age, length_bin, p_bin) %>%
+  spread(length_bin, p_bin) %>%
+  select(-age)
+
+limedata$length_at_age_key <- length_at_age_key
+
+data$length_50_sel_guess <-  lime_inputs$SL50
+
+limedata$economic_model <- 0
+
+limedata$sigma_effort_guess <- lime_inputs$SigmaF
+
+length_at_age_key %>% 
+  mutate(age = 1:nrow(.)) %>% 
+  gather(length, prob, -age) %>% 
+  mutate(length = as.numeric(length)) %>% 
+  ggplot(aes(length, prob, color = age, group = age)) + 
+  geom_line()
+
+limedata$length_comps %>% 
+  as_data_frame() %>% 
+  mutate(year = 1:nrow(.)) %>% 
+  gather(lbin, number,-year) %>% 
+  mutate(lbin = as.numeric(lbin)) %>% 
+  ggplot(aes(lbin, number)) + 
+  geom_col() + 
+  facet_wrap(~year)
+
+saveRDS(limedata, "limedata.RDS")
+
+
+
+```
+
+
+
+```{r}
+
+data <- readRDS("../limedata.RDS")
+
+data$economic_model <- 0
+
+data$n_lcomps <- nrow(data$length_comps)
+
+data$perc_change_effort <- data$perc_change_effort[1:data$nt]
+
+data$observed_effort <- data$observed_effort[1:data$nt]
+
+data$ppue_t <- data$ppue_t[1:data$nt]
+
+data$price_t <- data$price_t[1:data$nt]
+
+data$cost_t <- data$cost_t[1:data$nt]
+
+data$q_t <- data$q_t[1:data$nt]
+
+data$sd_sigma_r <- 0.1
+
+data$sigma_f <- 0.2
+
+data$bin_mids <- as.numeric(colnames(data$length_at_age_key)) 
+
+data$bin_mids <- data$bin_mids + ((data$bin_mids[2] - data$bin_mids[1])/2)
+
+data$age_sel <- 5
+
+chains <- 2
+
+refresh <- 25
+
+iter <- 2000
+
+warmup <-  1000
+
+seed <- 52
+
+cores <- 2
+
+adapt_delta <- 0.8
+
+max_treedepth <- 12
+
+scrooge_file <- "scrooge"
+
+  inits <-
+    map(
+      1:chains,
+      ~ list(
+        burn_f = jitter(data$m/2),
+        f_t = jitter(rep(data$m/2, data$nt)),
+        sigma_r = jitter(.1),
+        p_length_50_sel = jitter(0.25),
+        log_p_response = log(.1),
+        sigma_effort = 0.2
+      )
+    )
+  
+fit <-
+  rstan::stan(
+    file = here::here("src", paste0(scrooge_file, ".stan")),
+    data = data,
+    chains = chains,
+    refresh = refresh,
+    cores = cores,
+    iter = iter,
+    warmup = warmup,
+    control = list(adapt_delta = adapt_delta,
+                   max_treedepth = max_treedepth),
+    init = inits,
+    seed = seed
+  )
+
+# rstanarm::launch_shinystan(fit)
+
+wtf <- rstan::get_inits(fit)
+
+sigma_r <- tidybayes::spread_samples(fit, sigma_r)
+
+hist(sigma_r$sigma_r)
+
+rec_devs <- tidybayes::spread_samples(fit, rec_dev_t[year])
+
+rec_devs %>%
+  ggplot(aes(year,rec_dev_t, group = .iteration)) +
+  geom_line(alpha = 0.25) + 
+  geom_hline(aes(yintercept = 1), color = "red") 
+
+
+f_t <- tidybayes::spread_samples(fit, f_t[year])
+
+f_t %>%
+  group_by(year) %>% 
+  summarise(mean_f = mean(f_t)) %>% 
+  ggplot(aes(year,mean_f)) +
+  geom_line() + 
+  ylim(c(0,.4))
+
+f_t %>%
+  ggplot(aes(year,f_t, group = .iteration)) +
+  geom_line(alpha = 0.5) + 
+  ylim(c(0,.4))
+
+lcomps <- tidybayes::spread_samples(fit, p_lbin_sampled[year,lbin])
+
+observed_lcomps <- data$length_comps %>% 
+  as_data_frame() %>% 
+  mutate(year = 1:nrow(.)) %>% 
+  gather(lbin, numbers, -year) %>% 
+  mutate(lbin = as.numeric(lbin)) %>% 
+  group_by(year) %>% 
+  mutate(numbers = numbers / sum(numbers))
+
+lcomps %>%
+  group_by(year, lbin) %>%
+  summarise(mean_n = mean(p_lbin_sampled)) %>%
+  group_by(year) %>%
+  mutate(mean_n = mean_n / sum(mean_n)) %>%
+  ggplot() +
+  geom_line(aes(lbin, mean_n, color = year, group = year),show.legend = F) + 
+  geom_point(data = observed_lcomps, aes(lbin, numbers), size = .5, alpha = 0.5) +
+  facet_wrap(~year) + 
+  theme_classic()
+
+selectivity <- tidybayes::spread_samples(fit, mean_selectivity_at_age[age]) 
+
+selectivity%>% 
+  ggplot() +
+  geom_line(aes(age, mean_selectivity_at_age, group = .iteration),alpha = 0.5) 
+
+
+```
+
+
+fing awesome. Now, let's try it with your data
+
+
+
+
+
+
+```{r}
+
+experiments <- expand.grid(period = c("end"), window = c(20),
+                           economic_model = c(0),
+                           fishery = 1:nrow(fisheries_sandbox), stringsAsFactors = F)
+
+temp <- fisheries_sandbox %>%
+  filter(fleet_model == "open-access") %>% 
+  mutate(fishery = 1:nrow(.)) %>%
+  slice(1) %>%
+  left_join(experiments, by = "fishery") %>%
+  mutate(prepped_fishery = pmap(list(
+    prepped_fishery = prepped_fishery,
+    window = window,
+    period = period,
+    prop_years_lcomp_data = 0.25), subsample_data))
+
+temp$experiment <- 1:nrow(temp)
+
+temp <- temp %>% filter(economic_model == 0)
+```
+
+```{r}
+observed_lcomps <- temp$prepped_fishery[[1]]$scrooge_data$length_comps %>% 
+  as_data_frame() %>% 
+  mutate(year = 1:nrow(.)) %>% 
+  gather(lbin, numbers, -year) %>% 
+  mutate(lbin = as.numeric(lbin)) %>% 
+  group_by(year) %>% 
+  mutate(numbers = numbers / sum(numbers))
+
+observed_lcomps %>% 
+  ggplot() +
+  geom_point(data = observed_lcomps, aes(lbin, numbers), size = .5, alpha = 0.5) +
+  facet_wrap(~year) + 
+  theme_classic()
+
+```
+
+huh, I mean it certainly doens't look that bad... possible culprits. 
+
+1. the long tails on the right
+
+2. the sample sizes
+
+3. the timing of recruitment 
+
+4. a parameter mismatch. 
+
+
+
+```{r}
+sfs <- safely(fit_scrooge)
+
+doParallel::registerDoParallel(cores = n_cores)
+
+foreach::getDoParWorkers()
+
+set.seed(42)
+fits <- foreach::foreach(i = 1:nrow(temp)) %dopar% {
+  out <- sfs(
+    data = temp$prepped_fishery[[i]]$scrooge_data,
+    fish = temp$prepped_fishery[[i]]$fish,
+    fleet = temp$prepped_fishery[[i]]$fleet,
+    experiment = temp$experiment[i],
+    economic_model = 0,
+    scrooge_file = "scrooge",
+    iter = 2000,
+    warmup = 1000,
+    adapt_delta = 0.8,
+    max_treedepth = 12,
+    max_perc_change_f = 0.2,
+    in_clouds = in_clouds,
+    cloud_dir = cloud_dir,
+    chains = 1,
+    cv_effort = 0.5,
+    q_guess = mean(possible_q),
+    r0 = 100,
+    sd_sigma_r = 0.1,
+    sigma_f = 0.1,
+    cores = 1
+  )
+
+} # close fitting loop
+
+
+fit <- fits[[1]]$result
+
+rstanarm::launch_shinystan(fit)
+
+sigma_r <- tidybayes::spread_samples(fit, sigma_r)
+
+hist(sigma_r$sigma_r)
+
+rec_devs <- tidybayes::spread_samples(fit, rec_dev_t[year])
+
+true_recdevs <- temp$prepped_fishery[[1]]$simed_fishery %>% 
+  group_by(year) %>% 
+  summarise(true_rec_dev = exp(unique(rec_dev))) %>% 
+  filter(year >=179) %>% 
+  ungroup() %>% 
+  mutate(year = 1:nrow(.))
+
+rec_devs %>%
+  left_join(true_recdevs, by = "year") %>% 
+  ggplot(aes(year,rec_dev_t, group = .iteration)) +
+  geom_line(alpha = 0.25) + 
+  geom_point(aes(year,true_rec_dev), color = "red") +
+  geom_hline(aes(yintercept = 1), color = "red") 
+
+f_t <- tidybayes::spread_samples(fit, f_t[year]) %>% 
+  ungroup() %>% 
+mutate(year = year - 1 + 180 )
+
+true_f <- temp$prepped_fishery[[1]]$simed_fishery %>% 
+  group_by(year) %>% 
+  summarise(true_f = unique(f))
+
+f_t %>%
+  left_join(true_f, by = "year") %>% 
+  group_by(year) %>% 
+  summarise(mean_f = median(f_t),
+            true_f = mean(true_f)) %>% 
+  ggplot() +
+  geom_line(aes(year,mean_f)) + 
+  geom_point(aes(year, true_f), color = "red")
+
+f_t %>% 
+  ggplot() + 
+  geom_line(aes(year, f_t, group = .iteration),alpha = 0.1) + 
+  geom_point(data = true_f, aes(year, true_f), color = "red")
+
+
+lcomps <- tidybayes::spread_samples(fit, p_lbin_sampled[year,lbin])
+
+observed_lcomps <- temp$prepped_fishery[[1]]$scrooge_data$length_comps %>% 
+  as_data_frame() %>% 
+  mutate(year = 1:nrow(.)) %>% 
+  gather(lbin, numbers, -year) %>% 
+  mutate(lbin = as.numeric(lbin)) %>% 
+  group_by(year) %>% 
+  mutate(numbers = numbers / sum(numbers))
+
+lcomps %>%
+  group_by(year, lbin) %>%
+  summarise(mean_n = mean(p_lbin_sampled)) %>%
+  group_by(year) %>%
+  mutate(mean_n = mean_n / sum(mean_n)) %>%
+  ggplot() +
+  geom_line(aes(lbin, mean_n, color = year, group = year),show.legend = F) + 
+  geom_point(data = observed_lcomps, aes(lbin, numbers), size = .5, alpha = 0.5) +
+  facet_wrap(~year) + 
+  theme_classic()
+
+selectivity <- tidybayes::spread_samples(fit, mean_selectivity_at_age[age]) 
+
+selectivity%>% 
+  ggplot() +
+  geom_line(aes(age, mean_selectivity_at_age, group = .iteration),alpha = 0.5) 
+
+```
+
+
+
+```{r}
+sfs <- safely(fit_scrooge)
+
+doParallel::registerDoParallel(cores = n_cores)
+
+foreach::getDoParWorkers()
+
+set.seed(42)
+fits <- foreach::foreach(i = 1:nrow(temp)) %dopar% {
+  out <- sfs(
+    data = temp$prepped_fishery[[i]]$scrooge_data,
+    fish = temp$prepped_fishery[[i]]$fish,
+    fleet = temp$prepped_fishery[[i]]$fleet,
+    experiment = temp$experiment[i],
+    economic_model = 3,
+    scrooge_file = "scrooge",
+    iter = 2000,
+    warmup = 1000,
+    adapt_delta = 0.8,
+    max_treedepth = 12,
+    max_perc_change_f = 0.2,
+    in_clouds = in_clouds,
+    cloud_dir = cloud_dir,
+    chains = 1,
+    cv_effort = 0.5,
+    q_guess = mean(possible_q),
+    r0 = 100,
+    sd_sigma_r = 0.1,
+    cores = 1,
+    sigma_f = 0.2
+  )
+
+} # close fitting loop
+
+
+fit <- fits[[1]]$result
+
+rstanarm::launch_shinystan(fit)
+
+sigma_r <- tidybayes::spread_samples(fit, sigma_r)
+
+hist(sigma_r$sigma_r)
+
+rec_devs <- tidybayes::spread_samples(fit, rec_dev_t[year])
+
+true_recdevs <- temp$prepped_fishery[[1]]$simed_fishery %>% 
+  group_by(year) %>% 
+  summarise(true_rec_dev = exp(unique(rec_dev))) %>% 
+  filter(year >=179) %>% 
+  ungroup() %>% 
+  mutate(year = 1:nrow(.))
+
+rec_devs %>%
+  left_join(true_recdevs, by = "year") %>% 
+  ggplot(aes(year,rec_dev_t, group = .iteration)) +
+  geom_line(alpha = 0.25) + 
+  geom_point(aes(year,true_rec_dev), color = "red") +
+  geom_hline(aes(yintercept = 1), color = "red") 
+
+f_t <- tidybayes::spread_samples(fit, f_t[year]) %>% 
+  ungroup() %>% 
+mutate(year = year - 1 + 180 )
+
+true_f <- temp$prepped_fishery[[1]]$simed_fishery %>% 
+  group_by(year) %>% 
+  summarise(true_f = unique(f))
+
+f_t %>%
+  left_join(true_f, by = "year") %>% 
+  group_by(year) %>% 
+  summarise(mean_f = mean(f_t),
+            true_f = mean(true_f)) %>% 
+  ggplot() +
+  geom_line(aes(year,mean_f)) + 
+  geom_point(aes(year, true_f), color = "red")
+
+f_t %>% 
+  ggplot() + 
+  geom_line(aes(year, f_t, group = .iteration),alpha = 0.1) + 
+  geom_point(data = true_f, aes(year, true_f), color = "red")
+
+lcomps <- tidybayes::spread_samples(fit, p_lbin_sampled[year,lbin])
+
+observed_lcomps <- temp$prepped_fishery[[1]]$scrooge_data$length_comps %>% 
+  as_data_frame() %>% 
+  mutate(year = temp$prepped_fishery[[1]]$scrooge_data$length_comps_years)%>% 
+  gather(lbin, numbers, -year) %>% 
+  mutate(lbin = as.numeric(lbin)) %>% 
+  group_by(year) %>% 
+  mutate(numbers = numbers / sum(numbers))
+
+lcomps %>%
+  group_by(year, lbin) %>%
+  summarise(mean_n = mean(p_lbin_sampled)) %>%
+  group_by(year) %>%
+  mutate(mean_n = mean_n / sum(mean_n)) %>%
+  ggplot() +
+  geom_line(aes(lbin, mean_n, color = year, group = year),show.legend = F) + 
+  geom_point(data = observed_lcomps, aes(lbin, numbers), size = .5, alpha = 0.5) +
+  facet_wrap(~year) + 
+  theme_classic()
+
+selectivity <- tidybayes::spread_samples(fit, mean_selectivity_at_age[age]) 
+
+selectivity%>% 
+  ggplot() +
+  geom_line(aes(age, mean_selectivity_at_age, group = .iteration),alpha = 0.5)
+
+ppue <- tidybayes::spread_samples(fit, ppue_hat[year])
+
+true_ppue <- data_frame(year = 1:length(temp$prepped_fishery[[1]]$scrooge_data$ppue_t
+), ppue = temp$prepped_fishery[[1]]$scrooge_data$ppue_t
+) %>% 
+  ungroup() %>% 
+  mutate(ppue = ppue/max(ppue))
+
+
+ppue %>%
+  left_join(true_ppue, by = "year") %>%
+  ggplot() +
+  geom_line(aes(year, ppue_hat, group = .iteration),alpha = 0.25) +
+  geom_point(data = true_ppue, aes(year, ppue), color = "red") 
+
+
+# check posterior predictive 
+
+pp_n_tl <- tidybayes::spread_samples(fit, n_tl[year,length_bin]) 
+
+pp_n_tl %>% 
+  group_by(year, .chain,.iteration) %>% 
+  mutate(p_n_tl = n_tl / sum(n_tl)) %>% 
+  group_by(year, .chain, length_bin) %>% 
+  summarise(lower_90 = quantile(p_n_tl,0.05),
+            upper_90 = quantile(p_n_tl,0.95)) %>% 
+  ggplot() + 
+  geom_ribbon(aes(x = length_bin, ymin = lower_90, ymax = upper_90), fill = "lightgrey") +
+  facet_wrap(~year) + 
+  theme_minimal() +
+    geom_point(data = observed_lcomps, aes(lbin, numbers), size = .5, alpha = 0.5, color = "red")
+
+
+```
+
+
+```{r}
+
+sfs <- safely(fit_scrooge)
+
+doParallel::registerDoParallel(cores = n_cores)
+
+foreach::getDoParWorkers()
+
+set.seed(42)
+fits <- foreach::foreach(i = 1:nrow(temp)) %dopar% {
+  out <- sfs(
+    data = temp$prepped_fishery[[i]]$scrooge_data,
+    fish = temp$prepped_fishery[[i]]$fish,
+    fleet = temp$prepped_fishery[[i]]$fleet,
+    experiment = temp$experiment[i],
+    economic_model = 1,
+    scrooge_file = "scrooge",
+    iter = 2000,
+    warmup = 1000,
+    adapt_delta = 0.8,
+    max_treedepth = 12,
+    max_perc_change_f = 0.2,
+    in_clouds = in_clouds,
+    cloud_dir = cloud_dir,
+    chains = 1,
+    cv_effort = 0.5,
+    q_guess = mean(possible_q),
+    r0 = 100,
+    sd_sigma_r = 0.1,
+    cores = 1
+  )
+
+} # close fitting loop
+
+
+fit <- fits[[1]]$result
+
+rstanarm::launch_shinystan(fit)
+
+sigma_r <- tidybayes::spread_samples(fit, sigma_r)
+
+hist(sigma_r$sigma_r)
+
+rec_devs <- tidybayes::spread_samples(fit, rec_dev_t[year])
+
+true_recdevs <- temp$prepped_fishery[[1]]$simed_fishery %>% 
+  group_by(year) %>% 
+  summarise(true_rec_dev = exp(unique(rec_dev))) %>% 
+  filter(year >=179) %>% 
+  ungroup() %>% 
+  mutate(year = 1:nrow(.))
+
+rec_devs %>%
+  left_join(true_recdevs, by = "year") %>% 
+  ggplot(aes(year,rec_dev_t, group = .iteration)) +
+  geom_line(alpha = 0.25) + 
+  geom_point(aes(year,true_rec_dev), color = "red") +
+  geom_hline(aes(yintercept = 1), color = "red") 
+
+f_t <- tidybayes::spread_samples(fit, f_t[year]) %>% 
+  ungroup() %>% 
+mutate(year = year - 1 + 180 )
+
+true_f <- temp$prepped_fishery[[1]]$simed_fishery %>% 
+  group_by(year) %>% 
+  summarise(true_f = unique(f))
+
+f_t %>%
+  left_join(true_f, by = "year") %>% 
+  group_by(year) %>% 
+  summarise(mean_f = median(f_t),
+            true_f = mean(true_f)) %>% 
+  ggplot() +
+  geom_line(aes(year,mean_f)) + 
+  geom_point(aes(year, true_f), color = "red")
+
+f_t %>% 
+  ggplot() + 
+  geom_line(aes(year, f_t, group = .iteration),alpha = 0.1) + 
+  geom_point(data = true_f, aes(year, true_f), color = "red")
+
+lcomps <- tidybayes::spread_samples(fit, p_lbin_sampled[year,lbin])
+
+observed_lcomps <- temp$prepped_fishery[[1]]$scrooge_data$length_comps %>% 
+  as_data_frame() %>% 
+  mutate(year = 1:nrow(.)) %>% 
+  gather(lbin, numbers, -year) %>% 
+  mutate(lbin = as.numeric(lbin)) %>% 
+  group_by(year) %>% 
+  mutate(numbers = numbers / sum(numbers))
+
+lcomps %>%
+  group_by(year, lbin) %>%
+  summarise(mean_n = mean(p_lbin_sampled)) %>%
+  group_by(year) %>%
+  mutate(mean_n = mean_n / sum(mean_n)) %>%
+  ggplot() +
+  geom_line(aes(lbin, mean_n, color = year, group = year),show.legend = F) + 
+  geom_point(data = observed_lcomps, aes(lbin, numbers), size = .5, alpha = 0.5) +
+  facet_wrap(~year) + 
+  theme_classic()
+
+selectivity <- tidybayes::spread_samples(fit, mean_selectivity_at_age[age]) 
+
+selectivity%>% 
+  ggplot() +
+  geom_line(aes(age, mean_selectivity_at_age, group = .iteration),alpha = 0.5)
+
+ppue <- tidybayes::spread_samples(fit, ppue_hat[year])
+
+true_ppue <- data_frame(year = 1:length(temp$prepped_fishery[[1]]$scrooge_data$ppue_t
+), ppue = temp$prepped_fishery[[1]]$scrooge_data$ppue_t
+) %>% 
+  mutate(ppue = ppue / max(ppue))
+
+
+ppue %>%
+  left_join(true_ppue, by = "year") %>%
+  ggplot() +
+  geom_line(aes(year, ppue_hat, group = .iteration),alpha = 0.25) +
+  geom_point(data = true_ppue, aes(year, ppue), color = "red")
+
+```
+
+
+```{r}
+
+sfs <- safely(fit_scrooge)
+
+doParallel::registerDoParallel(cores = n_cores)
+
+foreach::getDoParWorkers()
+
+set.seed(42)
+fits <- foreach::foreach(i = 1:nrow(temp)) %dopar% {
+  out <- sfs(
+    data = temp$prepped_fishery[[i]]$scrooge_data,
+    fish = temp$prepped_fishery[[i]]$fish,
+    fleet = temp$prepped_fishery[[i]]$fleet,
+    experiment = temp$experiment[i],
+    economic_model = 3,
+    scrooge_file = "scrooge",
+    iter = 2000,
+    warmup = 1000,
+    adapt_delta = 0.8,
+    max_treedepth = 12,
+    max_perc_change_f = 0.2,
+    in_clouds = in_clouds,
+    cloud_dir = cloud_dir,
+    chains = 1,
+    cv_effort = 0.5,
+    q_guess = mean(possible_q),
+    r0 = 100,
+    sd_sigma_r = 0.1,
+    cores = 1
+  )
+
+} # close fitting loop
+
+
+fit <- fits[[1]]$result
+
+rstanarm::launch_shinystan(fit)
+
+sigma_r <- tidybayes::spread_samples(fit, sigma_r)
+
+hist(sigma_r$sigma_r)
+
+rec_devs <- tidybayes::spread_samples(fit, rec_dev_t[year])
+
+true_recdevs <- temp$prepped_fishery[[1]]$simed_fishery %>% 
+  group_by(year) %>% 
+  summarise(true_rec_dev = exp(unique(rec_dev))) %>% 
+  filter(year >=179) %>% 
+  ungroup() %>% 
+  mutate(year = 1:nrow(.))
+
+rec_devs %>%
+  left_join(true_recdevs, by = "year") %>% 
+  ggplot(aes(year,rec_dev_t, group = .iteration)) +
+  geom_line(alpha = 0.25) + 
+  geom_point(aes(year,true_rec_dev), color = "red") +
+  geom_hline(aes(yintercept = 1), color = "red") 
+
+f_t <- tidybayes::spread_samples(fit, f_t[year]) %>% 
+  ungroup() %>% 
+mutate(year = year - 1 + 180 )
+
+true_f <- temp$prepped_fishery[[1]]$simed_fishery %>% 
+  group_by(year) %>% 
+  summarise(true_f = unique(f))
+
+f_t %>%
+  left_join(true_f, by = "year") %>% 
+  group_by(year) %>% 
+  summarise(mean_f = median(f_t),
+            true_f = mean(true_f)) %>% 
+  ggplot() +
+  geom_line(aes(year,mean_f)) + 
+  geom_point(aes(year, true_f), color = "red")
+
+f_t %>% 
+  ggplot() + 
+  geom_line(aes(year, f_t, group = .iteration),alpha = 0.1) + 
+  geom_point(data = true_f, aes(year, true_f), color = "red")
+
+lcomps <- tidybayes::spread_samples(fit, p_lbin_sampled[year,lbin])
+
+observed_lcomps <- temp$prepped_fishery[[1]]$scrooge_data$length_comps %>% 
+  as_data_frame() %>% 
+  mutate(year = 1:nrow(.)) %>% 
+  gather(lbin, numbers, -year) %>% 
+  mutate(lbin = as.numeric(lbin)) %>% 
+  group_by(year) %>% 
+  mutate(numbers = numbers / sum(numbers))
+
+lcomps %>%
+  group_by(year, lbin) %>%
+  summarise(mean_n = mean(p_lbin_sampled)) %>%
+  group_by(year) %>%
+  mutate(mean_n = mean_n / sum(mean_n)) %>%
+  ggplot() +
+  geom_line(aes(lbin, mean_n, color = year, group = year),show.legend = F) + 
+  geom_point(data = observed_lcomps, aes(lbin, numbers), size = .5, alpha = 0.5) +
+  facet_wrap(~year) + 
+  theme_classic()
+
+selectivity <- tidybayes::spread_samples(fit, mean_selectivity_at_age[age]) 
+
+selectivity%>% 
+  ggplot() +
+  geom_line(aes(age, mean_selectivity_at_age, group = .iteration),alpha = 0.5)
+
+ppue <- tidybayes::spread_samples(fit, ppue_hat[year])
+
+true_ppue <- data_frame(year = 1:length(temp$prepped_fishery[[1]]$scrooge_data$ppue_t
+), ppue = temp$prepped_fishery[[1]]$scrooge_data$ppue_t
+) %>% 
+  mutate(ppue = ppue / max(ppue))
+
+
+ppue %>%
+  left_join(true_ppue, by = "year") %>%
+  ggplot() +
+  geom_line(aes(year, ppue_hat, group = .iteration),alpha = 0.25) +
+  geom_point(data = true_ppue, aes(year, ppue), color = "red")
+
+```
+
+# pathology with random walk
+
+So I think the problem was that the prior was overwhemling the data in the random walk. It was happiest when making F and sigma F really low, basically keeping it constant, since this made the prior happy, but made the surface really hard to explore. 
+
+# final tuning
+
+Oh of course, the model has a really hard time dealing with recruitment pulses in the early years since the pulse that cause it isn't in the data, especially if selectivity is higher! and so, it wants to compensate with F. Interesting. Is there a way to add a few buffer years of recruitment to the burn-in period? There must be. So the idea here would be to estimate a few more years of recruitment data during the burn-in period to account for the early pulses you see moving through the first years of the length comps. 
+Pretty easy to make that dynamic given likely age at selectivity. I.e. 
+
+Also need to do a bit of tuning of the fishery simulator now. Could 
 
