@@ -4391,7 +4391,7 @@ fits <- foreach::foreach(i = 1:nrow(temp)) %dopar% {
     fish = temp$prepped_fishery[[i]]$fish,
     fleet = temp$prepped_fishery[[i]]$fleet,
     experiment = temp$experiment[i],
-    economic_model = 3,
+    economic_model = 6,
     scrooge_file = "scrooge",
     iter = 2000,
     warmup = 1000,
@@ -4661,7 +4661,7 @@ fits <- foreach::foreach(i = 1:nrow(temp)) %dopar% {
     fish = temp$prepped_fishery[[i]]$fish,
     fleet = temp$prepped_fishery[[i]]$fleet,
     experiment = temp$experiment[i],
-    economic_model = 3,
+    economic_model = 1,
     scrooge_file = "scrooge",
     iter = 2000,
     warmup = 1000,
@@ -4780,4 +4780,6 @@ Oh of course, the model has a really hard time dealing with recruitment pulses i
 Pretty easy to make that dynamic given likely age at selectivity. I.e. 
 
 Also need to do a bit of tuning of the fishery simulator now. Could 
+
+
 

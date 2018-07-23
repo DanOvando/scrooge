@@ -301,34 +301,6 @@ for (i in 1:(n_lcomps)){
 
 //// effort prior ////
 
-
-if (economic_model == 1) { // open access priors
-/*
-Set priors on the change in f
-*/
-
-  for (t in 2:nt){
-
-    new_f = (effort_t[t - 1] + (exp(log_p_response) * (ppue_hat_t[t - 1]))) * q_t[t];
-
-    f_t[t] ~ normal(new_f,sigma_f);
-
-    } // close time loop
-
-} // close 1
-
-if (economic_model == 2){
-
-    for (t in 2:nt){
-
-    new_f = q_t[t] * effort_t[t - 1] * perc_change_effort[t - 1];
-
-    f_t[t] ~ normal(new_f , 0.5);
-
-    } // close time loop
-
-} // close 2
-
 if (economic_model == 0){
 
 /*
@@ -344,7 +316,46 @@ apply simple penalty on year to year variation in F
 
 } // close effort 0
 
+
+if (economic_model == 1) { // open access priors
+/*
+Set priors on the change in f based on open acces dynamics and
+relative changes in price, cost, and q where available
+*/
+
+  for (t in 2:nt){
+
+    new_f = (effort_t[t - 1] + (exp(log_p_response) * (ppue_hat_t[t - 1]))) * q_t[t];
+
+    f_t[t] ~ normal(new_f,sigma_f);
+
+    } // close time loop
+
+} // close 1
+
+if (economic_model == 2){
+
+/*
+Set priors on the change in F base on knowledge on the relative change in effort
+*/
+
+    for (t in 2:nt){
+
+    new_f = q_t[t] * effort_t[t - 1] * perc_change_effort[t - 1];
+
+    f_t[t] ~ normal(new_f , sigma_f);
+
+    } // close time loop
+
+} // close 2
+
+
+
 if (economic_model == 3){
+
+/*
+Fit to ppue data, under the assumption that ppue is proportional to delta F
+*/
 
   ppue_t[1:(nt - 1)] ~ normal(ppue_hat, sigma_ppue);
 
@@ -359,17 +370,24 @@ if (economic_model == 3){
 
 if (economic_model == 4){
 
+  /*
+Fit to ppue data, under the assumption that ppue is proportional to delta F,
+and provide priors using economic knowledge as well
+*/
+
   for (t in 2:nt){
 
     new_f = (effort_t[t - 1] + (exp(log_p_response) * (ppue_hat_t[t - 1]))) * q_t[t];
 
-    f_t[t] ~ normal(new_f,1);
+    f_t[t] ~ normal(new_f,sigma_f);
 
     } // close time loop
 
   ppue_t[1:(nt - 1)] ~ normal(ppue_hat, sigma_ppue);
 
 }
+
+
 
 f_t ~ cauchy(0,2.5);
 

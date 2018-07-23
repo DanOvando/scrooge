@@ -130,7 +130,8 @@ fit_scrooge <-
         f_t = rep(jitter(fish$m/2), data$nt),
         sigma_r = jitter(.1),
         p_length_50_sel = jitter(0.25),
-        log_p_response = log(.1)
+        log_p_response = log(.1),
+        log_max_cost = log(data$max_cost_guess)
       )
     )
 

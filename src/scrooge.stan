@@ -34,7 +34,9 @@ row_vector[nt] perc_change_effort;
 
 row_vector[nt] price_t;
 
-row_vector[nt] cost_t;
+row_vector[nt] relative_cost_t;
+
+real max_cost_guess;
 
 row_vector[nt] q_t;
 
@@ -102,9 +104,11 @@ vector[nt + age_sel]  uc_rec_dev_t; //  recruitment deviates
 
 real <lower = 0> sigma_r; // standard deviation of recruitment deviates
 
-real<lower = 0> sigma_ppue;
+real<lower = 0> sigma_obs;
 
 real  log_p_response;
+
+real log_max_cost; // mean cost
 
 real<lower = 0> p_length_50_sel; // length at 50% selectivity
 
@@ -121,6 +125,8 @@ transformed parameters{
   real length_50_sel;
 
   real plus_group;
+
+  real p_response;
 
   row_vector[n_ages] temp_a;
 
@@ -144,6 +150,8 @@ transformed parameters{
 
   matrix[nt, n_lbins] p_lbin_sampled; // numbers at time and length bin
 
+  row_vector[nt] cost_t;
+
   vector[nt] profit_t; // profits
 
   vector[nt] ppue_hat_t; // profit per unit effort
@@ -158,11 +166,17 @@ transformed parameters{
 
   vector[nt - 1] ppue_hat;
 
+  vector[nt - 1] perc_change_effort_hat;
+
   real temp_f;
 
   //////////////////////////
   //  set things up       //
   //////////////////////////
+
+  p_response = exp(log_p_response);
+
+  cost_t = exp(log_max_cost) * relative_cost_t;
 
   length_50_sel = loo * p_length_50_sel;
 
@@ -281,9 +295,12 @@ transformed parameters{
 
     delta_f[t] = effort_t[t + 1] - effort_t[t];
 
+    perc_change_effort_hat[t] = effort_t[t + 1] / effort_t[t];
+
+
     }
 
-  ppue_hat = delta_f / exp(log_p_response);
+  ppue_hat = delta_f / p_response;
 
 }
 
@@ -301,34 +318,6 @@ for (i in 1:(n_lcomps)){
 
 //// effort prior ////
 
-
-if (economic_model == 1) { // open access priors
-/*
-Set priors on the change in f
-*/
-
-  for (t in 2:nt){
-
-    new_f = (effort_t[t - 1] + (exp(log_p_response) * (ppue_hat_t[t - 1]))) * q_t[t];
-
-    f_t[t] ~ normal(new_f,sigma_f);
-
-    } // close time loop
-
-} // close 1
-
-if (economic_model == 2){
-
-    for (t in 2:nt){
-
-    new_f = q_t[t] * effort_t[t - 1] * perc_change_effort[t - 1];
-
-    f_t[t] ~ normal(new_f , 0.5);
-
-    } // close time loop
-
-} // close 2
-
 if (economic_model == 0){
 
 /*
@@ -344,9 +333,48 @@ apply simple penalty on year to year variation in F
 
 } // close effort 0
 
+
+if (economic_model == 1) { // open access priors
+/*
+Set priors on the change in f based on open acces dynamics and
+relative changes in price, cost, and q where available
+*/
+
+  for (t in 2:nt){
+
+    new_f = (effort_t[t - 1] + (p_response * (ppue_hat_t[t - 1]))) * q_t[t];
+
+    f_t[t] ~ normal(new_f,sigma_f);
+
+    } // close time loop
+
+} // close 1
+
+if (economic_model == 2){
+
+/*
+Set priors on the change in F base on knowledge on the relative change in effort
+*/
+
+    for (t in 2:nt){
+
+    new_f = q_t[t] * effort_t[t - 1] * perc_change_effort[t - 1];
+
+    f_t[t] ~ normal(new_f , sigma_f);
+
+    } // close time loop
+
+} // close 2
+
+
+
 if (economic_model == 3){
 
-  ppue_t[1:(nt - 1)] ~ normal(ppue_hat, sigma_ppue);
+/*
+Fit to ppue data, under the assumption that ppue is proportional to delta F
+*/
+
+  ppue_t[1:(nt - 1)] ~ normal(ppue_hat, sigma_obs);
 
     // for (t in 2:nt){
     //
@@ -359,21 +387,55 @@ if (economic_model == 3){
 
 if (economic_model == 4){
 
+  /*
+Fit to ppue data, under the assumption that ppue is proportional to delta F,
+and provide priors using economic knowledge as well
+*/
+
   for (t in 2:nt){
 
-    new_f = (effort_t[t - 1] + (exp(log_p_response) * (ppue_hat_t[t - 1]))) * q_t[t];
+    new_f = (effort_t[t - 1] + (p_response * (ppue_hat_t[t - 1]))) * q_t[t];
 
-    f_t[t] ~ normal(new_f,1);
+    f_t[t] ~ normal(new_f,sigma_f);
 
     } // close time loop
 
-  ppue_t[1:(nt - 1)] ~ normal(ppue_hat, sigma_ppue);
+  ppue_t[1:(nt - 1)] ~ normal(ppue_hat, sigma_obs);
 
 }
 
+
+if (economic_model == 5){
+  /*
+fit to percentage change in effort
+*/
+  perc_change_effort[1:(nt - 1)] ~ normal(perc_change_effort_hat, sigma_f);
+
+}
+
+if (economic_model == 6){
+  /*
+fit to percentage change in effort with bioeconomic informed priors
+*/
+
+    for (t in 2:nt){
+
+    new_f = (effort_t[t - 1] + (p_response * (ppue_hat_t[t - 1]))) * q_t[t];
+
+    f_t[t] ~ normal(new_f,sigma_f);
+
+    } // close time loop
+
+  perc_change_effort[1:(nt - 1)] ~ normal(perc_change_effort_hat, sigma_obs);
+
+}
+
+
+log_max_cost ~ normal(log(max_cost_guess),1);
+
 f_t ~ cauchy(0,2.5);
 
-sigma_ppue ~ cauchy(0, 2.5);
+sigma_obs ~ cauchy(0, 2.5);
 
 log_p_response ~ normal(log(.1),2);
 
@@ -394,12 +456,23 @@ p_length_50_sel ~ normal(length_50_sel_guess/loo, .05);
 
 generated quantities{
 
-
 int n_tl[nt, n_lbins];
+
+vector[nt - 1] pp_ppue;
+
+vector[nt - 1] pp_perc_change_effort;
 
 for (t in 1:nt){
 
     n_tl[t, 1:n_lbins] = multinomial_rng(to_vector(p_lbin_sampled[t, 1:n_lbins]),500); // generate length comp samples
+
+
+    if (t < nt){
+
+      pp_ppue[t] = normal_rng(ppue_hat[t], sigma_obs);
+
+      pp_perc_change_effort[t] = normal_rng(perc_change_effort_hat[t], sigma_obs);
+    }
 }
 
 } // close generated quantities block
