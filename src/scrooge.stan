@@ -64,6 +64,8 @@ vector<lower=0, upper=1>[n_ages] mean_maturity_at_age;
 
 matrix[n_ages, n_lbins] length_at_age_key;
 
+int age_sel; // estimate of the age at first selectivity
+
 real m; //natural mortality
 
 real h; //steepness
@@ -85,6 +87,9 @@ real sd_sigma_r;
 
 transformed data{
 
+int n_total;
+
+n_total = nt + n_burn;
 
 
 }
@@ -93,7 +98,7 @@ parameters{
 
 vector<lower = 0>[nt]  f_t; // f in time t
 
-vector[nt]  uc_rec_dev_t; //  recruitment deviates
+vector[nt + age_sel]  uc_rec_dev_t; //  recruitment deviates
 
 real <lower = 0> sigma_r; // standard deviation of recruitment deviates
 
@@ -106,8 +111,6 @@ real<lower = 0> p_length_50_sel; // length at 50% selectivity
 } // close parameters block
 
 transformed parameters{
-
-  real burn_f;
 
   real ssb0;
 
@@ -125,23 +128,21 @@ transformed parameters{
 
   vector[nt]  effort_t; //  base effort multiplier
 
-  vector[nt]  rec_dev_t; //  base effort multiplier
+  vector[nt + age_sel]  rec_dev_t; //  base effort multiplier
 
-  matrix[n_burn, n_ages] n_a_init; // numbers at time and age
+  real temp_rec; // place holder for temporary recruitment deviates
 
-  matrix[n_burn, n_ages] ssb_init; // numbers at time and age
+  matrix[n_total, n_ages] n_ta; // numbers at time and age
 
-  matrix[nt, n_ages] n_ta; // numbers at time and age
+  matrix[n_total, n_ages] ssb_ta; // spawning stock biomass at time and age
 
-  matrix[nt, n_ages] ssb_ta; // spawning stock biomass at time and age
+  matrix[n_total, n_ages] c_ta; // catch (biomass) at time and age
 
-  matrix[nt, n_ages] c_ta; // catch (biomass) at time and age
+  matrix[n_total, n_ages] cn_ta; // catch (numbers) at time and age
 
-  matrix[nt, n_ages] cn_ta; // catch (numbers) at time and age
+  vector[n_total] c_t; // total catch at time step
 
   matrix[nt, n_lbins] p_lbin_sampled; // numbers at time and length bin
-
-  vector[nt] c_t; // total catch at time step
 
   vector[nt] profit_t; // profits
 
@@ -157,9 +158,11 @@ transformed parameters{
 
   vector[nt - 1] ppue_hat;
 
-  burn_f = f_t[1];
+  real temp_f;
 
-  // length_50_sel = length_50_sel_guess;
+  //////////////////////////
+  //  set things up       //
+  //////////////////////////
 
   length_50_sel = loo * p_length_50_sel;
 
@@ -167,15 +170,13 @@ transformed parameters{
 
   rec_dev_t = exp(uc_rec_dev_t);
 
-  // fill matrices with zeros //
+  n_ta = rep_matrix(0,n_total, n_ages);
 
-  n_ta = rep_matrix(0,nt, n_ages);
+  ssb_ta = rep_matrix(0,n_total, n_ages);
 
-  ssb_ta = rep_matrix(0,nt, n_ages);
+  c_ta = rep_matrix(0,n_total, n_ages);
 
-  c_ta = rep_matrix(0,nt, n_ages);
-
-  cn_ta = rep_matrix(0,nt, n_ages);
+  cn_ta = rep_matrix(0,n_total, n_ages);
 
   p_lbin_sampled = rep_matrix(0,nt, n_lbins);
 
@@ -183,101 +184,96 @@ transformed parameters{
 
   mean_selectivity_at_age = length_at_age_key * selectivity_at_bin; // calculate mean selectivity at age given variance in length at age
 
-// set up initial population //
-
-  // f_t[1] = effort_t[1] .* q_t[1];
+  //////////////////////////
+  // run population model //
+  //////////////////////////
 
   effort_t[1] = f_t[1] / q_t[1];
 
-  n_a_init[1,1:n_ages] = r0 * exp(-m * (ages - 1))';
+  n_ta[1,1:n_ages] = r0 * exp(-m * (ages - 1))';
 
-  plus_group = n_a_init[1, n_ages - 1] * exp(-m) / (1 - exp(-m));  //plus group
+  plus_group = n_ta[1, n_ages - 1] * exp(-m) / (1 - exp(-m));  //plus group
 
-  n_a_init[1, n_ages] = plus_group;
+  n_ta[1, n_ages] = plus_group;
 
-  temp_a = n_a_init[1, 1:n_ages] .* mean_maturity_at_age'.* mean_weight_at_age';
+  temp_a = n_ta[1, 1:n_ages] .* mean_maturity_at_age'.* mean_weight_at_age';
 
-  ssb_init[1, 1:n_ages] = temp_a; // calculate ssb at age
+  ssb_ta[1, 1:n_ages] = temp_a; // calculate ssb at age
 
-  ssb0 = sum(ssb_init[1, 1:n_ages]);
-
- for (t in 2:n_burn){
-
-    ssb_temp =  sum(ssb_init[t - 1, 1:n_ages]);
-
-    n_a_init[t,1] = (0.8 * r0 * h *ssb_temp) / (0.2 * ssb0 * (1 - h) + (h - 0.2) * ssb_temp); //calculate recruitment
-
-  temp_a2 = n_a_init[t - 1, 1:(n_ages -1)] .* (exp(-(m + burn_f* mean_selectivity_at_age[1:(n_ages - 1)])))';
-
-    n_a_init[t , 2:n_ages] = temp_a2;  // grow and die
-
-    n_a_init[t, n_ages] = n_a_init[t, n_ages] + n_a_init[t - 1, n_ages] .* (exp(-(m + burn_f * mean_selectivity_at_age[n_ages])))'; // assign to plus group
-
-  ssb_init[t, 1:n_ages] = n_a_init[t, 1:n_ages] .* mean_maturity_at_age'.* mean_weight_at_age'; // calculate ssb at age
-
-}
-
-  // Start observed period
-
-  n_ta[1, 1:n_ages] = n_a_init[n_burn, 1:n_ages];  // start at initial depletion
-
-  n_ta[1,1] = n_ta[1,1] * rec_dev_t[1]; // initial recruitment deviate
-
-  ssb_ta[1, 1:n_ages] = n_ta[1, 1:n_ages] .* mean_maturity_at_age' .* mean_weight_at_age'; // virgin ssb
+  ssb0 = sum(ssb_ta[1, 1:n_ages]);
 
 
-  // order of events spawn, grow and die, recruit
+  temp_rec = 1;
 
-  for (t in 2:nt){
+  temp_f = f_t[1];
+
+  // order of events: spawn, grow and die, recruit
+
+  for (t in 2:n_total){
+
+  if (t > (n_burn - age_sel)){
+
+   temp_rec = rec_dev_t[t - n_burn + age_sel];
+
+  } // add in recruitment including some in the burn-in period if desired
+
+  if (t > n_burn){
+
+    temp_f = f_t[t - n_burn];
+
+  }
 
     ssb_temp =  sum(ssb_ta[t - 1, 1:n_ages]);
 
-    n_ta[t,1] = ((0.8 * r0 * h *ssb_temp) / (0.2 * ssb0 * (1 - h) + (h - 0.2) * ssb_temp)) * rec_dev_t[t]; //calculate recruitment
+    n_ta[t,1] = ((0.8 * r0 * h *ssb_temp) / (0.2 * ssb0 * (1 - h) + (h - 0.2) * ssb_temp)) * temp_rec; //calculate recruitment
 
-    temp_a2 = n_ta[t - 1, 1:(n_ages -1)] .* (exp(-(m + f_t[t - 1] * mean_selectivity_at_age[1:(n_ages - 1)])))';
+    temp_a2 = n_ta[t - 1, 1:(n_ages -1)] .* (exp(-(m + temp_f * mean_selectivity_at_age[1:(n_ages - 1)])))';
 
     n_ta[t , 2:n_ages] = temp_a2; // grow and die
 
-    n_ta[t, n_ages] = n_ta[t, n_ages] + n_ta[t - 1, n_ages] .* (exp(-(m + f_t[t - 1] * mean_selectivity_at_age[n_ages])))'; // assign to plus group
+    n_ta[t, n_ages] = n_ta[t, n_ages] + n_ta[t - 1, n_ages] .* (exp(-(m + temp_f * mean_selectivity_at_age[n_ages])))'; // fill in plus group
 
   ssb_ta[t, 1:n_ages] = n_ta[t, 1:n_ages] .* mean_maturity_at_age'.* mean_weight_at_age'; // calculate ssb at age
 
-   cn_ta[t - 1, 1:n_ages] = ((f_t[t - 1] * mean_selectivity_at_age) ./ (m + f_t[t - 1] * mean_selectivity_at_age))' .* n_ta[t - 1, 1:n_ages] .* (1 - exp(-(m + f_t[t - 1] * mean_selectivity_at_age)))'; // .* mean_weight_at_age';
+   cn_ta[t - 1, 1:n_ages] = ((temp_f * mean_selectivity_at_age) ./ (m + temp_f * mean_selectivity_at_age))' .* n_ta[t - 1, 1:n_ages] .* (1 - exp(-(m + temp_f * mean_selectivity_at_age)))'; // .* mean_weight_at_age';
 
-   c_ta[t-1, 1:n_ages] = cn_ta[t - 1, 1:n_ages] .* mean_weight_at_age';
+   c_ta[t - 1, 1:n_ages] = cn_ta[t - 1, 1:n_ages] .* mean_weight_at_age';
 
    c_t[t - 1] = sum(c_ta[t-1, 1:n_ages]);
 
-  // run economic model
+  // calculate economic parameters
 
-  profit_t[t - 1] = price_t[t - 1] * c_t[t - 1] - cost_t[t - 1] *         effort_t[t - 1] ^ beta;
+  if (t > n_burn + 1) {
 
-  ppue_hat_t[t - 1] = profit_t[t - 1] / effort_t[t - 1];
+  profit_t[t - 1 - n_burn] = price_t[t - 1 - n_burn] * c_t[t - 1] - cost_t[t - 1 - n_burn] * effort_t[t - 1 - n_burn] ^ beta;
 
-  effort_t[t] = f_t[t] / q_t[t];
+  ppue_hat_t[t - 1 - n_burn] = profit_t[t - 1 - n_burn] / effort_t[t - 1 - n_burn];
+
+  effort_t[t - n_burn] = f_t[t - n_burn] / q_t[t - n_burn];
 
   // sample lengths //
 
   p_age_sampled = cn_ta[t - 1, 1:n_ages] / sum(cn_ta[t - 1, 1:n_ages]);
 
-  p_lbin_sampled[t - 1, 1:n_lbins] = (p_age_sampled * length_at_age_key) / sum(p_age_sampled * length_at_age_key);  // calculate the proportion of the sampled catch in each length bin
+  p_lbin_sampled[t - 1 - n_burn, 1:n_lbins] = (p_age_sampled * length_at_age_key) / sum(p_age_sampled * length_at_age_key);  // calculate the proportion of the sampled catch in each length bin
 
+  }
 
   } // close time loop
 
 
 // fill in final time step
-     cn_ta[nt, 1:n_ages] = ((f_t[nt] * mean_selectivity_at_age) ./ (m + f_t[nt] * mean_selectivity_at_age))' .* n_ta[nt, 1:n_ages] .* (1 - exp(-(m + f_t[nt] * mean_selectivity_at_age)))'; //
+    cn_ta[n_total, 1:n_ages] = ((f_t[nt] * mean_selectivity_at_age) ./ (m + f_t[nt] * mean_selectivity_at_age))' .* n_ta[n_total, 1:n_ages] .* (1 - exp(-(m + f_t[nt] * mean_selectivity_at_age)))'; //
 
-   c_ta[nt, 1:n_ages] = cn_ta[nt, 1:n_ages] .* mean_weight_at_age';
+   c_ta[n_total, 1:n_ages] = cn_ta[n_total, 1:n_ages] .* mean_weight_at_age';
 
-   c_t[nt] = sum(c_ta[nt, 1:n_ages]);
+   c_t[n_total] = sum(c_ta[n_total, 1:n_ages]);
 
-  profit_t[nt] = price_t[nt] * c_t[nt] - cost_t[nt] * effort_t[nt] ^ beta;
+  profit_t[nt] = price_t[nt] * c_t[n_total] - cost_t[nt] * effort_t[nt] ^ beta;
 
   ppue_hat_t[nt] = profit_t[nt] / effort_t[nt];
 
-  p_age_sampled = cn_ta[nt, 1:n_ages] / sum(cn_ta[nt, 1:n_ages]);
+  p_age_sampled = cn_ta[n_total, 1:n_ages] / sum(cn_ta[n_total, 1:n_ages]);
 
   p_lbin_sampled[nt, 1:n_lbins] = (p_age_sampled * length_at_age_key) / sum(p_age_sampled * length_at_age_key);
 
@@ -289,19 +285,11 @@ transformed parameters{
 
   ppue_hat = delta_f / exp(log_p_response);
 
-
 }
 
 model{
 
-real oa_prediction;
-
-real effort_data_prediction;
-
 real new_f;
-
-real previous_max;
-
 
 //// length comps likelihood ////
 

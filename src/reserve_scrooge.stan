@@ -1,8 +1,5 @@
-/*scrooge_v3.0
+/*scrooge_v4.0
 
-effort prior is open-access dynamics
-
-non-centered recruitment and effort deviations
 
 */
 
@@ -53,9 +50,11 @@ real<lower = 0> p_response_guess;
 
 real<lower = 0> cv_effort;
 
+real<lower = 0> sigma_f; // penalty term for year to year variation in F, DO NOT ESTIMATE
+
 //// biology ////
 
-// real burn_f;
+vector<lower=0>[n_lbins] bin_mids;
 
 vector<lower=0>[n_ages] mean_length_at_age;
 
@@ -81,7 +80,6 @@ real sigma_r_guess;
 
 real sd_sigma_r;
 
-real sigma_effort_guess;
 
 }
 
@@ -93,27 +91,17 @@ transformed data{
 
 parameters{
 
-// real log_burn_effort; // burn in effort
-
-// vector[nt]  log_effort_t; // effort in time t
-
-// real<lower = 0> burn_f;
-
 vector<lower = 0>[nt]  f_t; // f in time t
 
 vector[nt]  uc_rec_dev_t; //  recruitment deviates
 
 real <lower = 0> sigma_r; // standard deviation of recruitment deviates
 
-// real<lower = 0> sigma_effort;
-
 real<lower = 0> sigma_ppue;
 
 real  log_p_response;
 
 real<lower = 0> p_length_50_sel; // length at 50% selectivity
-
-// real<lower = 0, upper = 10> p_response;
 
 } // close parameters block
 
@@ -159,6 +147,8 @@ transformed parameters{
 
   vector[nt] ppue_hat_t; // profit per unit effort
 
+  vector[n_lbins] selectivity_at_bin; // mean selectivity at length bin midpoint
+
   vector[n_ages] mean_selectivity_at_age; // mean selectivity at age
 
   row_vector[n_ages] p_age_sampled;
@@ -167,11 +157,7 @@ transformed parameters{
 
   vector[nt - 1] ppue_hat;
 
-  real sigma_effort;
-
   burn_f = f_t[1];
-
-  sigma_effort = sigma_effort_guess;
 
   // length_50_sel = length_50_sel_guess;
 
@@ -193,7 +179,9 @@ transformed parameters{
 
   p_lbin_sampled = rep_matrix(0,nt, n_lbins);
 
-  mean_selectivity_at_age = 1.0 ./ (1 + exp(-log(19) * ((mean_length_at_age - length_50_sel) / sel_delta))); // selectivity ogive at age
+  selectivity_at_bin = 1.0 ./ (1 + exp(-log(19) * ((bin_mids - length_50_sel) / sel_delta))); // selectivity ogive at age
+
+  mean_selectivity_at_age = length_at_age_key * selectivity_at_bin; // calculate mean selectivity at age given variance in length at age
 
 // set up initial population //
 
@@ -327,12 +315,15 @@ for (i in 1:(n_lcomps)){
 
 
 if (economic_model == 1) { // open access priors
+/*
+Set priors on the change in f
+*/
 
   for (t in 2:nt){
 
     new_f = (effort_t[t - 1] + (exp(log_p_response) * (ppue_hat_t[t - 1]))) * q_t[t];
 
-    f_t[t] ~ normal(new_f,1);
+    f_t[t] ~ normal(new_f,sigma_f);
 
     } // close time loop
 
@@ -352,12 +343,28 @@ if (economic_model == 2){
 
 if (economic_model == 0){
 
+/*
+apply simple penalty on year to year variation in F
+*/
+
+    for (t in 2:nt){
+
+    f_t[t] ~ normal(f_t[t - 1] , sigma_f);
+
+    } // close time loop
+
 
 } // close effort 0
 
 if (economic_model == 3){
 
   ppue_t[1:(nt - 1)] ~ normal(ppue_hat, sigma_ppue);
+
+    // for (t in 2:nt){
+    //
+    // f_t[t] ~ normal(f_t[t - 1] , sigma_f);
+    //
+    // } // close time loop
 
 }
 

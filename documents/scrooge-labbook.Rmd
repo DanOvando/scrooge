@@ -4097,7 +4097,7 @@ data$bin_mids <- as.numeric(colnames(data$length_at_age_key))
 
 data$bin_mids <- data$bin_mids + ((data$bin_mids[2] - data$bin_mids[1])/2)
 
-data$burn_f <- 0.2
+data$age_sel <- 5
 
 chains <- 2
 
@@ -4220,6 +4220,7 @@ experiments <- expand.grid(period = c("end"), window = c(20),
                            fishery = 1:nrow(fisheries_sandbox), stringsAsFactors = F)
 
 temp <- fisheries_sandbox %>%
+  filter(fleet_model == "open-access") %>% 
   mutate(fishery = 1:nrow(.)) %>%
   slice(1) %>%
   left_join(experiments, by = "fishery") %>%
@@ -4446,7 +4447,7 @@ true_f <- temp$prepped_fishery[[1]]$simed_fishery %>%
 f_t %>%
   left_join(true_f, by = "year") %>% 
   group_by(year) %>% 
-  summarise(mean_f = median(f_t),
+  summarise(mean_f = mean(f_t),
             true_f = mean(true_f)) %>% 
   ggplot() +
   geom_line(aes(year,mean_f)) + 
@@ -4489,7 +4490,8 @@ ppue <- tidybayes::spread_samples(fit, ppue_hat[year])
 true_ppue <- data_frame(year = 1:length(temp$prepped_fishery[[1]]$scrooge_data$ppue_t
 ), ppue = temp$prepped_fishery[[1]]$scrooge_data$ppue_t
 ) %>% 
-  ungroup()
+  ungroup() %>% 
+  mutate(ppue = ppue/max(ppue))
 
 
 ppue %>%

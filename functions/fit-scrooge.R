@@ -29,6 +29,8 @@ fit_scrooge <-
            sigma_f = 0.2
            ) {
 
+    data$age_sel <- floor((log(1-pmin(data$length_50_sel_guess, data$loo*.99)/data$loo)/-data$k)+data$t0)
+
     data$bin_mids <- as.numeric(colnames(data$length_at_age_key))
 
     data$bin_mids <- data$bin_mids + ((data$bin_mids[2] - data$bin_mids[1])/2)
@@ -120,9 +122,6 @@ fit_scrooge <-
     data$ppue_t <- data$ppue_t/mean(data$ppue_t)
 
   }
-
-
-  # burn_f = jitter(fish$m/2),
 
   inits <-
     map(
