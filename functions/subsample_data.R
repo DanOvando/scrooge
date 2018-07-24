@@ -38,10 +38,8 @@ subsample_data <-
     prepped_fishery$scrooge_data$perc_change_effort <-
       prepped_fishery$scrooge_data$perc_change_effort[sampled_years]
 
-
     prepped_fishery$scrooge_data$observed_effort <-
       prepped_fishery$scrooge_data$observed_effort[sampled_years]
-
 
     prepped_fishery$scrooge_data$ppue_t <-
       prepped_fishery$scrooge_data$ppue_t[sampled_years]

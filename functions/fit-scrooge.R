@@ -115,13 +115,15 @@ fit_scrooge <-
 
     data$p_response_guess <- (max_perc_change_f * hyp_effort) / (hyp_profits_guess / hyp_effort)
 
-  if (max(data$ppue_t) > 0){
-  data$ppue_t <- data$ppue_t/max(data$ppue_t)
-  } else{
+    # data$ppue_t <- data$ppue_t / max(data$ppue_t)
 
-    data$ppue_t <- data$ppue_t/mean(data$ppue_t)
-
-  }
+  # if (max(data$ppue_t) > 0){
+  # data$ppue_t <- data$ppue_t/max(data$ppue_t)
+  # } else{
+  #
+  #   data$ppue_t <- data$ppue_t/mean(data$ppue_t)
+  #
+  # }
 
   inits <-
     map(
@@ -131,7 +133,7 @@ fit_scrooge <-
         sigma_r = jitter(.1),
         p_length_50_sel = jitter(0.25),
         log_p_response = log(.1),
-        log_max_cost = log(data$max_cost_guess)
+        log_max_cost = log(data$p_response_guess)
       )
     )
 

@@ -39,7 +39,8 @@ prepare_fishery <-
            est_msy = F,
            use_effort_data = 0,
            cv_effort = 0.25,
-           cv_len = 0.1
+           cv_len = 0.1,
+           seed = 42
            ) {
 
     initial_effort <- initial_f / q
@@ -71,7 +72,6 @@ prepare_fishery <-
       q_cv = q_cv,
       q_ac = q_ac,
       q_slope = q_slope,
-      price_slope = price_slope,
       fleet_model = fleet_model,
       target_catch = fleet_params$target_catch,
       cost = cost,
@@ -141,6 +141,7 @@ prepare_fishery <-
       )
     }
 
+    set.seed(seed)
     sim <- sim_fishery(
       fish = fish,
       fleet = fleet,
@@ -152,6 +153,7 @@ prepare_fishery <-
       est_msy = FALSE
     )
 
+    sim$year <- sim$year - min(sim$year) + 1
 
     scrooge_data <- prepare_scrooge_data(fish = fish,
                                      fleet = fleet,

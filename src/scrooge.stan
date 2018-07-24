@@ -409,7 +409,7 @@ if (economic_model == 5){
   /*
 fit to percentage change in effort
 */
-  perc_change_effort[1:(nt - 1)] ~ normal(perc_change_effort_hat, sigma_f);
+  perc_change_effort[1:(nt - 1)] ~ normal(perc_change_effort_hat, sigma_obs);
 
 }
 
@@ -435,9 +435,9 @@ log_max_cost ~ normal(log(max_cost_guess),1);
 
 f_t ~ cauchy(0,2.5);
 
-sigma_obs ~ cauchy(0, 2.5);
+sigma_obs ~ cauchy(0, 1);
 
-log_p_response ~ normal(log(.1),2);
+log_p_response ~ normal(log(p_response_guess),2);
 
 //// recruitment prior ////
 

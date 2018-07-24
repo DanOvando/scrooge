@@ -69,9 +69,10 @@
 
   sim_fisheries <- T
 
+  run_case_studies <- T
+
   fit_models <- F
 
-  run_tests <- F
 
   n_cores <- 1
 
@@ -378,234 +379,309 @@
 
 # test three simple cases to verify core model performance
 
-if (run_tests == T) {
-  # perfecto open access
+if (run_case_studies == T) {
 
-  pfo <- fisheries_sandbox %>%
-    filter(fleet_model == "open-access",
-           sigma_r == min(sigma_r),
-           sigma_effort == min(sigma_effort),
-           price_cv == min(price_cv),
-           cost_cv == min(cost_cv)) %>%
-    slice(1) %>%
-    mutate(prepped_fishery = map(prepped_fishery, subsample_data, window = 10, period = "end")) %>%
-    mutate(scrooge_fit = pmap(
-      list(
-      data = map(prepped_fishery, "scrooge_data"),
-      fish = map(prepped_fishery, "fish"),
-      fleet = map(prepped_fishery, "fleet")),
-      fit_scrooge,
-        iter = 4000,
-        warmup = 2000,
-        adapt_delta = 0.8,
-        economic_model = 1,
-        scrooge_file = "scrooge",
-        in_clouds = F,
-      experiment = "pfo",
-      max_f_v_fmsy_increase = 0.1
-      )
-    )
+  # simple open access
 
+  simple <- prepare_fishery(
+    sci_name = "Lutjanus campechanus",
+    fleet_model = "open-access",
+    sigma_r = 0,
+    rec_ac = 0,
+    sigma_effort = 0,
+    price_cv = 0,
+    cost_cv = 0,
+    q_cv = 0,
+    price_slope = 0,
+    cost_slope = 0,
+    q_slope = 0,
+    price_ac = 0,
+    cost_ac = 0,
+    q_ac = 0,
+    steepness = 0.6,
+    percnt_loo_selected = 0.1,
+    obs_error = 0,
+    initial_f = .01,
+    r0 = 100,
+    price = 2,
+    q = 1e-3,
+    profit_lags = 0,
+    max_perc_change_f = 0.025,
+    max_cp_ratio = 0.5,
+    beta = 2,
+    sim_years = 100,
+    burn_years = 100,
+    cv_len = 0.2,
+    linf_buffer = 1.1,
+    seed = 24
+  )
 
-  pfo$summary_plot[[1]]
+  simple_plot <- plot_simmed_fishery(simple)
 
-
-  pfo <- pfo %>%
-    mutate(processed_scrooge = map2(
-      scrooge_fit,
-      map(prepped_fishery, "sampled_years"),
-      process_scrooge
-    )) %>%
-    mutate(observed = map(prepped_fishery, "simed_fishery")) %>%
-    mutate(scrooge_performance = pmap(
-      list(observed = observed,
-           predicted = processed_scrooge),
-      judge_performance
-    )) %>%
-    mutate(
-      scrooge_rec_performance = pmap(
-        list(observed = observed,
-             predicted = processed_scrooge),
-        judge_performance,
-        observed_variable = rec_dev,
-        predicted_variable = "rec_dev_t"
-      )
-    )  %>%
-    mutate(lcomps = map2(prepped_fishery, processed_scrooge, ~process_lcomps(.x, .y$n_tl))) %>%
-    mutate(
-      rmse = map_dbl(scrooge_performance, ~ .x$comparison_summary$rmse),
-      bias =  map_dbl(scrooge_performance, ~ .x$comparison_summary$bias)
-    ) %>%
-    arrange(rmse)
-
-  pfo$scrooge_performance[[1]]$comparison_plot
-
-  pfo$scrooge_rec_performance[[1]]$comparison_plot
+  simple_plot
 
 
-  # variable open access
+  # realistic open access
 
-  vfo <- fisheries_sandbox %>%
-    dplyr::filter(
-      fleet_model == "open-access",
-      sigma_r == max(sigma_r),
-      sigma_effort == min(sigma_effort),
-      price_cv == max(price_cv),
-      price_ac == max(price_ac),
-      cost_ac == max(cost_ac),
-      cost_cv == max(cost_cv),
-      b_v_bmsy_oa == 0.5
-    ) %>%
-    slice(7) %>%
-    mutate(prepped_fishery = map(prepped_fishery, subsample_data, window = 10, period = "end")) %>%
-    mutate(scrooge_fit = pmap(
-      list(
-        data = map(prepped_fishery, "scrooge_data"),
-        fish = map(prepped_fishery, "fish"),
-        fleet = map(prepped_fishery, "fleet")),
-      fit_scrooge,
-      iter = 4000,
-      warmup = 2000,
-      adapt_delta = 0.9,
-      economic_model = 1,
-      scrooge_file = "scrooge",
-      in_clouds = F,
-      experiment = "vfo",
-      max_f_v_fmsy_increase = 0.5
+  realistic <- prepare_fishery(
+    sci_name = "Lutjanus campechanus",
+    fleet_model = "open-access",
+    sigma_r = 0.4,
+    rec_ac = 0.5,
+    sigma_effort = 0,
+    price_cv = 0.4,
+    cost_cv = 0.2,
+    q_cv = 0.5,
+    price_slope = 0,
+    cost_slope =  0,
+    q_slope = 0.0025,
+    price_ac = 0.5,
+    cost_ac = 0.5,
+    q_ac = 0.75,
+    steepness = 0.8,
+    percnt_loo_selected = 0.3,
+    obs_error = 0,
+    initial_f = .025,
+    r0 = 100,
+    price = 4,
+    q = 1e-3,
+    profit_lags = 0,
+    max_perc_change_f = 0.1,
+    max_cp_ratio = .75,
+    beta = 2,
+    sim_years = 100,
+    burn_years = 100,
+    cv_len = 0.2,
+    linf_buffer = 1.25,
+    seed = 52
+  )
 
-    )
-    )
+  realistic_plot <- plot_simmed_fishery(realistic)
 
+  realistic_plot
 
-  vfo <- vfo %>%
-    mutate(lime_fit = pmap(list(
-      data = map(prepped_fishery, "scrooge_data"),
-      fish = map(prepped_fishery, "fish"),
-      fleet = map(prepped_fishery, "fleet")
-    ), fit_lime))
-
-  true_f <- vfo$prepped_fishery[[1]]$simed_fishery %>%
+  realistic$simed_fishery %>%
     group_by(year) %>%
-    summarise(f = unique(f)) %>%
-    filter(year >=64)
-
- a <- vfo$lime_fit[[1]]$Sdreport %>%
-    summary() %>%
-   as.data.frame() %>%
-   mutate(variable = rownames(.)) %>%
-   filter(variable == "lF_y") %>%
-   mutate(mean = exp(Estimate),
-          upper = exp(Estimate + 1.96 * `Std. Error`),
-          lower = exp(Estimate -  1.96 * `Std. Error`)) %>%
-   mutate(year = 1:nrow(.)) %>%
-   ggplot() +
-   geom_pointrange(aes(year, mean, ymin = lower, ymax = upper)) +
-   geom_point(data = true_f, aes(1:11, f), color = "red")
-
-  predicted_f <- data_frame(f = Report$F_y)
-
-  true_f %>%
-    ggplot() +
-    geom_point(aes(year,f,color = "True")) +
-    geom_line(aes(year, predicted_f,color = "Predicted"))
-
-  vfo$summary_plot[[1]]
-
-  vfo <- vfo %>%
-    mutate(processed_scrooge = map2(
-      scrooge_fit,
-      map(prepped_fishery, "sampled_years"),
-      process_scrooge
-    )) %>%    mutate(observed = map(prepped_fishery, "simed_fishery")) %>%
-    mutate(
-      scrooge_rec_performance = pmap(
-        list(observed = observed,
-             predicted = processed_scrooge),
-        judge_performance,
-        observed_variable = rec_dev,
-        predicted_variable = "rec_dev_t"
-      )
-    ) %>%
-    mutate(scrooge_performance = pmap(
-      list(observed = observed,
-           predicted = processed_scrooge),
-      judge_performance
-    )) %>%
-    mutate(lcomps = map2(prepped_fishery, processed_scrooge, ~process_lcomps(.x$length_comps, .y$n_tl))) %>%
-    mutate(
-      rmse = map_dbl(scrooge_performance, ~ .x$comparison_summary$rmse),
-      bias =  map_dbl(scrooge_performance, ~ .x$comparison_summary$bias)
-    ) %>%
-    arrange(rmse)
-
-    # vfo$scrooge_rec_performance[[1]]$comparison_plot
-
-     vfo$scrooge_performance[[1]]$comparison_plot +
-      labs(title = "econ")
-
-    save(file = "scrooge_performance.Rdata", pfo, vfo)
-
-  # constant and medium f
-
-
-  cfo <- fisheries_sandbox %>%
-    filter(
-      fleet_model == "constant-effort",
-      sigma_r == max(sigma_r),
-      sigma_effort == max(sigma_effort),
-      price_cv == 0,
-      cost_cv == 0
-    ) %>%
-    slice(1) %>%
-    mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery)) %>%
-    mutate(scrooge_fit = map(
-      prepped_fishery,
-      ~ fit_scrooge(
-        data = .x$scrooge_data,
-        iter = 10000,
-        warmup = 4000
-      )
-    ))
-
-  cfo$summary_plot[[1]]
-
-  cfo$prepped_fishery[[1]]$length_comps %>%
-    gather(age, numbers,-year) %>%
-    mutate(age = as.numeric(age)) %>%
-    group_by(year) %>%
-    summarise(ncaught = sum(numbers)) %>%
-    ggplot(aes(year, ncaught)) +
+    summarise(rec_dev = unique(exp(rec_dev))) %>%
+    ggplot(aes(year, rec_dev)) +
     geom_point()
 
-  cfo <- cfo %>%
-    mutate(processed_scrooge = map(scrooge_fit, process_scrooge)) %>%
-    mutate(observed = map(prepped_fishery, "simed_fishery")) %>%
-    mutate(
-      scrooge_rec_performance = pmap(
-        list(observed = observed,
-             predicted = processed_scrooge),
-        judge_performance,
-        observed_variable = rec_dev,
-        predicted_variable = "rec_dev_t"
-      )
-    ) %>%
-    mutate(scrooge_performance = pmap(
-      list(observed = observed,
-           predicted = processed_scrooge),
-      judge_performance
-    )) %>%
-    mutate(
-      rmse = map_dbl(scrooge_performance, ~ .x$comparison_summary$rmse),
-      bias =  map_dbl(scrooge_performance, ~ .x$comparison_summary$bias)
-    ) %>%
-    arrange(rmse)
-  #
-  cfo$scrooge_performance[[1]]$comparison_plot
-
-  cfo$scrooge_rec_performance[[1]]$comparison_plot
+  realistic$simed_fishery %>%
+    group_by(year) %>%
+    summarise(profits = sum(profits),
+              effort = unique(effort),
+              f = unique(f)) %>%
+    ungroup() %>%
+    mutate(ppue = profits / effort,
+           delta_effort = lead(effort) - effort,
+           delta_f = lead(f) - f) %>%
+    ggplot(aes(year, ppue)) +
+    geom_point()
 
 
-} # close test runs
+  # decoupled
+
+  decoupled <- prepare_fishery(
+  sci_name = "Lutjanus campechanus",
+  fleet_model = "supplied-catch",
+  sigma_r = 0.6,
+  rec_ac = 0.5,
+  sigma_effort = 0,
+  price_cv = 0.4,
+  cost_cv = 0.2,
+  q_cv = 0.5,
+  price_slope = .0075,
+  cost_slope =  -0.001,
+  q_slope = 0.005,
+  price_ac = 0.75,
+  cost_ac = 0.75,
+  q_ac = 0.75,
+  steepness = 0.9,
+  percnt_loo_selected = 0.3,
+  obs_error = 0,
+  initial_f = .025,
+  r0 = 100,
+  price = 4,
+  q = 1e-3,
+  profit_lags = 0,
+  max_perc_change_f = 0.2,
+  max_cp_ratio = 0.01,
+  beta = 2,
+  sim_years = 100,
+  burn_years = 100,
+  cv_len = 0.2,
+  linf_buffer = 1.25,
+  fleet_params = fleet_model_params$fleet_params[fleet_model_params$fleet_model == "supplied-catch"][[1]]
+  )
+
+  decoupled_plot <- plot_simmed_fishery(decoupled)
+
+  case_studies <- data_frame(case_study = c(
+                                            "simple","realistic"),
+                             prepped_fishery  = list(simple,
+                                                     realistic))
+
+  experiments <- expand.grid(period = c("beginning","middle"),
+                             window = c(25),
+                             economic_model = c(1,3),
+                             prop_years_lcomp_data = c(1),
+                             case_study = unique(case_studies$case_study), stringsAsFactors = F)
+
+  # experiments <- expand.grid(period = c("beginning","middle","end"),
+  #                            window = c(5,10),
+  #                            economic_model = c(0:6),
+  #                            prop_years_lcomp_data = c(0.25,1),
+  #                            case_study = unique(case_studies$case_study), stringsAsFactors = F)
+
+  case_studies <- experiments %>%
+    left_join(case_studies, by = "case_study") %>%
+    mutate(prepped_fishery = pmap(list(
+      prepped_fishery = prepped_fishery,
+      window = window,
+      period = period,
+      prop_years_lcomp_data = prop_years_lcomp_data), subsample_data))
+
+  case_studies$experiment <- 1:nrow(case_studies)
+
+  case_studies <- case_studies
+
+  sfs <- safely(fit_scrooge)
+
+  doParallel::registerDoParallel(cores = n_cores)
+
+  foreach::getDoParWorkers()
+
+  set.seed(42)
+  case_study_fits <- foreach::foreach(i = 1:nrow(case_studies)) %dopar% {
+    out <- sfs(
+      data = case_studies$prepped_fishery[[i]]$scrooge_data,
+      fish = case_studies$prepped_fishery[[i]]$fish,
+      fleet = case_studies$prepped_fishery[[i]]$fleet,
+      experiment = case_studies$experiment[i],
+      economic_model = case_studies$economic_model[i],
+      scrooge_file = "scrooge",
+      iter = 2000,
+      warmup = 1000,
+      adapt_delta = 0.8,
+      max_treedepth = 12,
+      max_perc_change_f = 0.2,
+      in_clouds = in_clouds,
+      cloud_dir = cloud_dir,
+      chains = 2,
+      cv_effort = 0.5,
+      q_guess = mean(possible_q),
+      r0 = 100,
+      sd_sigma_r = 0.1,
+      sigma_f = 0.2,
+      cores = 2
+    )
+  } # close fitting loop
+
+  case_studies$scrooge_fit <- case_study_fits
+
+  fit <- case_study_fits[[1]]$result
+
+  sigma_r <- tidybayes::spread_samples(fit, sigma_r)
+
+  rec_devs <- tidybayes::spread_samples(fit, rec_dev_t[year])
+
+  true_recdevs <- case_studies$prepped_fishery[[1]]$simed_fishery %>%
+    group_by(year) %>%
+    summarise(true_rec_dev = exp(unique(rec_dev))) %>%
+    filter(year >=179) %>%
+    ungroup() %>%
+    mutate(year = 1:nrow(.))
+
+  rec_devs %>%
+    left_join(true_recdevs, by = "year") %>%
+    ggplot(aes(year,rec_dev_t, group = .iteration)) +
+    geom_line(alpha = 0.25) +
+    geom_point(aes(year,true_rec_dev), color = "red") +
+    geom_hline(aes(yintercept = 1), color = "red")
+
+  f_t <- tidybayes::spread_samples(fit, f_t[year]) %>%
+    ungroup() %>%
+    mutate(year = year - 1 + 180 )
+
+  true_f <- case_studies$prepped_fishery[[1]]$simed_fishery %>%
+    group_by(year) %>%
+    summarise(true_f = unique(f))
+
+  f_t %>%
+    left_join(true_f, by = "year") %>%
+    group_by(year) %>%
+    summarise(mean_f = mean(f_t),
+              true_f = mean(true_f)) %>%
+    ggplot() +
+    geom_line(aes(year,mean_f)) +
+    geom_point(aes(year, true_f), color = "red")
+
+  f_t %>%
+    ggplot() +
+    geom_line(aes(year, f_t, group = .iteration),alpha = 0.1) +
+    geom_point(data = true_f, aes(year, true_f), color = "red")
+
+  lcomps <- tidybayes::spread_samples(fit, p_lbin_sampled[year,lbin])
+
+  observed_lcomps <- case_studies$prepped_fishery[[1]]$scrooge_data$length_comps %>%
+    as_data_frame() %>%
+    mutate(year = case_studies$prepped_fishery[[1]]$scrooge_data$length_comps_years)%>%
+    gather(lbin, numbers, -year) %>%
+    mutate(lbin = as.numeric(lbin)) %>%
+    group_by(year) %>%
+    mutate(numbers = numbers / sum(numbers))
+
+  lcomps %>%
+    group_by(year, lbin) %>%
+    summarise(mean_n = mean(p_lbin_sampled)) %>%
+    group_by(year) %>%
+    mutate(mean_n = mean_n / sum(mean_n)) %>%
+    ggplot() +
+    geom_line(aes(lbin, mean_n, color = year, group = year),show.legend = F) +
+    geom_point(data = observed_lcomps, aes(lbin, numbers), size = .5, alpha = 0.5) +
+    facet_wrap(~year) +
+    theme_classic()
+
+  selectivity <- tidybayes::spread_samples(fit, mean_selectivity_at_age[age])
+
+  selectivity%>%
+    ggplot() +
+    geom_line(aes(age, mean_selectivity_at_age, group = .iteration),alpha = 0.5)
+
+  ppue <- tidybayes::spread_samples(fit, ppue_hat[year])
+
+  true_ppue <- data_frame(year = 1:length(case_studies$prepped_fishery[[1]]$scrooge_data$ppue_t
+  ), ppue = case_studies$prepped_fishery[[1]]$scrooge_data$ppue_t
+  ) %>%
+    ungroup() %>%
+    mutate(ppue = ppue/max(ppue))
+
+
+  ppue %>%
+    left_join(true_ppue, by = "year") %>%
+    ggplot() +
+    geom_line(aes(year, ppue_hat, group = .iteration),alpha = 0.25) +
+    geom_point(data = true_ppue, aes(year, ppue), color = "red")
+
+
+  # check posterior predictive
+
+  pp_n_tl <- tidybayes::spread_samples(fit, n_tl[year,length_bin])
+
+  pp_n_tl %>%
+    group_by(year, .chain,.iteration) %>%
+    mutate(p_n_tl = n_tl / sum(n_tl)) %>%
+    group_by(year, .chain, length_bin) %>%
+    summarise(lower_90 = quantile(p_n_tl,0.05),
+              upper_90 = quantile(p_n_tl,0.95)) %>%
+    ggplot() +
+    geom_ribbon(aes(x = length_bin, ymin = lower_90, ymax = upper_90), fill = "lightgrey") +
+    facet_wrap(~year) +
+    theme_minimal() +
+    geom_point(data = observed_lcomps, aes(lbin, numbers), size = .5, alpha = 0.5, color = "red")
+
+
+} # close case studies runs
 
 if (fit_models == T) {
 
