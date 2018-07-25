@@ -617,9 +617,7 @@ if (run_case_studies == T) {
     geom_line(aes(year,mean_predicted), color = "steelblue") +
     geom_point(aes(year, observed), fill = "tomato", size = 4, shape = 21) +
     labs(y = "", x = "Year") +
-    facet_wrap(~economic_model, scales = "free_y") +
-    ylim(c(0,1))
-
+    facet_wrap(~economic_model, scales = "free_y")
 
 } # close case studies runs
 

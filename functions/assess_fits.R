@@ -5,6 +5,11 @@ assess_fits <- function(prepped_fishery, fit){
   sampled_years <- data_frame(year =1:length(sampled_years),
                               sampled_year = sampled_years)
 
+
+
+  length_comp_sampled_years <- data_frame(year = 1:nrow(prepped_fishery$scrooge_data$length_comps),
+                                          sampled_year = prepped_fishery$scrooge_data$length_comps_years)
+
   rec_devs <- tidybayes::spread_samples(fit, rec_dev_t[year])
 
   true_recdevs <- prepped_fishery$simed_fishery %>%
@@ -63,6 +68,35 @@ ppue_hat_t <- tidybayes::spread_samples(fit, ppue_hat_t[year]) %>%
            variable = "ppue") %>%
     mutate(predicted = predicted / max(predicted),
            observed = observed / max(observed))
+
+  browser()
+
+  observed_lcomps <- prepped_fishery$scrooge_data$length_comps %>%
+    as_data_frame() %>%
+    mutate(year = prepped_fishery$scrooge_data$length_comps_years) %>%
+    gather(lbin, numbers, -year) %>%
+    mutate(lbin = as.numeric(lbin)) %>%
+    group_by(year) %>%
+    mutate(numbers = numbers / sum(numbers))
+
+  pp_length_comps <- tidybayes::spread_samples(fit, n_tl[year,length_bin]) %>%
+    ungroup() %>%
+    left_join(length_comp_sampled_years, by = "year") %>%
+    mutate(year = sampled_year) %>%
+    select(-sampled_year) %>%
+    left_join(observed_lcomps, by = c("year", "length_bin" = "lbin")) %>%
+    mutate(source = "posterior_predictive")  %>%
+    rename(observed = n_tl, predicted = numbers)
+
+  fitted_length_comps <- tidybayes::spread_samples(fit, p_lbin_sampled[year,lbin]) %>%
+    ungroup() %>%
+    left_join(length_comp_sampled_years, by = "year") %>%
+    mutate(year = sampled_year) %>%
+    select(-sampled_year) %>%
+    left_join(observed_lcomps, by = c("year", "lbin" = "lbin")) %>%
+    mutate(source = "fitted")  %>%
+    rename(observed = numbers, predicted = p_lbin_sampled)
+
 
   out <- f_pref %>%
     bind_rows(rec_pref) %>%

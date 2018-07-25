@@ -54,7 +54,7 @@ real<lower = 0> p_response_guess;
 
 real<lower = 0> cv_effort;
 
-real<lower = 0> sigma_effort; //process error for effort model
+// real<lower = 0> sigma_effort; //process error for effort model
 
 //// biology ////
 
@@ -107,6 +107,8 @@ vector[nt]  log_effort_dev_t; // f in time t
 vector[nt + age_sel]  log_rec_dev_t; //  recruitment deviates
 
 real <lower = 0> sigma_r; // standard deviation of recruitment deviates
+
+real< lower = 0> sigma_effort;
 
 real<lower = 0> sigma_obs;
 
@@ -372,6 +374,8 @@ if (likelihood_model == 1){
 log_effort_dev_t ~ normal(0, sigma_effort);
 
 // log_max_cost ~ normal(log(max_cost_guess),1);
+
+sigma_effort ~ cauchy(0,1);
 
 sigma_obs ~ normal(0, 1);
 

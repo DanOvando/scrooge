@@ -38,7 +38,7 @@ fit_scrooge <-
 
     data$n_burn <-  n_burn
 
-    data$sigma_effort <- sigma_effort
+    # data$sigma_effort <- sigma_effort
 
     data$length_comps <- data$length_comps %>%
       select(-year)
@@ -135,7 +135,8 @@ fit_scrooge <-
         sigma_r = jitter(.1),
         p_length_50_sel = jitter(0.25),
         initial_f = jitter(data$m),
-        log_effort_dev_t = rep(0, data$nt)
+        log_effort_dev_t = rep(0, data$nt),
+        sigma_effort = jitter(0.2)
       )
     )
 
