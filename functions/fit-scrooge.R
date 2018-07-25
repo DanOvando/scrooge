@@ -11,6 +11,7 @@ fit_scrooge <-
            warmup = 2000,
            adapt_delta = 0.8,
            economic_model = 1,
+           likelihood_model = 0,
            model_type = "scrooge",
            max_treedepth = 10,
            max_perc_change_f = 0.5,

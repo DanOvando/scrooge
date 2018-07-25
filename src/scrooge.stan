@@ -22,6 +22,8 @@ vector[n_ages] ages; // vector of ages
 
 int<lower = 0> economic_model; // 0 = no bioeconomic prior, 1 = bioeconomic prior,
 
+int<lower = 0> likelihood_model; // 0 = no bioeconomic prior, 1 = bioeconomic prior,
+
 //// length data ////
 
 int length_comps[n_lcomps,n_lbins];
@@ -266,8 +268,9 @@ transformed parameters{
 
      c_t[t] = sum(c_ta[t, 1:n_ages]);
 
-    // calculate economic parameters
-
+    //////////////////////////
+    //  run economic models //
+    //////////////////////////
     if (t > n_burn) {
 
       profit_t[t - n_burn] = price_t[t - n_burn] * c_t[t] - cost_t[t - n_burn] * effort_t[t - n_burn] ^ beta;
@@ -279,6 +282,7 @@ transformed parameters{
       effort_t[t - n_burn + 1] = effort_t[t - n_burn] * effort_dev_t[t - n_burn + 1];
 
     } // close effort model 0
+
     if (economic_model == 1){
 
       effort_t[t - n_burn + 1] = (effort_t[t - n_burn] + (p_response * (ppue_hat_t[t - n_burn]))) * effort_dev_t[t - n_burn + 1];
@@ -341,13 +345,27 @@ real new_f;
 
 target += penalty; // add in penalty to bad efforts
 
-//// length comps likelihood ////
-
+  //////////////////////////
+  //  Likelihoods       //
+  //////////////////////////
 for (i in 1:(n_lcomps)){
 
   length_comps[i, 1:n_lbins] ~ multinomial(to_vector(p_lbin_sampled[length_comps_years[i], 1:n_lbins]));
 
  } // close length likelihood
+
+
+if (likelihood_model == 1){
+
+    ppue_t[1:(nt - 1)] ~ normal(ppue_hat, sigma_obs);
+
+
+}
+
+
+  //////////////////////////
+  //  Priors    //
+  //////////////////////////
 
 //// effort prior ////
 

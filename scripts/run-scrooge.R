@@ -526,7 +526,8 @@ if (run_case_studies == T) {
 
   experiments <- expand.grid(period = c("beginning","middle"),
                              window = c(20),
-                             economic_model = c(0,1,2,4,6),
+                             economic_model = c(0,1),
+                             likelihood_model = c(0,1),
                              prop_years_lcomp_data = c(0.1,1),
                              case_study = unique(case_studies$case_study), stringsAsFactors = F)
 
@@ -550,6 +551,7 @@ if (run_case_studies == T) {
     filter(case_study == "realistic",
            prop_years_lcomp_data == 0.1,
            economic_model  %in% c(1,0),
+           likelihood_model == 1,
            period == "beginning")
 
   sfs <- safely(fit_scrooge)
@@ -566,6 +568,7 @@ if (run_case_studies == T) {
       fleet = case_studies$prepped_fishery[[i]]$fleet,
       experiment = case_studies$experiment[i],
       economic_model =  case_studies$economic_model[i],
+      likelihood_model = case_studies$likelihood_model[i],
       scrooge_file = "scrooge",
       iter = 2000,
       warmup = 1000,
