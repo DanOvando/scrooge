@@ -4784,4 +4784,46 @@ Also need to do a bit of tuning of the fishery simulator now. Could
 duh. you can't fit to a thing that you're also free to estimate, and in your case, ppue is a linear transformation of the efforts themselves, so it's perfeclt determined. It needs to be a priors or you need to treat it as a random effect with a mean isntead of just a penalty. 
 
 
+# sorting out recruitment timing
+
+```{r}
+
+nt <- 10
+
+n_burn <- 20
+
+n_total <- nt + n_burn
+
+age_sel <- 7
+
+rec_devs <- 1:(nt + age_sel)
+
+temp_rec <- rep(NA, length(rec_devs))
+
+for (t in 1:(n_total - 1)) {
+
+if (t > (n_burn - age_sel - 1)) {
+  
+  print(t - n_burn + age_sel + 1)
+  
+  temp_rec[t - n_burn + age_sel + 1] = rec_devs[t - n_burn + age_sel + 1]
+
+}
+
+
+}
+
+
+```
+
+# AHHHHHHH!!!!!! IT WORKS
+
+holy shit, that was the ticket, you idiot. That's what you get for blindly copying in ideas. What you were doing before by decreasing sigma was not increasing the strength of the prior, but decreasing the ability of the model to move year to year. So that's why things fit great. 
+
+By building it into an actualy obs error/process error framework, you now use sigma to specify how little process error there is, i.e. how much creedence to give to the prior structural model. 
+
+With model 0 now, the more you jack up sigma, the more you just let things be whatever the hell they want to be year to year. 
+
+You can use a posterior predictive process to tune this thing. At the moment, it seems like you're being over confident. So, can find a sigma_effort such that test statistics on the posterior predictive look good, i.e. 50% of the time the data are covered by the 50% credible interval. 
+
 

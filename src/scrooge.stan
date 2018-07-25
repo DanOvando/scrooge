@@ -52,7 +52,7 @@ real<lower = 0> p_response_guess;
 
 real<lower = 0> cv_effort;
 
-real<lower = 0> sigma_f; // penalty term for year to year variation in F, DO NOT ESTIMATE
+real<lower = 0> sigma_effort; //process error for effort model
 
 //// biology ////
 
@@ -98,9 +98,11 @@ n_total = nt + n_burn;
 
 parameters{
 
-vector<lower = 0>[nt]  f_t; // f in time t
+real<lower = 0> initial_f;
 
-vector[nt + age_sel]  uc_rec_dev_t; //  recruitment deviates
+vector[nt]  log_effort_dev_t; // f in time t
+
+vector[nt + age_sel]  log_rec_dev_t; //  recruitment deviates
 
 real <lower = 0> sigma_r; // standard deviation of recruitment deviates
 
@@ -133,6 +135,10 @@ transformed parameters{
   row_vector[n_ages - 1] temp_a2;
 
   vector[nt]  effort_t; //  base effort multiplier
+
+  vector[nt]  f_t; //  base effort multiplier
+
+  vector[nt]  effort_dev_t; //  base effort multiplier
 
   vector[nt + age_sel]  rec_dev_t; //  base effort multiplier
 
@@ -170,6 +176,8 @@ transformed parameters{
 
   real temp_f;
 
+  real penalty = 0;
+
   //////////////////////////
   //  set things up       //
   //////////////////////////
@@ -182,7 +190,9 @@ transformed parameters{
 
   sel_delta = 2;
 
-  rec_dev_t = exp(uc_rec_dev_t);
+  rec_dev_t = exp(log_rec_dev_t);
+
+  effort_dev_t = exp(log_effort_dev_t);
 
   n_ta = rep_matrix(0,n_total, n_ages);
 
@@ -202,7 +212,9 @@ transformed parameters{
   // run population model //
   //////////////////////////
 
-  effort_t[1] = f_t[1] / q_t[1];
+  effort_t[1] = (initial_f / q_t[1]) * effort_dev_t[1];
+
+  f_t[1] = effort_t[1] * q_t[1];
 
   n_ta[1,1:n_ages] = r0 * exp(-m * (ages - 1))';
 
@@ -216,62 +228,81 @@ transformed parameters{
 
   ssb0 = sum(ssb_ta[1, 1:n_ages]);
 
-
   temp_rec = 1;
 
-  temp_f = f_t[1];
+  temp_f = initial_f;
 
   // order of events: spawn, grow and die, recruit
 
-  for (t in 2:n_total){
+  for (t in 1:(n_total - 1)){
 
-  if (t > (n_burn - age_sel)){
+    if (t > (n_burn - age_sel - 1)){
 
-   temp_rec = rec_dev_t[t - n_burn + age_sel];
+        temp_rec = rec_dev_t[t - n_burn + age_sel + 1];
 
-  } // add in recruitment including some in the burn-in period if desired
+    } // add in recruitment including some in the burn-in period if desired
 
-  if (t > n_burn){
+    if (t > n_burn){
 
-    temp_f = f_t[t - n_burn];
+        temp_f = f_t[t - n_burn];
 
-  }
+    }
 
-    ssb_temp =  sum(ssb_ta[t - 1, 1:n_ages]);
+      ssb_temp =  sum(ssb_ta[t, 1:n_ages]);
 
-    n_ta[t,1] = ((0.8 * r0 * h *ssb_temp) / (0.2 * ssb0 * (1 - h) + (h - 0.2) * ssb_temp)) * temp_rec; //calculate recruitment
+      n_ta[t + 1,1] = ((0.8 * r0 * h *ssb_temp) / (0.2 * ssb0 * (1 - h) + (h - 0.2) * ssb_temp)) * temp_rec; //calculate recruitment
 
-    temp_a2 = n_ta[t - 1, 1:(n_ages -1)] .* (exp(-(m + temp_f * mean_selectivity_at_age[1:(n_ages - 1)])))';
+      temp_a2 = n_ta[t , 1:(n_ages -1)] .* (exp(-(m + temp_f * mean_selectivity_at_age[1:(n_ages - 1)])))';
 
-    n_ta[t , 2:n_ages] = temp_a2; // grow and die
+      n_ta[t + 1 , 2:n_ages] = temp_a2; // grow and die
 
-    n_ta[t, n_ages] = n_ta[t, n_ages] + n_ta[t - 1, n_ages] .* (exp(-(m + temp_f * mean_selectivity_at_age[n_ages])))'; // fill in plus group
+      n_ta[t + 1, n_ages] = n_ta[t + 1, n_ages] + n_ta[t, n_ages] .* (exp(-(m + temp_f * mean_selectivity_at_age[n_ages])))'; // fill in plus group
 
-  ssb_ta[t, 1:n_ages] = n_ta[t, 1:n_ages] .* mean_maturity_at_age'.* mean_weight_at_age'; // calculate ssb at age
+    ssb_ta[t + 1, 1:n_ages] = n_ta[t + 1, 1:n_ages] .* mean_maturity_at_age'.* mean_weight_at_age'; // calculate ssb at age
 
-   cn_ta[t - 1, 1:n_ages] = ((temp_f * mean_selectivity_at_age) ./ (m + temp_f * mean_selectivity_at_age))' .* n_ta[t - 1, 1:n_ages] .* (1 - exp(-(m + temp_f * mean_selectivity_at_age)))'; // .* mean_weight_at_age';
+     cn_ta[t , 1:n_ages] = ((temp_f * mean_selectivity_at_age) ./ (m + temp_f * mean_selectivity_at_age))' .* n_ta[t , 1:n_ages] .* (1 - exp(-(m + temp_f * mean_selectivity_at_age)))'; // .* mean_weight_at_age';
 
-   c_ta[t - 1, 1:n_ages] = cn_ta[t - 1, 1:n_ages] .* mean_weight_at_age';
+     c_ta[t , 1:n_ages] = cn_ta[t , 1:n_ages] .* mean_weight_at_age';
 
-   c_t[t - 1] = sum(c_ta[t-1, 1:n_ages]);
+     c_t[t] = sum(c_ta[t, 1:n_ages]);
 
-  // calculate economic parameters
+    // calculate economic parameters
 
-  if (t > n_burn + 1) {
+    if (t > n_burn) {
 
-  profit_t[t - 1 - n_burn] = price_t[t - 1 - n_burn] * c_t[t - 1] - cost_t[t - 1 - n_burn] * effort_t[t - 1 - n_burn] ^ beta;
+      profit_t[t - n_burn] = price_t[t - n_burn] * c_t[t] - cost_t[t - n_burn] * effort_t[t - n_burn] ^ beta;
 
-  ppue_hat_t[t - 1 - n_burn] = profit_t[t - 1 - n_burn] / effort_t[t - 1 - n_burn];
+      ppue_hat_t[t - n_burn] = profit_t[t - n_burn] / effort_t[t - n_burn];
 
-  effort_t[t - n_burn] = f_t[t - n_burn] / q_t[t - n_burn];
+    if (economic_model == 0){
 
-  // sample lengths //
+      effort_t[t - n_burn + 1] = effort_t[t - n_burn] * effort_dev_t[t - n_burn + 1];
 
-  p_age_sampled = cn_ta[t - 1, 1:n_ages] / sum(cn_ta[t - 1, 1:n_ages]);
+    } // close effort model 0
+    if (economic_model == 1){
 
-  p_lbin_sampled[t - 1 - n_burn, 1:n_lbins] = (p_age_sampled * length_at_age_key) / sum(p_age_sampled * length_at_age_key);  // calculate the proportion of the sampled catch in each length bin
+      effort_t[t - n_burn + 1] = (effort_t[t - n_burn] + (p_response * (ppue_hat_t[t - n_burn]))) * effort_dev_t[t - n_burn + 1];
 
-  }
+      if ( effort_t[t - n_burn + 1] <= 1e-6) {
+
+         effort_t[t - n_burn + 1] = 1e-6 / (2 -  effort_t[t - n_burn + 1] / 1e-6);
+
+         penalty -= .01*(effort_t[t - n_burn + 1] - 1e-6)^2;
+
+      }
+
+
+    } // close effort model 1
+
+    f_t[t - n_burn + 1] = effort_t[t - n_burn + 1] * q_t[t - n_burn + 1];
+
+    // sample lengths //
+
+    p_age_sampled = cn_ta[t, 1:n_ages] / sum(cn_ta[t, 1:n_ages]);
+
+    p_lbin_sampled[t - n_burn, 1:n_lbins] = (p_age_sampled * length_at_age_key) / sum(p_age_sampled * length_at_age_key);  // calculate the proportion of the sampled catch in each length bin
+
+    } // close if in assessment period
 
   } // close time loop
 
@@ -302,11 +333,13 @@ transformed parameters{
 
   ppue_hat = delta_f / p_response;
 
-}
+} // close transformed parameters block
 
 model{
 
 real new_f;
+
+target += penalty; // add in penalty to bad efforts
 
 //// length comps likelihood ////
 
@@ -318,122 +351,9 @@ for (i in 1:(n_lcomps)){
 
 //// effort prior ////
 
-if (economic_model == 0){
-
-/*
-apply simple penalty on year to year variation in F
-*/
-
-    for (t in 2:nt){
-
-    f_t[t] ~ normal(f_t[t - 1] , sigma_f);
-
-    } // close time loop
-
-
-} // close effort 0
-
-
-if (economic_model == 1) { // open access priors
-/*
-Set priors on the change in f based on open acces dynamics and
-relative changes in price, cost, and q where available
-*/
-
-  for (t in 2:nt){
-
-    new_f = (effort_t[t - 1] + (p_response * (ppue_hat_t[t - 1]))) * q_t[t];
-
-    f_t[t] ~ normal(new_f,sigma_f);
-
-    } // close time loop
-
-} // close 1
-
-if (economic_model == 2){
-
-/*
-Set priors on the change in F base on knowledge on the relative change in effort
-*/
-
-    for (t in 2:nt){
-
-    new_f = q_t[t] * effort_t[t - 1] * perc_change_effort[t - 1];
-
-    f_t[t] ~ normal(new_f , sigma_f);
-
-    } // close time loop
-
-} // close 2
-
-
-
-if (economic_model == 3){
-
-/*
-Fit to ppue data, under the assumption that ppue is proportional to delta F
-*/
-
-  ppue_t[1:(nt - 1)] ~ normal(ppue_hat, sigma_obs);
-
-    for (t in 2:nt){
-
-    f_t[t] ~ normal(f_t[t - 1] , sigma_f);
-
-    } // close time loop
-
-}
-
-
-if (economic_model == 4){
-
-  /*
-Fit to ppue data, under the assumption that ppue is proportional to delta F,
-and provide priors using economic knowledge as well
-*/
-
-  for (t in 2:nt){
-
-    new_f = (effort_t[t - 1] + (p_response * (ppue_hat_t[t - 1]))) * q_t[t];
-
-    f_t[t] ~ normal(new_f,sigma_f);
-
-    } // close time loop
-
-  ppue_t[1:(nt - 1)] ~ normal(ppue_hat, sigma_obs);
-
-}
-
-
-if (economic_model == 5){
-  /*
-fit to percentage change in effort
-*/
-  perc_change_effort[1:(nt - 1)] ~ normal(perc_change_effort_hat, sigma_obs);
-
-}
-
-if (economic_model == 6){
-  /*
-fit to percentage change in effort with bioeconomic informed priors
-*/
-
-    for (t in 2:nt){
-
-    new_f = (effort_t[t - 1] + (p_response * (ppue_hat_t[t - 1]))) * q_t[t];
-
-    f_t[t] ~ normal(new_f,sigma_f);
-
-    } // close time loop
-
-  perc_change_effort[1:(nt - 1)] ~ normal(perc_change_effort_hat, sigma_obs);
-
-}
-
+log_effort_dev_t ~ normal(0, sigma_effort);
 
 // log_max_cost ~ normal(log(max_cost_guess),1);
-
-f_t ~ cauchy(0,2.5);
 
 sigma_obs ~ normal(0, 1);
 
@@ -441,7 +361,7 @@ sigma_obs ~ normal(0, 1);
 
 //// recruitment prior ////
 
-uc_rec_dev_t ~ normal(0, sigma_r);
+log_rec_dev_t ~ normal(0, sigma_r);
 
 sigma_r ~ normal(sigma_r_guess, sd_sigma_r);
 

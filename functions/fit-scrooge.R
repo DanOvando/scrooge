@@ -26,7 +26,7 @@ fit_scrooge <-
            sd_sigma_r = 0.001,
            seed = 42,
            n_burn = 50,
-           sigma_f = 0.2
+           sigma_effort = 0.2
            ) {
 
     data$age_sel <- floor((log(1-pmin(data$length_50_sel_guess, data$loo*.99)/data$loo)/-data$k)+data$t0)
@@ -37,7 +37,7 @@ fit_scrooge <-
 
     data$n_burn <-  n_burn
 
-    data$sigma_f <- sigma_f
+    data$sigma_effort <- sigma_effort
 
     data$length_comps <- data$length_comps %>%
       select(-year)
@@ -131,11 +131,10 @@ fit_scrooge <-
     map(
       1:chains,
       ~ list(
-        f_t = rep(jitter(fish$m/2), data$nt),
         sigma_r = jitter(.1),
         p_length_50_sel = jitter(0.25),
-        log_p_response = log(.1),
-        log_max_cost = log(data$p_response_guess)
+        initial_f = jitter(data$m),
+        log_effort_dev_t = rep(0, data$nt)
       )
     )
 

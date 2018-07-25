@@ -549,7 +549,7 @@ if (run_case_studies == T) {
   case_studies <- case_studies %>%
     filter(case_study == "realistic",
            prop_years_lcomp_data == 0.1,
-           economic_model == 1,
+           economic_model  %in% c(1,0),
            period == "beginning")
 
   sfs <- safely(fit_scrooge)
@@ -565,7 +565,7 @@ if (run_case_studies == T) {
       fish = case_studies$prepped_fishery[[i]]$fish,
       fleet = case_studies$prepped_fishery[[i]]$fleet,
       experiment = case_studies$experiment[i],
-      economic_model = 0,
+      economic_model =  case_studies$economic_model[i],
       scrooge_file = "scrooge",
       iter = 2000,
       warmup = 1000,
@@ -579,7 +579,7 @@ if (run_case_studies == T) {
       q_guess = mean(possible_q),
       r0 = 100,
       sd_sigma_r = 0.4,
-      sigma_f = 0.001,
+      sigma_effort = 0.2,
       cores = 2
     )
   } # close fitting loop
@@ -605,8 +605,8 @@ if (run_case_studies == T) {
   perf_summaries %>%
     filter(case_study == "realistic",
            period == "beginning",
-           variable == "ppue",
-           economic_model %in% c(1)
+           variable == "f",
+           economic_model %in% c(1,0)
            ) %>%
     ggplot() +
     geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90), fill = "lightgrey") +
@@ -614,7 +614,8 @@ if (run_case_studies == T) {
     geom_line(aes(year,mean_predicted), color = "steelblue") +
     geom_point(aes(year, observed), fill = "tomato", size = 4, shape = 21) +
     labs(y = "", x = "Year") +
-    facet_grid(prop_years_lcomp_data~economic_model, scales = "free_y")
+    facet_wrap(~economic_model, scales = "free_y") +
+    ylim(c(0,1))
 
 
 } # close case studies runs
