@@ -4781,5 +4781,7 @@ Pretty easy to make that dynamic given likely age at selectivity. I.e.
 
 Also need to do a bit of tuning of the fishery simulator now. Could 
 
+duh. you can't fit to a thing that you're also free to estimate, and in your case, ppue is a linear transformation of the efforts themselves, so it's perfeclt determined. It needs to be a priors or you need to treat it as a random effect with a mean isntead of just a penalty. 
+
 
 

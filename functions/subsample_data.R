@@ -2,7 +2,8 @@ subsample_data <-
   function(prepped_fishery,
            period = "beginning",
            window = 5,
-           prop_years_lcomp_data = 1) {
+           prop_years_lcomp_data = 1,
+           experiment) {
 
 
     if (prop_years_lcomp_data > 1){

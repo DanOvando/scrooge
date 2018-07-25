@@ -106,9 +106,9 @@ real <lower = 0> sigma_r; // standard deviation of recruitment deviates
 
 real<lower = 0> sigma_obs;
 
-real  log_p_response;
+// real log_p_response;
 
-real log_max_cost; // mean cost
+// real log_max_cost; // mean cost
 
 real<lower = 0> p_length_50_sel; // length at 50% selectivity
 
@@ -174,9 +174,9 @@ transformed parameters{
   //  set things up       //
   //////////////////////////
 
-  p_response = exp(log_p_response);
+  p_response = p_response_guess;
 
-  cost_t = exp(log_max_cost) * relative_cost_t;
+  cost_t = max_cost_guess * relative_cost_t;
 
   length_50_sel = loo * p_length_50_sel;
 
@@ -314,7 +314,7 @@ for (i in 1:(n_lcomps)){
 
   length_comps[i, 1:n_lbins] ~ multinomial(to_vector(p_lbin_sampled[length_comps_years[i], 1:n_lbins]));
 
-} // close length likelihood
+ } // close length likelihood
 
 //// effort prior ////
 
@@ -376,11 +376,11 @@ Fit to ppue data, under the assumption that ppue is proportional to delta F
 
   ppue_t[1:(nt - 1)] ~ normal(ppue_hat, sigma_obs);
 
-    // for (t in 2:nt){
-    //
-    // f_t[t] ~ normal(f_t[t - 1] , sigma_f);
-    //
-    // } // close time loop
+    for (t in 2:nt){
+
+    f_t[t] ~ normal(f_t[t - 1] , sigma_f);
+
+    } // close time loop
 
 }
 
@@ -431,13 +431,13 @@ fit to percentage change in effort with bioeconomic informed priors
 }
 
 
-log_max_cost ~ normal(log(max_cost_guess),1);
+// log_max_cost ~ normal(log(max_cost_guess),1);
 
 f_t ~ cauchy(0,2.5);
 
-sigma_obs ~ cauchy(0, 1);
+sigma_obs ~ normal(0, 1);
 
-log_p_response ~ normal(log(p_response_guess),2);
+// log_p_response ~ normal(log(p_response_guess),10);
 
 //// recruitment prior ////
 

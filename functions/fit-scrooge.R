@@ -94,7 +94,7 @@ fit_scrooge <-
 
     b0_at_age <- n0_at_age * fish$weight_at_age
 
-    hyp_f <- fish$m #hypothetical f
+    hyp_f <- 3*fish$m #hypothetical f
 
     hyp_effort <- hyp_f / min(data$q_t)
 
@@ -115,7 +115,9 @@ fit_scrooge <-
 
     data$p_response_guess <- (max_perc_change_f * hyp_effort) / (hyp_profits_guess / hyp_effort)
 
-    # data$ppue_t <- data$ppue_t / max(data$ppue_t)
+    # delta_effort <- data$p_response_guess * (hyp_profits_guess / hyp_effort)
+
+    # data$ppue_t <- data$ppue_t
 
   # if (max(data$ppue_t) > 0){
   # data$ppue_t <- data$ppue_t/max(data$ppue_t)

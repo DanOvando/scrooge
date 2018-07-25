@@ -60,6 +60,21 @@ plot_fits <- function(prepped_fishery, fit){
     geom_point(aes(year, true_f), fill = "tomato", size = 4, shape = 21) +
     labs(y = "F", x = "Year")
 
+    f_plot
+
+
+
+
+
+
+  delta_f <- tidybayes::spread_samples(fit, delta_f[year]) %>%
+    ungroup() %>%
+    left_join(sampled_years, by = "year") %>%
+    mutate(year = sampled_year) %>%
+    select(-sampled_year)
+
+
+
   ppue <- tidybayes::spread_samples(fit, ppue_hat[year]) %>%
     ungroup() %>%
     left_join(sampled_years, by = "year") %>%
@@ -69,7 +84,8 @@ plot_fits <- function(prepped_fishery, fit){
   true_ppue <-
     data_frame(year = sampled_years$sampled_year,
                true_ppue =  prepped_fishery$scrooge_data$ppue_t) %>%
-    ungroup()
+    ungroup() %>%
+    mutate(true_ppue = true_ppue / max(true_ppue))
 
 
   ppue_plot <- ppue %>%
