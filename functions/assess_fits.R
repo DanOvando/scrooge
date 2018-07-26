@@ -5,6 +5,11 @@ assess_fits <- function(prepped_fishery, fit){
   sampled_years <- data_frame(year =1:length(sampled_years),
                               sampled_year = sampled_years)
 
+
+
+  length_comp_sampled_years <- data_frame(year = 1:nrow(prepped_fishery$scrooge_data$length_comps),
+                                          sampled_year = prepped_fishery$scrooge_data$length_comps_years)
+
   rec_devs <- tidybayes::spread_samples(fit, rec_dev_t[year])
 
   true_recdevs <- prepped_fishery$simed_fishery %>%
@@ -64,10 +69,63 @@ ppue_hat_t <- tidybayes::spread_samples(fit, ppue_hat_t[year]) %>%
     mutate(predicted = predicted / max(predicted),
            observed = observed / max(observed))
 
-  out <- f_pref %>%
-    bind_rows(rec_pref) %>%
-    bind_rows(ppue_pref)
+  #  percent change in effort
 
+  perc_change_effort_hat <- tidybayes::spread_samples(fit, perc_change_effort_hat[year]) %>%
+    ungroup() %>%
+    left_join(sampled_years, by = "year") %>%
+    mutate(year = sampled_year) %>%
+    select(-sampled_year)
+
+  true_perc_change_effort_hat <- prepped_fishery$simed_fishery %>%
+    group_by(year) %>%
+    summarise(effort = unique(effort)) %>%
+    ungroup() %>%
+    arrange(year) %>%
+    mutate(perc_change_effort = lead(effort) / effort)
+
+  perc_change_effort_pref <- perc_change_effort_hat %>%
+    left_join(true_perc_change_effort_hat, by = "year") %>%
+    mutate(resid = perc_change_effort_hat - perc_change_effort) %>%
+    rename(predicted = perc_change_effort_hat,
+           observed = perc_change_effort) %>%
+    mutate(sq_er = resid^2,
+           variable = "percent_change_effort") %>%
+    mutate(predicted = predicted / max(predicted),
+           observed = observed / max(observed))
+
+  # length comps
+
+  observed_lcomps <- prepped_fishery$scrooge_data$length_comps %>%
+    as_data_frame() %>%
+    mutate(year = prepped_fishery$scrooge_data$length_comps_years) %>%
+    gather(lbin, numbers, -year) %>%
+    mutate(lbin = as.numeric(lbin)) %>%
+    group_by(year) %>%
+    mutate(numbers = numbers / sum(numbers))
+
+  pp_length_comps <- tidybayes::spread_samples(fit, n_tl[year,length_bin]) %>%
+    ungroup() %>%
+    left_join(observed_lcomps, by = c("year", "length_bin" = "lbin")) %>%
+    mutate(source = "posterior_predictive")  %>%
+    rename(observed = numbers, predicted = n_tl)
+
+  fitted_length_comps <- tidybayes::spread_samples(fit, p_lbin_sampled[year,lbin]) %>%
+    ungroup() %>%
+    left_join(observed_lcomps, by = c("year", "lbin" = "lbin")) %>%
+    mutate(source = "fitted")  %>%
+    rename(observed = numbers, predicted = p_lbin_sampled) %>%
+    rename(length_bin = lbin)
+
+  length_comps <- pp_length_comps %>%
+    bind_rows(fitted_length_comps)
+
+
+  out <- list(length_comps = length_comps,
+              others =     f_pref %>%
+                bind_rows(rec_pref) %>%
+                bind_rows(ppue_pref) %>%
+                bind_rows(perc_change_effort_pref))
 
 return(out)
 
