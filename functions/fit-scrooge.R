@@ -141,6 +141,7 @@ fit_scrooge <-
       )
     )
 
+
   fit <- rstan::sampling(object = scrooge_model,
                           data = data,
                           chains = chains,

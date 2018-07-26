@@ -112,7 +112,7 @@ real< lower = 0> sigma_effort;
 
 real<lower = 0> sigma_obs;
 
-// real log_p_response;
+real log_p_response;
 
 real log_max_cost; // mean cost
 
@@ -401,7 +401,7 @@ sigma_effort ~ normal(0.2, 0.2);
 
 sigma_obs ~ normal(0, 2);
 
-// log_p_response ~ normal(log(p_response_guess),10);
+// log_p_response ~ normal(log(p_response_guess),2);
 
 //// recruitment prior ////
 

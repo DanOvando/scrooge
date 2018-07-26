@@ -652,21 +652,33 @@ if (run_case_studies == T) {
 
 if (fit_models == T) {
 
-res <- fisheries_sandbox
+  experiments <- expand.grid(
+    period = c("beginning", "middle", "end"),
+    window = c(5, 10, 15),
+    economic_model = c(0, 1, 2,3),
+    likelihood_model = c(0, 1, 2),
+    prop_years_lcomp_data = c(0.1, .5, 1),
+    fishery = unique(fisheries_sandbox$fishery),
+    stringsAsFactors = F
+  )
 
-  experiments <- expand.grid(period = c("middle","end"), window = c(10),
-                             economic_model = c(0,3),
-                             fishery = 1:nrow(fisheries_sandbox), stringsAsFactors = F)
-
-  fisheries_sandbox <- fisheries_sandbox %>%
-    mutate(fishery = 1:nrow(.)) %>%
-    left_join(experiments, by = "fishery") %>%
-    mutate(prepped_fishery = pmap(list(
-      prepped_fishery = prepped_fishery,
-      window = window,
-      period = period), subsample_data))
+  fisheries_sandbox <- experiments %>%
+    left_join(fishery, by = "fishery") %>%
+    mutate(experiment = 1:nrow(.)) %>%
+    mutate(prepped_fishery = pmap(
+      list(
+        prepped_fishery = prepped_fishery,
+        window = window,
+        period = period,
+        experiment = experiment,
+        prop_years_lcomp_data = prop_years_lcomp_data
+      ),
+      subsample_data
+    ))
 
   fisheries_sandbox$experiment <- 1:nrow(fisheries_sandbox)
+
+  scrooge_model <- rstan::stan_model(here::here("src",paste0(scrooge_file, ".stan")), model_name = scrooge_file)
 
   sfs <- safely(fit_scrooge)
 
@@ -675,13 +687,18 @@ res <- fisheries_sandbox
   foreach::getDoParWorkers()
 
   set.seed(42)
-  fits <- foreach::foreach(i = 1:nrow(fisheries_sandbox)) %dopar% {
+  fitted_sandbox <- foreach::foreach(i = 1:nrow(fisheries_sandbox)) %dopar% {
     out <- sfs(
+      chains = chains,
+      cores = cores,
+      refresh = 25,
+      scrooge_model = scrooge_model,
       data = fisheries_sandbox$prepped_fishery[[i]]$scrooge_data,
       fish = fisheries_sandbox$prepped_fishery[[i]]$fish,
       fleet = fisheries_sandbox$prepped_fishery[[i]]$fleet,
       experiment = fisheries_sandbox$experiment[i],
-      economic_model = fisheries_sandbox$economic_model[i],
+      economic_model =  fisheries_sandbox$economic_model[i],
+      likelihood_model = fisheries_sandbox$likelihood_model[i],
       scrooge_file = "scrooge",
       iter = 2000,
       warmup = 1000,
@@ -690,18 +707,13 @@ res <- fisheries_sandbox
       max_perc_change_f = 0.2,
       in_clouds = in_clouds,
       cloud_dir = cloud_dir,
-      chains = 2,
       cv_effort = 0.5,
       q_guess = mean(possible_q),
       r0 = 100,
-      sd_sigma_r = 0.1,
-      cores = 2,
-      sigma_effort_guess = 0.1,
-      burn_f = 0.12
+      sd_sigma_r = 0.4,
+      sigma_effort = 0.2,
     )
-
   } # close fitting loop
-
 
   fisheries_sandbox$scrooge_fit <- fits
 
@@ -745,9 +757,7 @@ res <- fisheries_sandbox
 
 # process_fits ------------------------------------------------------------
 
-
 scrooge_worked <- map(fisheries_sandbox$scrooge_fit,'error') %>% map_lgl(is.null)
-
 
 stan_worked <-  map_lgl(map(fisheries_sandbox$scrooge_fit,  "result"),~!(nrow(.x) %>% is.null()))
 
