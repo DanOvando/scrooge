@@ -37,6 +37,8 @@
 
   new_run <- F
 
+  scrooge_file <- "scrooge"
+
   if (in_clouds == F){
 
     run_dir <- here::here("results", run_name)
@@ -72,7 +74,6 @@
   run_case_studies <- T
 
   fit_models <- F
-
 
   n_cores <- 1
 
@@ -379,6 +380,7 @@
 
 # test three cases  studies to demonstrate core model performance
 
+
 if (run_case_studies == T) {
 
   # simple open access
@@ -412,7 +414,7 @@ if (run_case_studies == T) {
     sim_years = 100,
     burn_years = 100,
     cv_len = 0.2,
-    linf_buffer = 1.1,
+    linf_buffer = 1.25,
     seed = 24
   )
 
@@ -516,43 +518,46 @@ if (run_case_studies == T) {
 
   decoupled_plot <- plot_simmed_fishery(decoupled)
 
-  case_studies <- data_frame(case_study = c(
-                                            "simple",
-                                            "realistic"
-                                           ),
-                             prepped_fishery  = list(simple,
-                                                     realistic
-                                                     ))
+  case_studies <- data_frame(
+    case_study = c("simple",
+                   "realistic",
+                   "decoupled"),
+    prepped_fishery  = list(simple,
+                            realistic,
+                            decoupled)
+  )
 
-  experiments <- expand.grid(period = c("beginning","middle"),
-                             window = c(20),
-                             economic_model = c(0,1),
-                             likelihood_model = c(0,1),
-                             prop_years_lcomp_data = c(0.1,1),
-                             case_study = unique(case_studies$case_study), stringsAsFactors = F)
-
-  # experiments <- expand.grid(period = c("beginning","middle","end"),
-  #                            window = c(5,10),
-  #                            economic_model = c(0:6),
-  #                            prop_years_lcomp_data = c(0.25,1),
-  #                            case_study = unique(case_studies$case_study), stringsAsFactors = F)
+  experiments <- expand.grid(
+    period = c("beginning", "middle", "end"),
+    window = c(5, 10, 20),
+    economic_model = c(0, 1),
+    likelihood_model = c(0, 1),
+    prop_years_lcomp_data = c(0.1, .5, 1),
+    case_study = unique(case_studies$case_study),
+    stringsAsFactors = F
+  )
 
   case_studies <- experiments %>%
     left_join(case_studies, by = "case_study") %>%
     mutate(experiment = 1:nrow(.)) %>%
-    mutate(prepped_fishery = pmap(list(
-      prepped_fishery = prepped_fishery,
-      window = window,
-      period = period,
-      experiment = experiment,
-      prop_years_lcomp_data = prop_years_lcomp_data), subsample_data))
-
-  case_studies <- case_studies %>%
+    mutate(prepped_fishery = pmap(
+      list(
+        prepped_fishery = prepped_fishery,
+        window = window,
+        period = period,
+        experiment = experiment,
+        prop_years_lcomp_data = prop_years_lcomp_data
+      ),
+      subsample_data
+    )) %>%
     filter(case_study == "realistic",
-           prop_years_lcomp_data == 0.1,
-           economic_model  %in% c(1,0),
+           period == "beginning",
+           window == 20,
            likelihood_model == 1,
-           period == "beginning")
+           prop_years_lcomp_data == 0.5) %>%
+    slice(1:2)
+
+  scrooge_model <- rstan::stan_model(here::here("src",paste0(scrooge_file, ".stan")), model_name = scrooge_file)
 
   sfs <- safely(fit_scrooge)
 
@@ -563,6 +568,10 @@ if (run_case_studies == T) {
   set.seed(42)
   case_study_fits <- foreach::foreach(i = 1:nrow(case_studies)) %dopar% {
     out <- sfs(
+      chains = 1,
+      cores = 1,
+      refresh = 25,
+      scrooge_model = scrooge_model,
       data = case_studies$prepped_fishery[[i]]$scrooge_data,
       fish = case_studies$prepped_fishery[[i]]$fish,
       fleet = case_studies$prepped_fishery[[i]]$fleet,
@@ -577,13 +586,11 @@ if (run_case_studies == T) {
       max_perc_change_f = 0.2,
       in_clouds = in_clouds,
       cloud_dir = cloud_dir,
-      chains = 1,
       cv_effort = 0.5,
       q_guess = mean(possible_q),
       r0 = 100,
       sd_sigma_r = 0.4,
       sigma_effort = 0.2,
-      cores = 2
     )
   } # close fitting loop
 
@@ -593,7 +600,8 @@ if (run_case_studies == T) {
     mutate(performance = map2(prepped_fishery, scrooge_fit, assess_fits))
 
   perf_summaries <- case_studies %>%
-    select(-scrooge_fit, -prepped_fishery) %>%
+    mutate(others = map(performance, "others")) %>%
+    select(-scrooge_fit, -prepped_fishery,-performance) %>%
     unnest() %>%
     group_by(year, variable, experiment,case_study, economic_model, period, window,prop_years_lcomp_data) %>%
     summarise(
@@ -606,10 +614,8 @@ if (run_case_studies == T) {
 
 
   perf_summaries %>%
-    filter(case_study == "realistic",
-           period == "beginning",
-           variable == "f",
-           economic_model %in% c(1,0)
+    filter(
+           variable == "ppue",
            ) %>%
     ggplot() +
     geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90), fill = "lightgrey") +

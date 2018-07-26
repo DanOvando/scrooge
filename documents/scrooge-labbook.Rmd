@@ -4826,4 +4826,6 @@ With model 0 now, the more you jack up sigma, the more you just let things be wh
 
 You can use a posterior predictive process to tune this thing. At the moment, it seems like you're being over confident. So, can find a sigma_effort such that test statistics on the posterior predictive look good, i.e. 50% of the time the data are covered by the 50% credible interval. 
 
+Now, this will allow you to build in the fit to the PPUE, and potentially adding in the other parameters!. about. effing. time. 
+
 

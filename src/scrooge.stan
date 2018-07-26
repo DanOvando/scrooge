@@ -279,13 +279,13 @@ transformed parameters{
 
       ppue_hat_t[t - n_burn] = profit_t[t - n_burn] / effort_t[t - n_burn];
 
-    if (economic_model == 0){
+    if (economic_model == 0){ // random walk behavior
 
       effort_t[t - n_burn + 1] = effort_t[t - n_burn] * effort_dev_t[t - n_burn + 1];
 
     } // close effort model 0
 
-    if (economic_model == 1){
+    if (economic_model == 1){ // open access based on knowledge of prices, costs, and q
 
       effort_t[t - n_burn + 1] = (effort_t[t - n_burn] + (p_response * (ppue_hat_t[t - n_burn]))) * effort_dev_t[t - n_burn + 1];
 
@@ -297,8 +297,27 @@ transformed parameters{
 
       }
 
-
     } // close effort model 1
+
+    if (economic_model == 2){
+      // open access dynamics using ppue as prior instead of data
+
+      effort_t[t - n_burn + 1] = (effort_t[t - n_burn] + (p_response * (ppue_t[t - n_burn]))) * effort_dev_t[t - n_burn + 1];
+
+      if ( effort_t[t - n_burn + 1] <= 1e-6) {
+
+         effort_t[t - n_burn + 1] = 1e-6 / (2 -  effort_t[t - n_burn + 1] / 1e-6);
+
+         penalty -= .01*(effort_t[t - n_burn + 1] - 1e-6)^2;
+
+      }
+
+    } // close effort model 2
+
+    if (economic_model == 3){
+      // use percentage changes in effort as a prior instead of data
+      effort_t[t - n_burn + 1] = (effort_t[t - n_burn] * perc_change_effort[t - n_burn]) * effort_dev_t[t - n_burn + 1];
+    }
 
     f_t[t - n_burn + 1] = effort_t[t - n_burn + 1] * q_t[t - n_burn + 1];
 
@@ -343,8 +362,6 @@ transformed parameters{
 
 model{
 
-real new_f;
-
 target += penalty; // add in penalty to bad efforts
 
   //////////////////////////
@@ -357,10 +374,15 @@ for (i in 1:(n_lcomps)){
  } // close length likelihood
 
 
-if (likelihood_model == 1){
+if (likelihood_model == 1 && economic_model != 2){
 
     ppue_t[1:(nt - 1)] ~ normal(ppue_hat, sigma_obs);
 
+}
+
+if (likelihood_model == 2 && economic_model != 3){
+
+    perc_change_effort[1:(nt - 1)] ~ normal(perc_change_effort_hat, sigma_obs);
 
 }
 
@@ -382,6 +404,8 @@ sigma_obs ~ normal(0, 1);
 // log_p_response ~ normal(log(p_response_guess),10);
 
 //// recruitment prior ////
+
+initial_f ~ normal(0,1);
 
 log_rec_dev_t ~ normal(0, sigma_r);
 

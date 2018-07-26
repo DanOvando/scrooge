@@ -1,5 +1,6 @@
 fit_scrooge <-
-  function(data,
+  function(scrooge_model,
+           data,
            fish,
            fleet,
            experiment,
@@ -140,22 +141,17 @@ fit_scrooge <-
       )
     )
 
-  fit <-
-      rstan::stan(
-        file = here::here("src", paste0(scrooge_file, ".stan")),
-        data = data,
-        chains = chains,
-        refresh = refresh,
-        cores = cores,
-        iter = iter,
-        warmup = warmup,
-        control = list(adapt_delta = adapt_delta,
-                       max_treedepth = max_treedepth),
-        init = inits,
-        seed = seed
-      )
-    # init = inits
-
+  fit <- rstan::sampling(object = scrooge_model,
+                          data = data,
+                          chains = chains,
+                          refresh = refresh,
+                          cores = cores,
+                          iter = iter,
+                          warmup = warmup,
+                          control = list(adapt_delta = adapt_delta,
+                                         max_treedepth = max_treedepth),
+                          init = inits,
+                          seed = seed)
 
     # clean up old DLLS per https://github.com/stan-dev/rstan/issues/448
 

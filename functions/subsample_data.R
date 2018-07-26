@@ -23,6 +23,8 @@ subsample_data <-
     } else if (period == "end") {
       sampled_years <- (max(years) - window):max(years)
 
+      sampled_years <- sampled_years[sampled_years > 0 ]
+
     }
     if (prop_years_lcomp_data <1){
 
@@ -51,6 +53,11 @@ subsample_data <-
 
     prepped_fishery$scrooge_data$length_comps_years <-
       which(sampled_years %in% length_years)
+
+    if (length(length_years) == 1){
+      prepped_fishery$scrooge_data$length_comps_years <- array(prepped_fishery$scrooge_data$length_comps_years, dim = 1)
+      # prepped_fishery$scrooge_data$n_lcomps <- array(1, dim = 1)
+    }
 
     prepped_fishery$scrooge_data$n_lcomps <-
       ifelse(length(length_years) > 1,
