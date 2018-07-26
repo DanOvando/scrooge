@@ -529,9 +529,9 @@ if (run_case_studies == T) {
 
   experiments <- expand.grid(
     period = c("beginning", "middle", "end"),
-    window = c(5, 10, 20),
-    economic_model = c(0, 1),
-    likelihood_model = c(0, 1),
+    window = c(5, 10, 15),
+    economic_model = c(0, 1, 2,3),
+    likelihood_model = c(0, 1, 2),
     prop_years_lcomp_data = c(0.1, .5, 1),
     case_study = unique(case_studies$case_study),
     stringsAsFactors = F
@@ -552,10 +552,10 @@ if (run_case_studies == T) {
     )) %>%
     filter(case_study == "realistic",
            period == "beginning",
-           window == 20,
-           likelihood_model == 1,
+           window == 10,
            prop_years_lcomp_data == 0.5) %>%
-    slice(1:2)
+    filter(!(likelihood_model == 2 & economic_model == 3)) %>%
+    filter(!(likelihood_model == 1 & economic_model == 2))
 
   scrooge_model <- rstan::stan_model(here::here("src",paste0(scrooge_file, ".stan")), model_name = scrooge_file)
 
@@ -603,7 +603,7 @@ if (run_case_studies == T) {
     mutate(others = map(performance, "others")) %>%
     select(-scrooge_fit, -prepped_fishery,-performance) %>%
     unnest() %>%
-    group_by(year, variable, experiment,case_study, economic_model, period, window,prop_years_lcomp_data) %>%
+    group_by(year, variable, experiment,case_study, economic_model, likelihood_model, period, window,prop_years_lcomp_data) %>%
     summarise(
       lower_90 = quantile(predicted, 0.05),
       upper_90 = quantile(predicted, 0.95),
@@ -615,7 +615,7 @@ if (run_case_studies == T) {
 
   perf_summaries %>%
     filter(
-           variable == "ppue",
+           variable == "f",
            ) %>%
     ggplot() +
     geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90), fill = "lightgrey") +
@@ -623,7 +623,30 @@ if (run_case_studies == T) {
     geom_line(aes(year,mean_predicted), color = "steelblue") +
     geom_point(aes(year, observed), fill = "tomato", size = 4, shape = 21) +
     labs(y = "", x = "Year") +
-    facet_wrap(~economic_model, scales = "free_y")
+    facet_grid(likelihood_model ~ economic_model) +
+    theme_minimal()
+
+  length_comps <- map(case_studies$performance,"length_comps")
+
+
+    length_comps[[1]] %>%
+    filter(source == "posterior_predictive") %>%
+    group_by(year, .chain,.iteration) %>%
+    mutate(predicted = predicted / sum(predicted)) %>%
+    group_by(year, .chain, length_bin) %>%
+    summarise(lower_90 = quantile(predicted,0.05),
+              upper_90 = quantile(predicted,0.95),
+              mean = mean(predicted),
+              observed = unique(observed)) %>%
+    ggplot() +
+    geom_ribbon(aes(x = length_bin, ymin = lower_90, ymax = upper_90), fill = "lightgrey") +
+    geom_line(aes(length_bin, mean), color = "steelblue") +
+    geom_point(aes(length_bin, observed),size = .5, alpha = 0.5, color = "red") +
+    facet_wrap(~year) +
+    theme_minimal()
+
+  saveRDS(case_studies, file = glue::glue("{run_dir}/case_studies.RDS"))
+
 
 } # close case studies runs
 

@@ -69,6 +69,33 @@ ppue_hat_t <- tidybayes::spread_samples(fit, ppue_hat_t[year]) %>%
     mutate(predicted = predicted / max(predicted),
            observed = observed / max(observed))
 
+  #  percent change in effort
+
+  perc_change_effort_hat <- tidybayes::spread_samples(fit, perc_change_effort_hat[year]) %>%
+    ungroup() %>%
+    left_join(sampled_years, by = "year") %>%
+    mutate(year = sampled_year) %>%
+    select(-sampled_year)
+
+  true_perc_change_effort_hat <- prepped_fishery$simed_fishery %>%
+    group_by(year) %>%
+    summarise(effort = unique(effort)) %>%
+    ungroup() %>%
+    arrange(year) %>%
+    mutate(perc_change_effort = lead(effort) / effort)
+
+  perc_change_effort_pref <- perc_change_effort_hat %>%
+    left_join(true_perc_change_effort_hat, by = "year") %>%
+    mutate(resid = perc_change_effort_hat - perc_change_effort) %>%
+    rename(predicted = perc_change_effort_hat,
+           observed = perc_change_effort) %>%
+    mutate(sq_er = resid^2,
+           variable = "percent_change_effort") %>%
+    mutate(predicted = predicted / max(predicted),
+           observed = observed / max(observed))
+
+  # length comps
+
   observed_lcomps <- prepped_fishery$scrooge_data$length_comps %>%
     as_data_frame() %>%
     mutate(year = prepped_fishery$scrooge_data$length_comps_years) %>%
@@ -97,7 +124,8 @@ ppue_hat_t <- tidybayes::spread_samples(fit, ppue_hat_t[year]) %>%
   out <- list(length_comps = length_comps,
               others =     f_pref %>%
                 bind_rows(rec_pref) %>%
-                bind_rows(ppue_pref))
+                bind_rows(ppue_pref) %>%
+                bind_rows(perc_change_effort_pref))
 
 return(out)
 

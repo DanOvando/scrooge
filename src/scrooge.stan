@@ -114,7 +114,7 @@ real<lower = 0> sigma_obs;
 
 // real log_p_response;
 
-// real log_max_cost; // mean cost
+real log_max_cost; // mean cost
 
 real<lower = 0> p_length_50_sel; // length at 50% selectivity
 
@@ -188,15 +188,15 @@ transformed parameters{
 
   p_response = p_response_guess;
 
-  cost_t = max_cost_guess * relative_cost_t;
+  cost_t = exp(log_max_cost) * relative_cost_t;
 
   length_50_sel = loo * p_length_50_sel;
 
   sel_delta = 2;
 
-  rec_dev_t = exp(log_rec_dev_t);
+  rec_dev_t = exp(log_rec_dev_t * sigma_r - sigma_r^2/2);
 
-  effort_dev_t = exp(log_effort_dev_t);
+  effort_dev_t = exp(log_effort_dev_t * sigma_effort - sigma_effort^2/2);
 
   n_ta = rep_matrix(0,n_total, n_ages);
 
@@ -393,13 +393,13 @@ if (likelihood_model == 2 && economic_model != 3){
 
 //// effort prior ////
 
-log_effort_dev_t ~ normal(0, sigma_effort);
+log_effort_dev_t ~ normal(0, 1);
 
-// log_max_cost ~ normal(log(max_cost_guess),1);
+log_max_cost ~ normal(log(max_cost_guess),1);
 
-sigma_effort ~ cauchy(0,1);
+sigma_effort ~ normal(0.2, 0.2);
 
-sigma_obs ~ normal(0, 1);
+sigma_obs ~ normal(0, 2);
 
 // log_p_response ~ normal(log(p_response_guess),10);
 
@@ -407,7 +407,7 @@ sigma_obs ~ normal(0, 1);
 
 initial_f ~ normal(0,1);
 
-log_rec_dev_t ~ normal(0, sigma_r);
+log_rec_dev_t ~ normal(0, 1);
 
 sigma_r ~ normal(sigma_r_guess, sd_sigma_r);
 
