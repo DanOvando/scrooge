@@ -4828,4 +4828,51 @@ You can use a posterior predictive process to tune this thing. At the moment, it
 
 Now, this will allow you to build in the fit to the PPUE, and potentially adding in the other parameters!. about. effing. time. 
 
+# early case study check
+
+```{r}
+
+please <- readRDS(here::here("woop.RDS"))
+
+dim(please)
+
+  please$scrooge_fit <- map(please$scrooge_fit , "result")
+
+
+  please <- please %>%
+    mutate(performance = map2(prepped_fishery, scrooge_fit, assess_fits))
+
+  perf_summaries <- please %>%
+    mutate(others = map(performance, "others")) %>%
+    select(-scrooge_fit,-prepped_fishery, -performance) %>%
+    unnest() %>%
+    group_by(
+      year,
+      variable,
+      experiment,
+      case_study,
+      economic_model,
+      period,
+      window,
+      prop_years_lcomp_data
+    ) %>%
+    summarise(
+      lower_90 = quantile(predicted, 0.05),
+      upper_90 = quantile(predicted, 0.95),
+      lower_50 = quantile(predicted, 0.25),
+      upper_50 = quantile(predicted, 0.75),
+      mean_predicted = mean(predicted),
+      observed = mean(observed)
+    )
+  
+oof <-  perf_summaries %>% 
+    group_by(variable, case_study, economic_model, period, window, prop_years_lcomp_data) %>% 
+    summarise(rmse = sqrt(mean(mean((mean_predicted - observed)^2))))
+
+oof %>% 
+  ggplot(aes(economic_model, rmse)) + 
+  geom_point()
+
+
+```
 

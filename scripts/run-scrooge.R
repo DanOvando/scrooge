@@ -78,9 +78,10 @@ n_cores <- 1
 n_chains <- 1
 
 if (in_clouds == T) {
-  system("umount results/scrooge-results")
 
-  system("rm -r results/scrooge-results")
+  # system("umount results/scrooge-results")
+
+  # system("rm -r results/scrooge-results")
 
   if (dir.exists("results/scroote-results") == F) {
     system("mkdir results/scrooge-results")
@@ -89,9 +90,9 @@ if (in_clouds == T) {
 
   system("gcsfuse scrooge-results results/scrooge-results")
 
-  system("umount data/scrooge-data")
+  # system("umount data/scrooge-data")
 
-  system("rm -r data/scrooge-data")
+  # system("rm -r data/scrooge-data")
 
   if (dir.exists("results/scroote-data") == F) {
     system("mkdir data/scrooge-data")
