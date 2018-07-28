@@ -4876,3 +4876,212 @@ oof %>%
 
 ```
 
+# problem children
+
+
+```{r}
+
+a <- map(case_study_fits, "result")
+
+
+b <- map(a, get_elapsed_time)
+
+pfit <- a[[1]]
+
+
+  scrooge_model <-
+    rstan::stan_model(here::here("src", paste0(scrooge_file, ".stan")), model_name = scrooge_file)
+
+  sfs <- safely(fit_scrooge)
+
+ test <-
+    foreach::foreach(i = 3) %dopar% {
+      out <- sfs(
+        chains = 1,
+        cores = 1,
+        refresh = 25,
+        scrooge_model = scrooge_model,
+        data = case_studies$prepped_fishery[[i]]$scrooge_data,
+        fish = case_studies$prepped_fishery[[i]]$fish,
+        fleet = case_studies$prepped_fishery[[i]]$fleet,
+        experiment = case_studies$experiment[i],
+        economic_model =  case_studies$economic_model[i],
+        likelihood_model = case_studies$likelihood_model[i],
+        scrooge_file = "scrooge",
+        iter = 2000,
+        warmup = 1000,
+        adapt_delta = 0.95,
+        max_treedepth = 8,
+        max_perc_change_f = 0.01,
+        in_clouds = in_clouds,
+        cloud_dir = cloud_dir,
+        cv_effort = 0.5,
+        q_guess = mean(possible_q),
+        r0 = 100,
+        sd_sigma_r = 0.4,
+        sigma_effort = 0.2,
+      )
+    } # close fitting loop
+ 
+ problem <- case_studies %>% slice(3)
+ 
+ problem$scrooge_fit <- list(test[[1]]$result)
+
+  problem <- problem %>%
+    mutate(performance = map2(prepped_fishery, scrooge_fit, assess_fits))
+
+
+perf_summaries <- problem %>%
+    mutate(others = map(performance, "others")) %>%
+    select(-scrooge_fit,-prepped_fishery, -performance) %>%
+    unnest() %>%
+    group_by(
+      year,
+      variable,
+      experiment,
+      case_study,
+      economic_model,
+      likelihood_model,
+      period,
+      window,
+      prop_years_lcomp_data
+    ) %>%
+    summarise(
+      lower_90 = quantile(predicted, 0.05),
+      upper_90 = quantile(predicted, 0.95),
+      lower_50 = quantile(predicted, 0.25),
+      upper_50 = quantile(predicted, 0.75),
+      mean_predicted = mean(predicted),
+      mean_predicted = median(mean_predicted),
+      observed = mean(observed)
+    )
+
+
+  perf_summaries %>%
+    filter(variable == "f") %>%
+    ggplot() +
+    geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90), fill = "lightgrey") +
+    geom_ribbon(aes(year, ymin = lower_50, ymax = upper_50), fill = "darkgrey") +
+    geom_line(aes(year, mean_predicted), color = "steelblue") +
+    geom_point(
+      aes(year, observed),
+      fill = "tomato",
+      size = 4,
+      shape = 21
+    ) +
+    labs(y = "", x = "Year") +
+    facet_grid(likelihood_model ~ economic_model) +
+    theme_minimal()
+ 
+ rstanarm::launch_shinystan(map(test, "result")[[1]])
+
+```
+
+Oh that's freaking awesome. Estimating max percentage change instead of the stupid p response factor makes like waaaay better. 
+
+Let's test it against a bunch of open access
+
+
+```{r}
+
+case_studies <- case_studies %>% 
+  filter(economic_model %in% c(1,2))
+
+  case_studies <- case_studies %>% 
+    sample_n(3)
+
+  
+  
+ scrooge_model <-
+    rstan::stan_model(here::here("src", paste0(scrooge_file, ".stan")), model_name = scrooge_file)
+
+  sfs <- safely(fit_scrooge)
+
+  doParallel::registerDoParallel(cores = n_cores)
+
+  foreach::getDoParWorkers()
+  
+  set.seed(42)
+  case_study_fits <-
+    foreach::foreach(i = 1:nrow(case_studies)) %dopar% {
+      out <- sfs(
+        chains = 1,
+        cores = 1,
+        refresh = 25,
+        scrooge_model = scrooge_model,
+        data = case_studies$prepped_fishery[[i]]$scrooge_data,
+        fish = case_studies$prepped_fishery[[i]]$fish,
+        fleet = case_studies$prepped_fishery[[i]]$fleet,
+        experiment = case_studies$experiment[i],
+        economic_model =  case_studies$economic_model[i],
+        likelihood_model = case_studies$likelihood_model[i],
+        scrooge_file = "scrooge",
+        iter = 2000,
+        warmup = 1000,
+        adapt_delta = 0.9,
+        max_treedepth = 8,
+        max_perc_change_f = 0.2,
+        in_clouds = in_clouds,
+        cloud_dir = cloud_dir,
+        cv_effort = 0.5,
+        q_guess = mean(possible_q),
+        r0 = 100,
+        sd_sigma_r = 0.4,
+        sigma_effort = 0.2,
+      )
+    } # close fitting loop
+
+  case_studies$scrooge_fit <- map(case_study_fits, "result")
+
+  case_studies <- case_studies %>%
+    mutate(performance = map2(prepped_fishery, scrooge_fit, assess_fits))
+  
+   perf_summaries <- case_studies %>%
+    mutate(others = map(performance, "others")) %>%
+    select(-scrooge_fit,-prepped_fishery, -performance) %>%
+    unnest() %>%
+    group_by(
+      year,
+      variable,
+      experiment,
+      case_study,
+      economic_model,
+      likelihood_model,
+      period,
+      window,
+      prop_years_lcomp_data
+    ) %>%
+    summarise(
+      lower_90 = quantile(predicted, 0.05),
+      upper_90 = quantile(predicted, 0.95),
+      lower_50 = quantile(predicted, 0.25),
+      upper_50 = quantile(predicted, 0.75),
+      mean_predicted = mean(predicted),
+      mean_predicted = median(mean_predicted),
+      observed = mean(observed)
+    )
+
+
+  perf_summaries %>%
+    filter(variable == "f") %>%
+    ggplot() +
+    geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90), fill = "lightgrey") +
+    geom_ribbon(aes(year, ymin = lower_50, ymax = upper_50), fill = "darkgrey") +
+    geom_line(aes(year, mean_predicted), color = "steelblue") +
+    geom_point(
+      aes(year, observed),
+      fill = "tomato",
+      size = 4,
+      shape = 21
+    ) +
+    labs(y = "", x = "Year") +
+    facet_wrap(~experiment, scales = "free") +
+    theme_minimal()
+
+
+  rstanarm::launch_shinystan(case_studies$scrooge_fit[[3]])
+
+```
+
+
+

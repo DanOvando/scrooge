@@ -117,6 +117,22 @@ fit_scrooge <-
 
     data$p_response_guess <- (max_perc_change_f * hyp_effort) / (hyp_profits_guess / hyp_effort)
 
+    data$max_ppue = hyp_profits_guess / hyp_effort
+
+    data$max_ppue_effort <-  hyp_effort
+
+    if (economic_model == 2){
+
+      max_ppue = max(data$ppue_t)
+
+      data$p_response_guess <- (max_perc_change_f * hyp_effort) / (max_ppue)
+
+      data$max_ppue = max_ppue
+
+    }
+
+    data$max_revenue_guess <- b0_revenue
+
     # delta_effort <- data$p_response_guess * (hyp_profits_guess / hyp_effort)
 
     # data$ppue_t <- data$ppue_t
@@ -137,7 +153,8 @@ fit_scrooge <-
         p_length_50_sel = jitter(0.25),
         initial_f = jitter(data$m),
         log_effort_dev_t = rep(0, data$nt),
-        sigma_effort = jitter(0.2)
+        sigma_effort = jitter(0.2),
+        cr_ratio = jitter(0.75)
       )
     )
 

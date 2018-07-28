@@ -38,8 +38,6 @@ row_vector[nt] price_t;
 
 row_vector[nt] relative_cost_t;
 
-real max_cost_guess;
-
 row_vector[nt] q_t;
 
 vector[nt] ppue_t;
@@ -50,7 +48,11 @@ real length_50_sel_guess;
 
 real delta_guess;
 
-real<lower = 0> p_response_guess;
+real max_ppue_effort; // guess of ppue maximizing effort
+
+real max_ppue; // guess of maximum ppue
+
+real max_revenue_guess; // guess of revenue at b0
 
 real<lower = 0> cv_effort;
 
@@ -112,9 +114,11 @@ real< lower = 0> sigma_effort;
 
 real<lower = 0> sigma_obs;
 
+real <lower = 0> max_perc_change_effort; // max percent change in effort
+
 // real log_p_response;
 
-real log_max_cost; // mean cost
+real<lower = 0> cr_ratio; // estimated peak cost to revenue ratio
 
 real<lower = 0> p_length_50_sel; // length at 50% selectivity
 
@@ -180,15 +184,24 @@ transformed parameters{
 
   real temp_f;
 
-  real penalty = 0;
+  real penalty;
 
+  real max_cost; // estimate of max costs
+
+  real max_profits; // estimate of maximum profits
   //////////////////////////
   //  set things up       //
   //////////////////////////
 
-  p_response = p_response_guess;
+  penalty = 0;
 
-  cost_t = exp(log_max_cost) * relative_cost_t;
+  p_response = (max_perc_change_effort * max_ppue_effort) / max_ppue;
+
+  max_profits = max_revenue_guess * (1 - cr_ratio);
+
+  max_cost = (max_revenue_guess - max_profits) / max_ppue_effort^beta;
+
+  cost_t = max_cost * relative_cost_t;
 
   length_50_sel = loo * p_length_50_sel;
 
@@ -395,13 +408,13 @@ if (likelihood_model == 2 && economic_model != 3){
 
 log_effort_dev_t ~ normal(0, 1);
 
-log_max_cost ~ normal(log(max_cost_guess),1);
+max_perc_change_effort ~ normal(0,0.25);
+
+cr_ratio ~ normal(0.5,1);
 
 sigma_effort ~ normal(0.2, 0.2);
 
-sigma_obs ~ normal(0, 2);
-
-// log_p_response ~ normal(log(p_response_guess),2);
+sigma_obs ~ cauchy(0, 1);
 
 //// recruitment prior ////
 
