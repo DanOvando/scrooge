@@ -29,7 +29,7 @@ functions <- list.files(here::here("functions"))
 
 walk(functions, ~ here::here("functions", .x) %>% source()) # load local functions
 
-in_clouds <-  T
+in_clouds <-  F
 
 run_name <- "d1.0"
 
@@ -67,35 +67,50 @@ theme_set(scrooge_theme)
 
 # run options -------------------------------------------------------------
 
-sim_fisheries <- T
+sim_fisheries <- F
 
 run_case_studies <- F
 
-fit_models <- T
+fit_models <- F
 
-n_cores <- 1
+n_cores <- 2
 
-n_chains <- 1
+n_chains <- 2
 
 if (in_clouds == T) {
 
-  # system("umount results/scrooge-results")
 
-  # system("rm -r results/scrooge-results")
 
-  if (dir.exists("results/scroote-results") == F) {
+  if (dir.exists("results/scrooge-results") == T) {
+
+    system("umount results/scrooge-results")
+
+    system("rm -r results/scrooge-results")
+
+    system("mkdir results/scrooge-results")
+
+  } else{
+
     system("mkdir results/scrooge-results")
 
   }
 
   system("gcsfuse scrooge-results results/scrooge-results")
 
-  # system("umount data/scrooge-data")
 
-  # system("rm -r data/scrooge-data")
 
-  if (dir.exists("results/scroote-data") == F) {
+  if (dir.exists("results/scrooge-data") == T) {
+
+    system("umount data/scrooge-data")
+
+    system("rm -r data/scrooge-data")
+
     system("mkdir data/scrooge-data")
+
+  } else{
+
+    system("mkdir data/scrooge-data")
+
 
   }
 
@@ -539,7 +554,7 @@ if (run_case_studies == T) {
 
   experiments <- expand.grid(
     period = c("beginning", "middle", "end"),
-    window = c(5, 10, 15),
+    window = c(5, 15),
     economic_model = c(0, 1, 2, 3),
     likelihood_model = c(0, 1, 2),
     prop_years_lcomp_data = c(0.1, .5, 1),
@@ -560,12 +575,12 @@ if (run_case_studies == T) {
       ),
       subsample_data
     )) %>%
-    filter(
-      case_study == "realistic",
-      period == "beginning",
-      window == 10,
-      prop_years_lcomp_data == 0.5
-    ) %>%
+    # filter(
+    #   case_study == "realistic",
+    #   period == "beginning",
+    #   window == 15,
+    #   prop_years_lcomp_data == 0.5
+    # ) %>%
     filter(!(likelihood_model == 2 & economic_model == 3)) %>%
     filter(!(likelihood_model == 1 & economic_model == 2))
 
@@ -584,7 +599,7 @@ if (run_case_studies == T) {
       out <- sfs(
         chains = 1,
         cores = 1,
-        refresh = 25,
+        refresh = 200,
         scrooge_model = scrooge_model,
         data = case_studies$prepped_fishery[[i]]$scrooge_data,
         fish = case_studies$prepped_fishery[[i]]$fish,
@@ -593,8 +608,8 @@ if (run_case_studies == T) {
         economic_model =  case_studies$economic_model[i],
         likelihood_model = case_studies$likelihood_model[i],
         scrooge_file = "scrooge",
-        iter = 2000,
-        warmup = 1000,
+        iter = 3000,
+        warmup = 1500,
         adapt_delta = 0.8,
         max_treedepth = 12,
         max_perc_change_f = 0.2,
@@ -634,57 +649,62 @@ if (run_case_studies == T) {
       lower_50 = quantile(predicted, 0.25),
       upper_50 = quantile(predicted, 0.75),
       mean_predicted = mean(predicted),
+      mean_predicted = median(mean_predicted),
       observed = mean(observed)
     )
 
 
-  perf_summaries %>%
-    filter(variable == "f",) %>%
-    ggplot() +
-    geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90), fill = "lightgrey") +
-    geom_ribbon(aes(year, ymin = lower_50, ymax = upper_50), fill = "darkgrey") +
-    geom_line(aes(year, mean_predicted), color = "steelblue") +
-    geom_point(
-      aes(year, observed),
-      fill = "tomato",
-      size = 4,
-      shape = 21
-    ) +
-    labs(y = "", x = "Year") +
-    facet_grid(likelihood_model ~ economic_model) +
-    theme_minimal()
+  # perf_summaries %>%
+  #   filter(variable == "f") %>%
+  #   ggplot() +
+  #   geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90), fill = "lightgrey") +
+  #   geom_ribbon(aes(year, ymin = lower_50, ymax = upper_50), fill = "darkgrey") +
+  #   geom_line(aes(year, mean_predicted), color = "steelblue") +
+  #   geom_point(
+  #     aes(year, observed),
+  #     fill = "tomato",
+  #     size = 4,
+  #     shape = 21
+  #   ) +
+  #   labs(y = "", x = "Year") +
+  #   facet_grid(likelihood_model ~ economic_model) +
+  #   theme_minimal()
 
   length_comps <- map(case_studies$performance, "length_comps")
 
 
-  length_comps[[1]] %>%
-    filter(source == "posterior_predictive") %>%
-    group_by(year, .chain, .iteration) %>%
-    mutate(predicted = predicted / sum(predicted)) %>%
-    group_by(year, .chain, length_bin) %>%
-    summarise(
-      lower_90 = quantile(predicted, 0.05),
-      upper_90 = quantile(predicted, 0.95),
-      mean = mean(predicted),
-      observed = unique(observed)
-    ) %>%
-    ggplot() +
-    geom_ribbon(aes(x = length_bin, ymin = lower_90, ymax = upper_90), fill = "lightgrey") +
-    geom_line(aes(length_bin, mean), color = "steelblue") +
-    geom_point(
-      aes(length_bin, observed),
-      size = .5,
-      alpha = 0.5,
-      color = "red"
-    ) +
-    facet_wrap( ~ year) +
-    theme_minimal()
+  # length_comps[[1]] %>%
+  #   filter(source == "posterior_predictive") %>%
+  #   group_by(year, .chain, .iteration) %>%
+  #   mutate(predicted = predicted / sum(predicted)) %>%
+  #   group_by(year, .chain, length_bin) %>%
+  #   summarise(
+  #     lower_90 = quantile(predicted, 0.05),
+  #     upper_90 = quantile(predicted, 0.95),
+  #     mean = mean(predicted),
+  #     observed = unique(observed)
+  #   ) %>%
+  #   ggplot() +
+  #   geom_ribbon(aes(x = length_bin, ymin = lower_90, ymax = upper_90), fill = "lightgrey") +
+  #   geom_line(aes(length_bin, mean), color = "steelblue") +
+  #   geom_point(
+  #     aes(length_bin, observed),
+  #     size = .5,
+  #     alpha = 0.5,
+  #     color = "red"
+  #   ) +
+  #   facet_wrap( ~ year) +
+  #   theme_minimal()
 
   saveRDS(case_studies, file = glue::glue("{run_dir}/case_studies.RDS"))
+
+  saveRDS(perf_summaries, file = glue::glue("{run_dir}/perf_summaries.RDS"))
 
 
 } # close case studies runs
 
+run_clouds <- FALSE
+if (run_clouds == T){
 if (fit_models == T) {
   experiments <- expand.grid(
     period = c("beginning", "middle", "end"),
@@ -820,7 +840,7 @@ fisheries_sandbox$performance[[1]] %>%
   geom_line(aes(year, predicted)) +
   geom_point(aes(year, observed), color = "red")
 
-
+} # close cloud
 # run diagnostics ---------------------------------------------------------
 
 

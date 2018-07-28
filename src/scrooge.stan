@@ -112,7 +112,7 @@ real< lower = 0> sigma_effort;
 
 real<lower = 0> sigma_obs;
 
-real log_p_response;
+// real log_p_response;
 
 real log_max_cost; // mean cost
 
