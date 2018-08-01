@@ -68,11 +68,15 @@ theme_set(scrooge_theme)
 
 # run options -------------------------------------------------------------
 
-sim_fisheries <- F
+sim_fisheries <- FALSE
 
-run_case_studies <- T
+run_case_studies <- FALSE
 
-fit_models <- F
+run_clouds <- FALSE
+
+fit_models <- FALSE
+
+process_cloud_fits <- FALSE
 
 n_cores <- 2
 
@@ -264,16 +268,14 @@ if (sim_fisheries == T)
 {
   n_fisheries <- 10
 
-  # "constant-effort",
-  # "supplied-catch",
+  candidate_species <- paste(FishLife::database$Z_ik$Genus,FishLife::database$Z_ik$Species) %>%
+    unique() %>%
+    sort()
 
-  fisheries_sandbox <- data_frame(
+    fisheries_sandbox <- data_frame(
     sci_name = sample(
-      c(
-        "Atractoscion nobilis",
-        "Scomber japonicus",
-        "Lutjanus campechanus"
-      ),
+      "Lepidopsetta polyxystra"
+      ,
       n_fisheries,
       replace = T
     ),
@@ -357,7 +359,7 @@ if (sim_fisheries == T)
         sim_years = 100,
         burn_years = 100,
         cv_len = 0.2,
-        linf_buffer = 1.1
+        linf_buffer = 1.25
       )
 
     } # close dopar
@@ -375,6 +377,9 @@ if (sim_fisheries == T)
   fisheries_sandbox <- fisheries_sandbox %>%
     mutate(prepped_fishery = map(prepped_fishery, "result")) %>%
     mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery))
+
+  fisheries_sandbox$fishery <- 1:nrow(fisheries_sandbox)
+
 
   if (in_clouds == FALSE) {
     saveRDS(fisheries_sandbox,
@@ -398,7 +403,6 @@ if (sim_fisheries == T)
   }
 } # close sim fisheries stuff
 
-fisheries_sandbox$fishery <- 1:nrow(fisheries_sandbox)
 
 # apply candidate assessment models ---------------------------------------
 
@@ -594,7 +598,8 @@ if (run_case_studies == T) {
   set.seed(42)
 
   # case_studies <- case_studies %>%
-  #   filter(experiment %in% c(7,10))
+  #   filter(economic_model == 1, likelihood_model == 1) %>%
+  #   slice(1:2)
 
   future::plan(future::multiprocess, workers = n_cores)
 
@@ -622,7 +627,7 @@ if (run_case_studies == T) {
     q_guess = mean(possible_q),
     r0 = 100,
     sd_sigma_r = 0.4,
-    cv_obs = 0.5,
+    cv_obs = 2,
     .progress = TRUE
   )
 
@@ -706,10 +711,14 @@ if (run_case_studies == T) {
 
   saveRDS(perf_summaries, file = glue::glue("{run_dir}/perf_summaries.RDS"))
 
+} else {
 
-} # close case studies runs
+  case_studies <- readRDS(glue::glue("{run_dir}/case_studies.RDS"))
 
-run_clouds <- FALSE
+  perf_summaries <- readRDS(glue::glue("{run_dir}/perf_summaries.RDS"))
+
+}# close case studies runs
+
 if (run_clouds == T){
 if (fit_models == T) {
   experiments <- expand.grid(
@@ -724,6 +733,7 @@ if (fit_models == T) {
 
   fisheries_sandbox <- experiments %>%
     left_join(fisheries_sandbox, by = "fishery") %>%
+    sample_n(2) %>%
     mutate(experiment = 1:nrow(.)) %>%
     mutate(prepped_fishery = pmap(
       list(
@@ -736,49 +746,42 @@ if (fit_models == T) {
       subsample_data
     ))
 
-  fisheries_sandbox$experiment <- 1:nrow(fisheries_sandbox)
-
-  fisheries_sandbox <- fisheries_sandbox %>%
-    sample_n(2)
 
   scrooge_model <-
     rstan::stan_model(here::here("src", paste0(scrooge_file, ".stan")), model_name = scrooge_file)
 
   sfs <- safely(fit_scrooge)
 
-  doParallel::registerDoParallel(cores = n_cores)
+  future::plan(future::multiprocess, workers = n_cores)
 
-  foreach::getDoParWorkers()
-
-  set.seed(42)
-  fitted_sandbox <-
-    foreach::foreach(i = 1:nrow(fisheries_sandbox)) %dopar% {
-      out <- sfs(
-        chains = n_chains,
-        cores = n_cores,
-        refresh = 25,
-        scrooge_model = scrooge_model,
-        data = fisheries_sandbox$prepped_fishery[[i]]$scrooge_data,
-        fish = fisheries_sandbox$prepped_fishery[[i]]$fish,
-        fleet = fisheries_sandbox$prepped_fishery[[i]]$fleet,
-        experiment = fisheries_sandbox$experiment[i],
-        economic_model =  fisheries_sandbox$economic_model[i],
-        likelihood_model = fisheries_sandbox$likelihood_model[i],
-        scrooge_file = "scrooge",
-        iter = 2000,
-        warmup = 1000,
-        adapt_delta = 0.8,
-        max_treedepth = 12,
-        max_perc_change_f = 0.2,
-        in_clouds = in_clouds,
-        cloud_dir = cloud_dir,
-        cv_effort = 0.5,
-        q_guess = mean(possible_q),
-        r0 = 100,
-        sd_sigma_r = 0.4,
-        sigma_effort = 0.2,
-      )
-    } # close fitting loop
+  fitted_sandbox <- future_pmap(
+    list(
+      data = map(fisheries_sandbox$prepped_fishery, "scrooge_data"),
+      fish = map(fisheries_sandbox$prepped_fishery, "fish"),
+      fleet = map(fisheries_sandbox$prepped_fishery, "fleet"),
+      experiment = fisheries_sandbox$experiment,
+      economic_model =  fisheries_sandbox$economic_model,
+      likelihood_model = fisheries_sandbox$likelihood_model
+    ),
+    .f = sfs,
+    chains = n_chains,
+    cores = n_chains,
+    refresh = 200,
+    scrooge_model = scrooge_model,
+    scrooge_file = "scrooge",
+    iter = 2000,
+    warmup = 1000,
+    adapt_delta = 0.9,
+    max_treedepth = 8,
+    max_perc_change_f = 0.2,
+    in_clouds = in_clouds,
+    cloud_dir = cloud_dir,
+    q_guess = mean(possible_q),
+    r0 = 100,
+    sd_sigma_r = 0.4,
+    cv_obs = 2,
+    .progress = TRUE
+  )
 
   fisheries_sandbox$scrooge_fit <- fitted_sandbox
 
@@ -847,6 +850,66 @@ fisheries_sandbox$performance[[1]] %>%
   geom_point(aes(year, observed), color = "red")
 
 } # close cloud
+
+
+# Process cloud fits ------------------------------------------------------
+process_cloud_fits <-  FALSE
+if (process_cloud_fits == T){
+
+
+if (dir.exists(here::here("results","scrooge-results",run_name)) == F){
+
+  system("gcsfuse scrooge-results results/scrooge-results")
+
+}
+# system("umount results/scrooge-results")
+#
+# system("rm -r results/scrooge-results")
+#
+# system("mkdir results/scrooge-results")
+#
+# system("gcsfuse scrooge-results results/scrooge-results")
+
+processed_sandbox <- readRDS(file = glue::glue("results/scrooge-results/{run_name}/processed_fisheries_sandbox.RDS"))
+
+reserve <- processed_sandbox$performance
+
+processed_sandbox$performance <- map(processed_sandbox$performance, "result")
+
+performance_worked <- map_dbl(map(processed_sandbox$performance, class), length) %>%
+  map_lgl(~.x >1)
+
+sandbox_performance <- processed_sandbox %>%
+  select(-scrooge_fit, -prepped_fishery,-summary_plot,-fleet_params) %>%
+  filter(performance_worked) %>%
+  unnest()
+
+
+sandbox_performance <- sandbox_performance%>%
+  group_by(fishery,
+           experiment,
+           period,
+           window,
+           prop_years_lcomp_data,
+           variable,
+           economic_model,
+           likelihood_model) %>%
+  summarise(rmse = sqrt(mean(sq_er)),
+            bias = median((predicted - observed) / observed)) %>%
+  mutate(fit_model = glue::glue("em{economic_model}_lm{likelihood_model}"))
+
+
+model_performance <- rstanarm::stan_glmer(rmse ~ fishery + (1|economic_model),
+                                          data = sandbox_performance)
+
+
+
+}
+
+
+# the idea
+
+
 # run diagnostics ---------------------------------------------------------
 
 

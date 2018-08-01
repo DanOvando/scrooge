@@ -5135,8 +5135,10 @@ case study one: realistic fishery, compare LIME to 1 + 1
 ```{r}
 cs1 <- perf_summaries %>% 
   filter(case_study == "realistic",
-         (economic_model == 0 & likelihood_model == 0) | (economic_model == 0 & likelihood_model == 1),
          prop_years_lcomp_data == 1) %>% 
+  # filter(case_study == "realistic",
+  #        (economic_model == 0 & likelihood_model == 0) | (economic_model == 0 & likelihood_model == 1),
+  #        prop_years_lcomp_data == 1) %>% 
   mutate(model = glue::glue("em{economic_model}-lm{likelihood_model}"))
 
 cs1 %>% 

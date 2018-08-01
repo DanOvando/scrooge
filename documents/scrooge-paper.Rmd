@@ -130,9 +130,30 @@ This paper demonstrates the how to use historic economic information to improve 
 
 ## Methods
 
-### Overview
+The overall method for this paper are as follows:
 
-Utilize SPASM to simulate true states of the world
+  - We utilize and age-structured bio-economic operating model to database of simulated fisheries
+  - Fishing mortality rates from the simulated fishery are estiamted using our bio-economic estimation model, which can take a variety of forms
+    - Random walk behavior
+    - Open access 
+    - ...
+  - We assess the performance of the estimation model using a set of case study fisheries
+  - We assess broader model performance using a Bayesian hierarchichal model and classification algorithms
+  
+
+### Equations
+
+Process Name | Equation Number |Equation
+-------------|--------------------------
+Thing        |                  |$y \sim x$
+
+
+### Operating Model
+
+The operating model is adapted from @Ovando2014. It is a relatively straightforward sinlge-species age-structured bioeconomic model. For our case study runs we utilized a more or less "standard" species, red snapper (*Lutjanus campechanus*). For our broader simulation analysis, we randomly selected fish species from the commercial landings statistics of the Food and Agriculture Organziation of the United Nations [FAO, @FAO2018]. Life history data were then estimated for that species using the `FishLife` [@Thorson2017d] package in `R` [@RCoreTeam2018]. Additionally, for each run we drawn random levels of recruitment variaions ($\sigma_r$ from the range 0 to 0.75), as well as recruitment autocorrelation ($ac_{r}$) from the range of 0 to 0.75. 
+
+The economic component of the operating model has four possible modes that are selected for any given simulation... blah blah
+
 
 Fit alternative models
 
@@ -169,19 +190,95 @@ statistical rethinking,
 @Punt1997 (IMPORTANT TO INCLUDE)
 
 
-### SPASM
 
-explanation of the model itself @Ovando2016, age structured model, sampling length comps, fleet models, error
+### `scrooge` Model
 
-### Other assessments
+The estimating model itself, which, since it is motivated by money we call `scrooge`, was coded in `stan` using the `rstan` package [citation]. The core internal operating model is an age structured model identical in structure to the operating model used for the simulations. This means that the model requires user-supplied estimates of life history data, specifically
+  - Von Bertalanffy growth parameters
+  - Allometric weight and maturity at length/age equations
+  - An estimate of natural mortality 
+  - An estimate of Beverton-Holt steepness
 
-Explanation of
+We will focus our discussion on the estimation model. 
 
-@Rudd2017
+The model has a number of parameters it must estimate, namely fishing mortality rates, recruitment deviates, the length at 50% selectivity, and associated process and observation errors as required. 
 
-@Hordyk2014
+To begin with, all estimation models share a common components of recruitment deviates and length composition data. Recruitment is assumed to on average have Beverton-Holt dynamics [@Beverton1959], reparemeterized around steepness. Process error around this mean relationship is assumed to be log-normally distributed with a bias correction
 
-### SCROOGE
+XX mention that recruitment starts before burn-in period ends
+
+$$r_{t} = BH(SSB_{t-1},h)e^{r^{dev}_{t}}$$
+
+
+$$r^{dev}_{t} \sim normal(-\sigma_{r}^2/2, \sigma_r)$$
+
+$$\sigma_r ~ normal(0.4,0.4)$$
+
+Length composition data are structured as discrete numbers of fish counted within 1cm length bins per year. While each estimation model differs in its methods for estimating fishing mortality rates, for a given generated mortality rate, vector of estimated recruitment events $r$, and estimated selectivity $s^{50}$, the model produces a vector of probability of capture at length $p^{capture}$ for each time step, given the structural population equations of the model $g()$. 
+
+$$p^{capture}_{t,l} \sim g(f, r, s^{50})$$
+
+The observed numbers at length $N_{t,l}$ are then assumed to be draws from a multinomial distribution of the form
+
+$N_{t,1:L} \sim multinomial(p^{capture}_{t,1:L})$
+
+The key difference in the estimation models is how they estimate *f* and the data that enter the likelihood. All estimation of *f* begins by estimating a parameter $f^{init}$, which is the fishing mortality rate that is held constant over a burn-in period to achieve a given level of depletion by the time of the start of the data period of the model. The estimation models diverge from there in that each specifies a different structural model for how *f* evolves from $f^{init}$. 
+
+#### Random Walk Model
+
+This estimation model is similar in flavor to the penalty on deviations in fishing mortality used in LIME. Under this model, effort deviates $E^{dev}$ are assumed to be lognormally distributed
+
+$$E^{dev}_{t} \sim normal(-\sigma_{E}^2/2, \sigma_E)$$
+
+$$\sigma_E \sim normal(0.4,0.4)$$
+
+Effort evolves in a random walk manner from there
+
+$$E_{1} = \frac{f^{init}}{q}e^{E^{dev}_{1}}$$
+
+$$f_{1} = qE_{1}$$
+
+Where *q* is a catchability coefficient, held at 1e-3. 
+
+For the remaining *T* timesteps
+
+$$E_{t} = E_{t-1}e^{E^{dev}_{t}}$$
+
+$$f_{t} = qE_{t}$$
+
+# Bioeconomic Model with Incentives Data
+
+We now turn to our class of bioeconomic models. ALl of these operate under the form
+
+$$E_{t + 1} = E_{t} + \theta{\hat{PPUE_{t}}}$$
+
+where $\hat{PPUE_{t}}$ the profit per unit effort, and $\theta$ adjusts the responsiveness of effort to *PPUE*. 
+
+Under this model, $\hat{PPUE_{t}}$ is calculated as 
+
+$$\hat{PPUE_{t}} = \frac{p_{t}C(q_{t},B_{t},E_t,s^{50}) - c_{t}E_{t}^2}{E_{t}}$$
+
+where *C()* represents that Baranov catch equation [citation]. 
+
+Notice now that the components price (*p*), catchability (*q*), and cost (*c*) are allowed to vary over time. This is because the model allows for user supplied information on the evoloution of these economic traits over time, either in the form of actual values (e.g. the price in a given year), or in relative changes (prices are 10% higher than they were last year). For the relative change cases, user supplied inputs are converted to deviations from a mean value and then multiplied by a default mean value set by the model. 
+
+One challenge in this is that the dynamics of the open access model are driven by the relative proitability of the fishery, and as such largely to the relative scale of revenue and costs. Therefore, getting the relative magnitude of prices and costs to be relatively correct is important. Unfortunately, while prices can be relatively easily determined, costs are much more difficult to obtain, especially in units matching the exact effort units of the operating model. 
+
+To solve this problem, we estimate an additional parameter in this estimation model, $c^{max}$. The cost in any time is then calculated as
+
+$$c_t  = c^{max}c^{rel}$$
+
+where $c^{rel}$ are the relative costs (scaled from 0 to 1) over time supplied by users. $c^{max}$ itself is tuned in a rather long process that results in much cleaner estimation that can actually be provided with informative priors. Rather than estimating  $c^{max}$ itself, we estimate a costs to revenue ratio at the start of the fishery. We first estimate a guess of, given the simulated nature of the fishery, something close to maximum profits (assumed to come by fishing a bit harder than *m* when the population is completely unfished). We then calculate the revenues at this max profits for a given estimate cost to revenue
+
+$$REVENUE^{max} = PROFITS^{max}(1 - CR) $$
+
+
+Given this $REVENUE^{max}$, we then solve for the actual $c^max$ that would produce these revenues, given the other blah blah. 
+
+sigmas
+
+
+#### Model requirements
 
 concept, likelihood, options, etc.
 
@@ -190,6 +287,280 @@ economic shock explanation and illustration
 ## Results
 
 ### Case Studies
+
+
+```{r prep_figures}
+prep_figures <- 
+  
+  
+modelo_name <- c(
+  em0_lm0 = "Lengths Only",
+  em1_lm1 =  "Lengths + Economics"
+)
+
+
+```
+
+
+```{r cs1, fig.cap = "Summary of performance under case study 1"}
+
+perf_summaries <- perf_summaries %>% 
+  mutate(model = glue::glue("em{economic_model}_lm{likelihood_model}"))
+
+
+performance_stats <- case_studies %>% 
+  select(-scrooge_fit, -prepped_fishery) %>% 
+  mutate(others = map(performance,"others")) %>% 
+  select(-performance) %>% 
+  unnest() %>% 
+  mutate(model = glue::glue("em{economic_model}_lm{likelihood_model}")) %>% 
+  group_by(case_study, 
+           period,
+           window,
+           prop_years_lcomp_data,
+           model, 
+           variable) %>% 
+  summarise(rmse = sqrt(mean(sq_er)),
+            bias = median((predicted - observed) / observed))
+
+cs1_summary <- performance_stats %>% 
+  ungroup() %>% 
+  filter(case_study == "realistic",
+         prop_years_lcomp_data == 1,
+         variable == "f",
+         model == "em0_lm0" | model == "em1_lm1")
+
+lcomp_years <- case_studies %>% 
+  filter(case_study == "realistic",
+         prop_years_lcomp_data == max(prop_years_lcomp_data),
+         period == "middle")
+
+lcomp_years <- lcomp_years$prepped_fishery[[1]]$scrooge_data$length_comps_years
+
+
+cs1_summary$model <- fct_recode(as.factor(cs1_summary$model),  "Lengths Only" = "em0_lm0",
+   "Lengths + Economics" = "em1_lm1" )
+
+cs1 <- perf_summaries %>% 
+  ungroup() %>% 
+  filter(case_study == "realistic",
+         prop_years_lcomp_data == 1,
+          model == "em0_lm0" | model == "em1_lm1") 
+
+
+fill_vector <- rep("transparent", length (unique(cs1$year[cs1$variable == "f"])))
+
+fill_vector[lcomp_years] <- "tomato"
+
+fill_vector <- c(fill_vector, fill_vector)
+
+cs1_plot <- cs1 %>% 
+  filter(variable == "f") %>% 
+  mutate(year = year - min(year) + 1) %>% 
+  mutate(lcomp_year = year %in% lcomp_years) %>% 
+  arrange(experiment) %>% 
+  ggplot() + 
+  geom_point(aes(year, observed), size = 3, alpha = 0.75, shape = 21, fill =fill_vector) +
+  geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90, fill = model), alpha = 0.2, show.legend = FALSE) +
+  geom_line(aes(year,mean_predicted, color = model), show.legend = FALSE) + 
+  labs(x = "Year", y = "Fishing Mortality") + 
+  ggsci::scale_color_aaas() + 
+  ggsci::scale_fill_aaas() + 
+  facet_wrap(~model, labeller = labeller(model = modelo_name)) + 
+  theme(plot.margin = unit(c(0,0,0,0), units = "lines"),
+        panel.spacing = unit(0.1, units = "lines"),
+        axis.title.x = element_blank())
+
+cs1_summ_plot <- cs1_summary %>% 
+  gather(metric, value, rmse:bias) %>% 
+  ggplot(aes(model, value, fill = metric)) + 
+  geom_col(position = "dodge", color = "black") + 
+  theme(plot.margin = unit(c(0,0,0,1), units = "lines"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank()) + 
+  geom_hline(aes(yintercept = 0)) +
+  theme(axis.text.x = element_text(size = 8, angle = 35, vjust = 0.75), 
+        legend.position = "top", legend.title = element_blank()) 
+
+
+cs1_plot + cs1_summ_plot + plot_layout(nrow = 1, ncol = 2, widths = c(3,1))
+
+```
+
+
+
+```{r}
+
+perf_summaries <- perf_summaries %>% 
+  mutate(model = glue::glue("em{economic_model}_lm{likelihood_model}"))
+
+
+performance_stats <- case_studies %>% 
+  select(-scrooge_fit, -prepped_fishery) %>% 
+  mutate(others = map(performance,"others")) %>% 
+  select(-performance) %>% 
+  unnest() %>% 
+  mutate(model = glue::glue("em{economic_model}_lm{likelihood_model}")) %>% 
+  group_by(case_study, 
+           period,
+           window,
+           prop_years_lcomp_data,
+           model, 
+           variable) %>% 
+  summarise(rmse = sqrt(mean(sq_er)),
+            bias = median((predicted - observed) / observed))
+
+cs2_summary <- performance_stats %>% 
+  ungroup() %>% 
+  filter(case_study == "realistic",
+         prop_years_lcomp_data == min(prop_years_lcomp_data),
+         variable == "f",
+         model == "em0_lm0" | model == "em1_lm1")
+
+lcomp_years <- case_studies %>% 
+  filter(case_study == "realistic",
+         prop_years_lcomp_data == min(prop_years_lcomp_data),
+         period == "middle")
+
+lcomp_years <- lcomp_years$prepped_fishery[[1]]$scrooge_data$length_comps_years
+
+
+cs2_summary$model <- fct_recode(as.factor(cs2_summary$model),  "Lengths Only" = "em0_lm0",
+   "Lengths + Economics" = "em1_lm1" )
+
+cs2 <- perf_summaries %>% 
+  ungroup() %>% 
+  filter(case_study == "realistic",
+         prop_years_lcomp_data == min(prop_years_lcomp_data),
+          model == "em0_lm0" | model == "em1_lm1") 
+
+
+fill_vector <- rep("transparent", length (unique(cs2$year[cs2$variable == "f"])))
+
+fill_vector[lcomp_years] <- "tomato"
+
+fill_vector <- c(fill_vector, fill_vector)
+
+cs2_plot <- cs2 %>% 
+  filter(variable == "f") %>% 
+  mutate(year = year - min(year) + 1) %>% 
+  mutate(lcomp_year = year %in% lcomp_years) %>% 
+  arrange(experiment) %>% 
+  ggplot() + 
+  geom_point(aes(year, observed), size = 3, alpha = 0.75, shape = 21, fill =fill_vector) +
+  geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90, fill = model), alpha = 0.2, show.legend = FALSE) +
+  geom_line(aes(year,mean_predicted, color = model), show.legend = FALSE) + 
+  labs(x = "Year", y = "Fishing Mortality") + 
+  ggsci::scale_color_aaas() + 
+  ggsci::scale_fill_aaas() + 
+  facet_wrap(~model, labeller = labeller(model = modelo_name)) + 
+  theme(plot.margin = unit(c(0,0,0,0), units = "lines"),
+        panel.spacing = unit(0.1, units = "lines"),
+        axis.title.x = element_blank())
+
+cs2_summ_plot <- cs2_summary %>% 
+  gather(metric, value, rmse:bias) %>% 
+  ggplot(aes(model, value, fill = metric)) + 
+  geom_col(position = "dodge", color = "black") + 
+  theme(plot.margin = unit(c(0,0,0,1), units = "lines"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank()) + 
+  geom_hline(aes(yintercept = 0)) +
+  theme(axis.text.x = element_text(size = 8, angle = 35, vjust = 0.75), 
+        legend.position = "top", legend.title = element_blank()) 
+
+
+cs2_plot + cs2_summ_plot + plot_layout(nrow = 1, ncol = 2, widths = c(3,1))
+
+
+```
+
+
+```{r}
+
+perf_summaries <- perf_summaries %>% 
+  mutate(model = glue::glue("em{economic_model}_lm{likelihood_model}"))
+
+
+performance_stats <- case_studies %>% 
+  select(-scrooge_fit, -prepped_fishery) %>% 
+  mutate(others = map(performance,"others")) %>% 
+  select(-performance) %>% 
+  unnest() %>% 
+  mutate(model = glue::glue("em{economic_model}_lm{likelihood_model}")) %>% 
+  group_by(case_study, 
+           period,
+           window,
+           prop_years_lcomp_data,
+           model, 
+           variable) %>% 
+  summarise(rmse = sqrt(mean(sq_er)),
+            bias = median((predicted - observed) / observed))
+
+cs3_summary <- performance_stats %>% 
+  ungroup() %>% 
+  filter(case_study == "decoupled",
+         prop_years_lcomp_data == min(prop_years_lcomp_data),
+         variable == "f",
+         model == "em0_lm0" | model == "em1_lm1")
+
+lcomp_years <- case_studies %>% 
+  filter(case_study == "decoupled",
+         prop_years_lcomp_data == min(prop_years_lcomp_data),
+         period == "middle")
+
+lcomp_years <- lcomp_years$prepped_fishery[[1]]$scrooge_data$length_comps_years
+
+
+cs3_summary$model <- fct_recode(as.factor(cs3_summary$model),  "Lengths Only" = "em0_lm0",
+   "Lengths + Economics" = "em1_lm1" )
+
+cs3 <- perf_summaries %>% 
+  ungroup() %>% 
+  filter(case_study == "decoupled",
+         prop_years_lcomp_data == min(prop_years_lcomp_data),
+          model == "em0_lm0" | model == "em1_lm1") 
+
+
+fill_vector <- rep("transparent", length (unique(cs3$year[cs3$variable == "f"])))
+
+fill_vector[lcomp_years] <- "tomato"
+
+fill_vector <- c(fill_vector, fill_vector)
+
+cs3_plot <- cs3 %>% 
+  filter(variable == "f") %>% 
+  mutate(year = year - min(year) + 1) %>% 
+  mutate(lcomp_year = year %in% lcomp_years) %>% 
+  arrange(experiment) %>% 
+  ggplot() + 
+  geom_point(aes(year, observed), size = 3, alpha = 0.75, shape = 21, fill =fill_vector) +
+  geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90, fill = model), alpha = 0.2, show.legend = FALSE) +
+  geom_line(aes(year,mean_predicted, color = model), show.legend = FALSE) + 
+  labs(x = "Year", y = "Fishing Mortality") + 
+  ggsci::scale_color_aaas() + 
+  ggsci::scale_fill_aaas() + 
+  facet_wrap(~model, labeller = labeller(model = modelo_name)) + 
+  theme(plot.margin = unit(c(0,0,0,0), units = "lines"),
+        panel.spacing = unit(0.1, units = "lines"),
+        axis.title.x = element_blank())
+
+cs3_summ_plot <- cs3_summary %>% 
+  gather(metric, value, rmse:bias) %>% 
+  ggplot(aes(model, value, fill = metric)) + 
+  geom_col(position = "dodge", color = "black") + 
+  theme(plot.margin = unit(c(0,0,0,1), units = "lines"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank()) + 
+  geom_hline(aes(yintercept = 0)) +
+  theme(axis.text.x = element_text(size = 8, angle = 35, vjust = 0.75), 
+        legend.position = "top", legend.title = element_blank()) 
+
+
+cs3_plot + cs3_summ_plot + plot_layout(nrow = 1, ncol = 2, widths = c(3,1))
+
+
+```
 
 Focus on performance using economic priors and LIME priors; more cohesive than also then trying to compare to LIME/LBSPR.
 
@@ -200,6 +571,8 @@ For the case studies, the point is to highlight the general performance of the m
 ### Broader performance stats
 
 PCA/regression/machine learning style exploration of what drives RMSE/BIAS/whatever it is.
+
+
 
 ### Application to PISCO data
 
