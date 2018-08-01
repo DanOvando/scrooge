@@ -46,7 +46,7 @@ assess_fits <- function(prepped_fishery, fit){
 
 # ppue
 
-ppue_hat_t <- tidybayes::spread_samples(fit, ppue_hat_t[year]) %>%
+ppue_hat <- tidybayes::spread_samples(fit, ppue_hat[year]) %>%
     ungroup() %>%
     left_join(sampled_years, by = "year") %>%
     mutate(year = sampled_year) %>%
@@ -59,10 +59,10 @@ ppue_hat_t <- tidybayes::spread_samples(fit, ppue_hat_t[year]) %>%
     ungroup() %>%
     mutate(ppue = profits / effort)
 
-  ppue_pref <- ppue_hat_t %>%
+  ppue_pref <- ppue_hat %>%
     left_join(true_ppue, by = "year") %>%
-    mutate(resid = ppue_hat_t - ppue) %>%
-    rename(predicted = ppue_hat_t,
+    mutate(resid = ppue_hat - ppue) %>%
+    rename(predicted = ppue_hat,
            observed = ppue) %>%
     mutate(sq_er = resid^2,
            variable = "ppue") %>%

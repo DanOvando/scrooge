@@ -22,13 +22,12 @@ fit_scrooge <-
            q_guess = 0.1,
            r0 = 1000,
            init_f_v_m = 0.8,
-           cv_effort = 1.6,
            cp_guess = 0.75,
            h = 0.8,
            sd_sigma_r = 0.001,
            seed = 42,
            n_burn = 50,
-           sigma_effort = 0.2
+           cv_obs = 0.1
            ) {
 
     data$age_sel <- floor((log(1-pmin(data$length_50_sel_guess, data$loo*.99)/data$loo)/-data$k)+data$t0)
@@ -60,10 +59,6 @@ fit_scrooge <-
 
       data$q_t <- rep(mean(data$q_t), length(data$q_t))
 
-    }
-
-    if (is.na(cv_effort) == F){
-    data$cv_effort <-  cv_effort
     }
 
     f_msy <-
@@ -120,6 +115,19 @@ fit_scrooge <-
     data$max_ppue = hyp_profits_guess / hyp_effort
 
     data$max_ppue_effort <-  hyp_effort
+
+    if (likelihood_model == 1){
+
+    data$sd_sigma_obs <- abs(mean(data$ppue_t)) * cv_obs
+
+    } else if (likelihood_model == 2){
+
+      data$sd_sigma_obs <- abs(mean(data$perc_change_effort)) * cv_obs
+
+    } else {
+
+      data$sd_sigma_obs <- 1
+    }
 
     if (economic_model == 2){
 

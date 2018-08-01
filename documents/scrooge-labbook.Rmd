@@ -5085,3 +5085,185 @@ case_studies <- case_studies %>%
 
 
 
+```{r}
+
+performance <- case_studies %>% 
+  select(case_study, economic_model, likelihood_model, performance) %>% 
+  mutate(rmse = map(performance, ~.x$others %>% group_by(variable) %>% 
+  summarise(rmse = sqrt(mean(sq_er))))) %>% 
+  select(-performance) %>% 
+  unnest()
+
+
+
+performance %>% 
+  ggplot(aes(case_study, rmse, fill = factor(economic_model))) + 
+  geom_boxplot() + 
+  coord_cartesian(ylim = c(0,3))
+
+```
+
+
+
+```{r}
+
+others <- map(case_studies$performance, "others")
+
+f_and_r_performance <- case_studies %>% 
+  select(-performance,-scrooge_fit, -prepped_fishery) %>% 
+  mutate(others = others) %>% 
+  unnest()
+
+rmse_and_bias <- f_and_r_performance  %>% 
+  group_by(economic_model, likelihood_model,prop_years_lcomp_data, case_study, variable) %>% 
+  summarise(rmse = sqrt(mean(sq_er)),
+            bias = mean(predicted - observed))
+
+rmse_and_bias %>% 
+  filter(variable %in% "f") %>% 
+  ggplot(aes(factor(likelihood_model), rmse)) + 
+  ggbeeswarm::geom_beeswarm() + 
+  facet_wrap(~variable)
+
+
+```
+
+
+case study one: realistic fishery, compare LIME to 1 + 1
+
+
+```{r}
+cs1 <- perf_summaries %>% 
+  filter(case_study == "realistic",
+         (economic_model == 0 & likelihood_model == 0) | (economic_model == 0 & likelihood_model == 1),
+         prop_years_lcomp_data == 1) %>% 
+  mutate(model = glue::glue("em{economic_model}-lm{likelihood_model}"))
+
+cs1 %>% 
+  filter(variable == "f") %>% 
+  ggplot() + 
+  geom_point(aes(year, observed), fill = "tomato", size = 2, alpha = 0.75, shape = 21) +
+  geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90, fill = model), alpha = 0.2) +
+  geom_line(aes(year,mean_predicted, color = model)) + 
+  labs(x = "Year", y = "Fishing Mortality") + 
+  ggsci::scale_color_aaas() + 
+  ggsci::scale_fill_aaas()
+
+cs1 %>% 
+  filter(variable == "recruitment_deviates") %>% 
+  ggplot() + 
+  geom_point(aes(year, observed), fill = "tomato", size = 2, alpha = 0.75, shape = 21) +
+  geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90, fill = model), alpha = 0.2) +
+  geom_line(aes(year,mean_predicted, color = model)) + 
+  labs(x = "Year", y = "recruitment_deviates") + 
+  ggsci::scale_color_aaas() + 
+  ggsci::scale_fill_aaas()
+
+cs1 %>% 
+  filter(variable == "ppue") %>% 
+  ggplot() + 
+  geom_point(aes(year, observed), fill = "tomato", size = 2, alpha = 0.75, shape = 21) +
+  geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90, fill = model), alpha = 0.2) +
+  geom_line(aes(year,mean_predicted, color = model)) + 
+  labs(x = "Year", y = "ppue") + 
+  ggsci::scale_color_aaas() + 
+  ggsci::scale_fill_aaas()
+
+```
+
+
+```{r}
+
+cs2 <- perf_summaries %>% 
+  ungroup() %>% 
+  filter(case_study == "realistic",
+         (economic_model == 0 & likelihood_model == 0) | (economic_model == 1 & likelihood_model == 1),
+         prop_years_lcomp_data == min(prop_years_lcomp_data))
+
+cs2 %>% 
+  filter(variable == "f") %>% 
+  ggplot() + 
+  geom_point(aes(year, observed), fill = "tomato", size = 2, alpha = 0.75, shape = 21) +
+  geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90, fill = factor(economic_model)), alpha = 0.2) +
+  geom_line(aes(year,mean_predicted, color = factor(economic_model))) + 
+  labs(x = "Year", y = "Fishing Mortality") + 
+  ggsci::scale_color_aaas() + 
+  ggsci::scale_fill_aaas()
+
+cs2 %>% 
+  filter(variable == "recruitment_deviates") %>% 
+  ggplot() + 
+  geom_point(aes(year, observed), fill = "tomato", size = 2, alpha = 0.75, shape = 21) +
+  geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90, fill = factor(economic_model)), alpha = 0.2) +
+  geom_line(aes(year,mean_predicted, color = factor(economic_model))) + 
+  labs(x = "Year", y = "recruitment_deviates") + 
+  ggsci::scale_color_aaas() + 
+  ggsci::scale_fill_aaas()
+
+cs2 %>% 
+  filter(variable == "ppue") %>% 
+  ggplot() + 
+  geom_point(aes(year, observed), fill = "tomato", size = 2, alpha = 0.75, shape = 21) +
+  geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90, fill = factor(economic_model)), alpha = 0.2) +
+  geom_line(aes(year,mean_predicted, color = factor(economic_model))) + 
+  labs(x = "Year", y = "ppue") + 
+  ggsci::scale_color_aaas() + 
+  ggsci::scale_fill_aaas()
+
+```
+
+```{r}
+
+cs3 <- perf_summaries %>% 
+  ungroup() %>% 
+  filter(case_study == "decoupled",
+         (economic_model == 0 & likelihood_model == 0) | (economic_model == 1 & likelihood_model == 1),
+         prop_years_lcomp_data == max(prop_years_lcomp_data))
+
+cs3 %>% 
+  filter(variable == "f") %>% 
+  ggplot() + 
+  geom_point(aes(year, observed), fill = "tomato", size = 2, alpha = 0.75, shape = 21) +
+  geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90, fill = factor(economic_model)), alpha = 0.2) +
+  geom_line(aes(year,mean_predicted, color = factor(economic_model))) + 
+  labs(x = "Year", y = "Fishing Mortality") + 
+  ggsci::scale_color_aaas() + 
+  ggsci::scale_fill_aaas()
+
+cs3 %>% 
+  filter(variable == "recruitment_deviates") %>% 
+  ggplot() + 
+  geom_point(aes(year, observed), fill = "tomato", size = 2, alpha = 0.75, shape = 21) +
+  geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90, fill = factor(economic_model)), alpha = 0.2) +
+  geom_line(aes(year,mean_predicted, color = factor(economic_model))) + 
+  labs(x = "Year", y = "recruitment_deviates") + 
+  ggsci::scale_color_aaas() + 
+  ggsci::scale_fill_aaas()
+
+cs3 %>% 
+  filter(variable == "ppue") %>% 
+  ggplot() + 
+  geom_point(aes(year, observed), fill = "tomato", size = 2, alpha = 0.75, shape = 21) +
+  geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90, fill = factor(economic_model)), alpha = 0.2) +
+  geom_line(aes(year,mean_predicted, color = factor(economic_model))) + 
+  labs(x = "Year", y = "ppue") + 
+  ggsci::scale_color_aaas() + 
+  ggsci::scale_fill_aaas()
+
+```
+
+
+Interesting, why isn't the PPUE coming into the equation more?
+
+```{r}
+reserve <- case_studies
+
+case_studies %>% 
+  filter(experiment %in% unique(cs1$experiment))
+
+rstanarm::launch_shinystan(case_studies$scrooge_fit[[2]])
+
+
+```
+
+

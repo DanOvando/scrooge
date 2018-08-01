@@ -42,7 +42,7 @@ load(here::here("processed_data","fisheries_sandbox.Rdata"))
   in_clouds <-  F
 
   run_name <- "v3.0"
-  
+
     scrooge_theme <- theme_ipsum(base_size = 16, axis_title_size = 18, strip_text_size = 18)
 
   theme_set(scrooge_theme)
@@ -51,51 +51,104 @@ load(here::here("processed_data","fisheries_sandbox.Rdata"))
 ```
 
 
-# Introduction
+## Abstract
+
+The wellbeing of coastal communities and ecosystems around the world depends on our ability to provide accurate and timely assessments of the status of fished populations. This is typically accomplished by collecting biologically-focused data such as the amount and size of fish captured, and using those data to fit statistical models that estimate factors such as current biomass levels and exploitation rates, usually relative to some benchmark set by stakeholders.
+
+This stock assessment process has had successes throughout the world especially where the data and resources are available to perform what we might call "traditional" statistical stock assessments [@Hilborn2014]. While many of the world's largest and most valuable fisheries fall into this category, the majority of people that depend on fisheries do so in smaller scale operations that lack the capacity for traditional stock assessment, a group that has been generally called "data limited fisheries"[wakefield citation]. This problem has led to an explosion of "data limited stock assessments" (DLAs), that aim to provide management advice using fewer data (but more assumptions). These DLAs have made fisheries assessment possible in previously unassessed places, but increasingly they have sought to simply use more involved statistics to extract more knowledge from the same data (often length composition of the catch).
+
+This study improves the management capacity of data-limited fisheries by demonstrating how expanding the pool of available data to include economic and biological information together can dramatically (hopefully) improve the accuracy of stock assessments.
+
+While fisheries are coupled socio-eclogical systems [@Ostrom2009], the human dimensions of fisheries, the incentives that drive behavior, have been left to economists and other social scientists, while the stock assessment side of the equation has focused on the ecological and biological aspects of a fishery. Our results build off of fisheries economics to show that utilizing data on the economic history of a fishery (prices, costs, technology, labor, and profitability) together with biological data can dramatically improve the ability of stock assessment models to accurately estimate fishing mortality rates. In many realistic simulations, we demonstrate that this bio-economic estimation model provides XX% more accurate results than published methods utilizing biological data alone. We also show that inclusion of these data result in XX% greater confidence when applied to real-world data. Lastly,  we  provide a generalizable simulation framework using machine learning techniques to assess the the relative performance of these models under different states of nature.
+
+Our results demonstrate how often available, but to date underutilized, data can improve stock assessment in data-limited contexts. While we present one specific methodology for incorporating economic data into stock assessment, these results can serve as a foundation for a broader field of study investigating methods for utilizing economic data in biological stock assessment, improving both the accuracy and effectiveness of fisheries management around the globe.
 
 
-## General fisheries stuff
+## Introduction
 
+Why are data limited assessments worse?
 
-Effective fisheries management requires that managers and stakeholders have some ability to estimate and react to the abundance of fish in the ocean. The history of fisheries science is largely concerned with developing and improving our ability to accomplish this difficult task, starting from early models of growth overfishing [citation] and leading up to multi-species bio-geo-economic models[e.g. citation some mice model].  While the field has made dramatic advances in our ability to assess fisheries, by and large we have found two solutions to this problem: Fit highly complex integrated statistical models to diverse data streams [cite fancy stock assessment technique], or utilize increasing levels of statistical wizardry to try and squeeze more information out of limited data [what has lately been termed Data Limited Stock Assessments, or DLAs; cite]. The explosion of DLAs has been both promising and concerning. The majority of fisheries in the world lack the resources for fully integrated stock assessments, and so depend on this world of "data limited stock assessment". While there has been tremendous growth in this field, nearly all DLAs rely on the same streams of information that would have been available to a fisheries scientist in the 1800s: lengths [cite], captures [cite], and catch per unit effort[cite].
+### General fisheries stuff
 
-## DLAs
+Effective fisheries management requires that managers and stakeholders have some ability to estimate and react to the abundance of fishes in the ocean. The history of fisheries science is largely concerned with developing and improving our ability to accomplish this difficult task, starting from early models of growth overfishing [citation] and leading up to multi-species bio-geo-economic models[e.g. citation some mice model].  While the field has made dramatic advances in our ability to assess the status of fisheries, by and large we have found two solutions to this problem: Fit highly complex integrated statistical models to diverse data streams [cite fancy stock assessment technique], or utilize increasing levels of statistical wizardry to try and squeeze more information out of limited data [what has lately been termed Data Limited Stock Assessments, or DLAs; cite]. The explosion of DLAs has been both promising and concerning. The majority of fisheries in the world lack the resources for fully integrated stock assessments, and so depend on this world of "data limited stock assessment". While there has been tremendous growth in this field, nearly all DLAs rely on the same streams of information that would have been available to a fisheries scientist in the 1800s: lengths [cite], captures [cite], and catch per unit effort[cite], generally only one at a time. While these biological data can be highly informative, economic data can also provide information as to the history and status of a fishery. We present here a novel tool for combining historic economic information with traditional fisheries data to improve fisheries stock assessment.
 
-what they are, how do they usually work
+Why do we need a new line of evidence in stock assessment? One could certainly make the case that statistical stock assessments are complicated enough as it is. But, while these "gold standard" assessments appear to by and large perform well using solely biological data, data-limited stock assessments, in which models are fit by trading in data for assumptions, often struggle if the exact requirements of their assumptions are not satisfied. This can present a major problem for communities and ecosystems that depend on the outcomes of these DLAs to guide their management practices. While future work can examine the usefulness of economic data in a data-rich context, our focus here is in demonstrating how economic information augment biological data to improve the performance of data-limited stock assessments.
 
-@Dowling2014, @Dowling2015, @Dowling2016, @Carruthers2014, and @Prince2003
+What defines a data limited assessment? @Dowling2015 provides a useful summary of what we mean by a data-limited fishery, but for now we can broadly consider data-limited assessments as fisheries lacking sufficient quality information to perform a "traditional" stock assessment, meaning at minimum total catch records and catch-per-unit-effort, on up to a fully integrated statistical catch-at-age model requiring catch, CPUE, length compositions, growth and aging, tagging, etc. A common example of a data-limited fishery might then include a fishery for which only CPUE data is available, or for which the only species-specific information are sampled length frequencies from the port or market.
 
-## Why integrate economic data?
+This paper builds off the length-based DLA literature, and so we focus our discussion on the nature of these methods. See  @Carruthers2014 and @Andersona for thorough summaries of catch-based DLAs. Length-based DLAs all use life history data or assumptions of some kind to translate the distribution of observed lengths in a fished population into some meaningful management metric. Catch-curves, perhaps the oldest of the DLAs, dating back to at least @Chapman1960, use assumptions and estimates of the age-at-length relationship to translate lengths into ages, and measure the slope of the logarithm of the numbers at age to provide an estimate of total mortality *Z*. Assumptions or estimates of natural mortality *m* can then be used to extract fishing mortality *f* simply by $f = Z - m$. Recently, newer methods have evolved that try and estimate fishing mortality rates, recruitment, and selectivity by examining the overall shape of the length composition data[@Hordyk2014; @Rudd2017]. These models use life history data (or assumptions) to simulate what the length composition of a given population would be expected to be if it were left unfished. This estimate of the unfished length composition is then compared to the observed length composition, and estimates of *f*, recruitment, and selectivity are made that best explain the observed length composition, given the expectation provided by life history data.
+
+These methods have proven effective and useful in many circumstances, but their reliance length composition leaves them sensitive to relatively common features in fisheries such as autocorrelated shifts in recruitment regimes [citations]. Given length data alone, it is difficult to separate out recruitment from fishing mortality, since both manifest themselves as change in the relative proportions of different length classes. The most straightforward solution to this problem is to assume that the population is at equilibrium, and any deviations in expected recruitment are on average zero during the time period of analysis. Year-to-year shifts in the length composition are then attributed to fishing mortality. Given limited data, say only one year of length composition data, this may be the only assumption possible.
+
+Since recruitment regimes are likely to be more the rule than the exception though, we would like to be able to do better than this. @Rudd2017 provided an important extension to the equilibrium assumptions underpinning @Hordyk2014 by relaxing the equilibrium assumption and allowing the user to estimate a vector of recruitment deviates and fishing mortality rates given a time series of length composition data. In order to get around the confounded nature of recruitment and fishing mortality, given only length data the LIME model presented in @Rudd2017 requires a user specified penalty constraining the amount that fishing mortality can vary year-to-year.
+
+The other important feature of the LIME model though is that it allows the user to add in additional lines of evidence, for example catch-per-unit effort data... this is good.
+
+An informal synthesis presented at the 2015 Wakefield Symposium
+
+@Dowling2016, @Carruthers2014, and @Prince2003
+
+### What's the Problem that Economic Data Fix?
+
+GET TO HERE FASTER. USE ECONOMIC DATA. HERE'S AN EXAMPLE OF WHY. FOLLOW YOUR OWN ADVICE AND MENTION THE ECON STUFF EARLIER.
+
+LIME presents an important framework for integrating multiple streams of "limited data" together into a comprehensive assessment. However, the data types that can be incorporated into LIME are all components of the traditional fisheries toolbox: lengths, catches, and CPUEs XX. These data are important and useful, but there is an untapped source of information present in many fisheries that our model makes use of: economic data. NEEDS TO BE CLEAR HERE THAT LENGTH BASED IS JUST A VEHICLE FOR THE BIGGER POINT
+
+Why should we expect economic data to be useful?
+
+Summary of fisheries as bio-economic systems
+
+- @Fulton2011 human behavior: the key source of uncertainty. Objectives and uncertainty drive consequences, good source for thinking about this broad problem.
+- @Gordon1954
+- Empirical evidence for This
+- Acknowledgement of SSCOM @Thorson2013a
+
+- Why useful?
+  - reasonable to think that data-limited = open access (as a starting point)
+  - Why can economic data be resurrected where biological can't
 
 [@Gordon1954; @Szuwalski; @Thorson2013a]
 
-  - Neilsen 2017 (@Nielsen2017) is that lit review of coupled ecological-economic models. Ah right, these are all MSE style models though, not assessment modules. So, a good reference for ways to model effort dynamics, but not redundant on the effort dynamics. 
+  - Neilsen 2017 (@Nielsen2017) is that lit review of coupled ecological-economic models. Ah right, these are all MSE style models though, not assessment modules. So, a good reference for ways to model effort dynamics, but not redundant on the effort dynamics.
 
   - [@Branch2006] fleet dynamics and management. Right, this thinks about the way that fleet dynamics interact with different kinds of management. Interesting insights on how you want to include this into DLAs, but not much in the direct sense of integration to stock assessment
-  
-  - [@Salas2004] is similar but focuses on small scale fisheries. Interesting stuff but not much on the modeling front. But lots of good content thinking about behavioral dynamics of small scale fisheries that would be valuable to dive into. 
-  
--[@vanPutten2012] theories and behavioral drivers underlying fleet dynamics. See @Vermard2008 for some modeling examples. Has lots of useful references in here. Random utility models for individual behavior. Basically, has a nice summary of sources for different ways to model and think about behavior. So, you can start with the profit maximizing side of things, but expand that out for different types of fleet dynamics. 
 
-- @Fulton2011 human behavior: the key source of uncertainty. Objectives and uncertainty drive consequences, good source for thinking about this broad problem. 
+  - [@Salas2004] is similar but focuses on small scale fisheries. Interesting stuff but not much on the modeling front. But lots of good content thinking about behavioral dynamics of small scale fisheries that would be valuable to dive into.
 
-- @Marchal2013 added value of fleet dynamics in models. This one looks at MSE style problems again, but has aome interesting fleet model specifications that you could steal. Equation 11 is handy, just more justification for change is the effort last year times some factor and profits over the last few years 
+-[@vanPutten2012] theories and behavioral drivers underlying fleet dynamics. See @Vermard2008 for some modeling examples. Has lots of useful references in here. Random utility models for individual behavior. Basically, has a nice summary of sources for different ways to model and think about behavior. So, you can start with the profit maximizing side of things, but expand that out for different types of fleet dynamics.
 
-- @Clark1990 
+- @Marchal2013 added value of fleet dynamics in models. This one looks at MSE style problems again, but has aome interesting fleet model specifications that you could steal. Equation 11 is handy, just more justification for change is the effort last year times some factor and profits over the last few years
+
+- @Clark1990
 
 - @Hoff2008
 
-general intro to economic dynamics
 
-availability of economic data
+### Research statement
 
-separation of recruitment from F
+This paper demonstrates the how to use historic economic information to improve outcomes of fisheries stock assessments.
 
-## Why Bayes?
+## Methods
+
+### Overview
+
+Utilize SPASM to simulate true states of the world
+
+Fit alternative models
+
+scrooge-lite
+
+scrooge
+
+LIME/LBSPR/MAYBE
+
+compare fit and bias
+
+### Why A Bayesian Approach?
 
 A general argument for informative priors in data limited assessment
 
-statistical rethinking, 
+statistical rethinking,
 
 @McElreath2016
 
@@ -115,255 +168,51 @@ statistical rethinking,
 
 @Punt1997 (IMPORTANT TO INCLUDE)
 
-## Research statement
 
-This paper explores the ability of informative Bayesian priors built off of economic histories to improve data-limited stock assessment. 
-
-# Methods
-
-## Overview
-
-Utilize SPASM to simulate true states of the world
-
-Fit alternative models
-
-scrooge-lite
-
-scrooge
-
-LIME
-
-LBSPR
-
-compare fit and bias
-
-## SPASM
+### SPASM
 
 explanation of the model itself @Ovando2016, age structured model, sampling length comps, fleet models, error
 
-## Other assessments
+### Other assessments
 
-Explanation of 
+Explanation of
 
 @Rudd2017
 
 @Hordyk2014
 
-## SCROOGE
+### SCROOGE
 
-concept, likelihood, options, etc. 
+concept, likelihood, options, etc.
 
 economic shock explanation and illustration
 
-# Results
+## Results
 
+### Case Studies
 
-## Case Studies
+Focus on performance using economic priors and LIME priors; more cohesive than also then trying to compare to LIME/LBSPR.
 
-Focus on performance using economic priors and LIME priors; more cohesive than also then trying to compare to LIME/LBSPR. 
-
-Save that for the mega-run, where you can then say something about when different models are likely to perform well, by predicting RMSE as a function of model with effects for each model scenario. 
+Save that for the mega-run, where you can then say something about when different models are likely to perform well, by predicting RMSE as a function of model with effects for each model scenario.
 
 For the case studies, the point is to highlight the general performance of the model. So, let's hold fishery constant, but now run the assessments no economic prior, and then with all incentive, all effort, and equal weighting, and compare performance
 
-So you're running this here now, wouldn't this potentially be easier just to pull from your bank of saved runs? i.e. find the experiment numbers that match those, and pull in the assessment results? Though of course that gets tricky since it depends on having all of those saved and ready to go, doesn't allow for easy modification, so if this doesn't take that long I kind of like re-running it on the fly as long as runtime isn't too prohibitive. 
+### Broader performance stats
 
-```{r case-studies}
+PCA/regression/machine learning style exploration of what drives RMSE/BIAS/whatever it is.
 
-case_studies <- purrr::cross_df(list(scenario = c("simple","complex"), 
-                                     economic_model = c(1,0),
-                                    effort_data_weight = c(0,0.5,1))) %>% 
-  filter(!(economic_model == 0 & effort_data_weight > 0))
-
-
-simple <- fisheries_sandbox %>% 
-  filter(sci_name == "Lutjanus campechanus",
-         steepness == 0.6, 
-         sigma_r == min(sigma_r),
-         sigma_effort == min(sigma_effort),
-         price_cv == min(price_cv),
-         cost_cv == min(cost_cv),
-         q_cv == min(q_cv),
-         q_ac == min(q_ac),
-         obs_error == min(obs_error),
-         fleet_model == "constant-effort") %>% 
-  mutate(scenario = "simple")
-
-
-complex <- fisheries_sandbox %>% 
-  filter(sci_name == "Lutjanus campechanus",
-         steepness == 0.9, 
-         sigma_r == max(sigma_r),
-         sigma_effort == max(sigma_effort),
-         price_cv == max(price_cv),
-         cost_cv == max(cost_cv),
-         q_cv == max(q_cv),
-         q_ac == max(q_ac),
-         obs_error == min(obs_error),
-         fleet_model == "open-access") %>% 
-  mutate(scenario = "complex")
-
-temp_studies <- 
-
-case_studies <- case_studies %>% 
-  left_join(simple %>% bind_rows(complex) %>% nest(-scenario), by = "scenario")
-  
-  
-case_studies <- case_studies %>%
-  mutate(assessment = pmap(
-  list(
-  fishery = data,
-  experiment = scenario,
-  economic_model = economic_model,
-  effort_data_weight = effort_data_weight
-  ),
-  run_and_judge_scrooge
-  ))
-
-case_studies$assessment[[1]]$scrooge_performance[[1]]$comparison_plot + 
-  lims(x = c(40,65))
-  
-
-case_studies$assessment[[2]]$scrooge_rec_performance[[1]]$comparison_plot +
-  lims(x = c(40, 65))
-  
-
-case_studies$assessment[[2]]$scrooge_fit[[1]] %>% rstanarm::launch_shinystan()
-
-
-
-case_studies <- case_studies %>% 
-  mutate(f_t_hat = map(assessment, ~map_df(.x$processed_scrooge,"f_t")))
-
-
-
-case_studies <- case_studies %>% 
-  mutate(f_t = map(data, ~ map_df(.x$prepped_fishery,"simed_fishery") %>% 
-                     group_by(year) %>% summarise(f = unique(f))))
-
-
-true_f <- case_studies %>% 
-  select(scenario, f_t) %>% 
-  unique() %>% 
-  unnest()
-  
-
-f_performance <- case_studies %>%
-  select(-data, -assessment,-f_t) %>%
-  unnest() %>%
-  mutate(effort_data_weight = if_else(economic_model == 0, 99, effort_data_weight)) %>% mutate(effort_data_weight = factor(effort_data_weight))
-
-f_summary <- f_performance %>%
-  group_by(effort_data_weight, scenario, year) %>%
-  summarise(
-  lower = quantile(value, 0.1),
-  upper = quantile(value, 0.9),
-  mean_f = mean(value),
-  median_f = median(value)
-  ) %>%
-  ungroup() %>% 
-  mutate(effort_data_weight = factor(effort_data_weight))
-
-
-f_performance_plot <- f_summary %>%
-  ggplot()  +
-  geom_ribbon(aes(
-  year,
-  ymin = lower,
-  ymax = upper,
-  fill = effort_data_weight
-  ),
-  alpha = 0.25) +
-  geom_line(aes(year, mean_f, color =effort_data_weight )) +
-  geom_line(data = true_f %>% filter(year %in% unique(f_performance$year)), aes(year, f)) +
-  facet_wrap(~ scenario)
-  
-
-f_rmse_bias <- f_performance %>%
-  left_join(true_f, by = c("year","scenario")) %>% 
-  group_by(iteration, scenario, effort_data_weight) %>%
-  summarise(rmse = sqrt(mean((value - f) ^ 2)),
-            bias = median((value - f) / f)) %>%
-  ungroup() %>%
-  group_by(effort_data_weight) %>%
-  mutate(mean_bias = mean(bias),
-         mean_rmse = mean(rmse))  %>% 
-  ungroup()
-
-rmse_plot <- f_rmse_bias%>%
-  ggplot() +
-  geom_density(
-    aes(rmse, fill = effort_data_weight),
-    alpha = 0.5,
-    color = NA,
-    show.legend = F
-  ) +
-  geom_vline(aes(xintercept = 0), size = 1, linetype = 2) +
-  scale_y_continuous(expand = c(0, 0)) +
-  labs(x = "RMSE") +
-  theme(
-    legend.position = "bottom",
-    axis.text.y = element_blank(),
-    axis.title.y = element_blank(),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    plot.margin = unit(c(.1, .1, .1, .1), "lines")
-  ) + 
-  facet_wrap(~scenario)
-
-
-bias_plot <- f_rmse_bias %>%
-  ggplot() +
-  geom_density(
-    aes(bias, fill = effort_data_weight),
-    alpha = 0.5,
-    color = NA,
-    show.legend = F
-  ) +
-  geom_vline(aes(xintercept = 0), size = 1, linetype = 2) +
-  scale_y_continuous(expand = c(0, 0)) +
-  labs(x = "Bias") +
-  theme(
-    legend.position = "bottom",
-    axis.text.y = element_blank(),
-    axis.title.y = element_blank(),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    plot.margin = unit(c(.1, .1, .1, .1), "lines")
-  ) + 
-  facet_wrap(~scenario)
-
-
-  (f_performance_plot |
-     (rmse_plot / bias_plot)) + plot_layout(ncol = 2, widths = c(2, 1))
-
-
-
-```
-
-
-
-all with the same fishus idealus 
-
-Compare assessments under
-
-no recruitment, constant f, equilibrium
-
-stochastic, environmental, and structural economic noise
-
-stochastic, environmental, and non-structural economic noise (pull from @Szuwalski)
-
-
-## Broader performance stats
-
-PCA/regression/machine learning style exploration of what drives RMSE/BIAS/whatever it is. 
-
-
-## Application to PISCO data
+### Application to PISCO data
 
 show assessment results for PISCO data
 
-# Discussion
+## Discussion
+
+This isn't just a tweak to length-based assessments, foundation for a new branch of assessment.
+
+
+@Dowling2014 - need to then link these to control rules for MSE
+
+@Dowling2015,
 
 Why is this the most groundbreaking thing ever
 
@@ -371,11 +220,8 @@ Highlight some commonly available economic data for places
 
 Discuss in context of channel islands: what does predictive model say should be performance under those circumstances, relative to other assessment methods
 
-recommend ensemble approach 
+recommend ensemble approach
 
-tease next steps, economic only model other kinds of models, etc. 
+tease next steps, economic only model other kinds of models, etc.
 
-# Works Cited
-
-
-
+## Works Cited

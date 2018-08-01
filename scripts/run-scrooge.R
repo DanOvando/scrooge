@@ -22,6 +22,7 @@ library(LBSPR)
 library(stringr)
 library(glue)
 library(broom)
+library(furrr)
 library(tidyverse)
 rstan::rstan_options(auto_write = TRUE)
 extrafont::loadfonts()
@@ -75,7 +76,7 @@ fit_models <- F
 
 n_cores <- 2
 
-n_chains <- 2
+n_chains <- 1
 
 if (in_clouds == T) {
 
@@ -450,8 +451,8 @@ if (run_case_studies == T) {
   realistic <- prepare_fishery(
     sci_name = "Lutjanus campechanus",
     fleet_model = "open-access",
-    sigma_r = 0.7,
-    rec_ac = 0.75,
+    sigma_r = 0.4,
+    rec_ac = 0.5,
     sigma_effort = 0,
     price_cv = 0.4,
     cost_cv = 0.2,
@@ -512,7 +513,7 @@ if (run_case_studies == T) {
   decoupled <- prepare_fishery(
     sci_name = "Lutjanus campechanus",
     fleet_model = "supplied-catch",
-    sigma_r = 0.6,
+    sigma_r = 0.5,
     rec_ac = 0.5,
     sigma_effort = 0,
     price_cv = 0.4,
@@ -545,20 +546,20 @@ if (run_case_studies == T) {
   decoupled_plot <- plot_simmed_fishery(decoupled)
 
   case_studies <- data_frame(
-    case_study = c("simple",
+    case_study = c(
                    "realistic",
                    "decoupled"),
-    prepped_fishery  = list(simple,
+    prepped_fishery  = list(
                             realistic,
                             decoupled)
   )
 
   experiments <- expand.grid(
-    period = c("beginning", "middle", "end"),
-    window = c(5, 15),
-    economic_model = c(0, 1, 2, 3),
+    period = c("middle"),
+    window = c(15),
+    economic_model = c(0, 1),
     likelihood_model = c(0, 1, 2),
-    prop_years_lcomp_data = c(0.1, .5, 1),
+    prop_years_lcomp_data = c(0.2, 1),
     case_study = unique(case_studies$case_study),
     stringsAsFactors = F
   )
@@ -585,52 +586,54 @@ if (run_case_studies == T) {
     filter(!(likelihood_model == 2 & economic_model == 3)) %>%
     filter(!(likelihood_model == 1 & economic_model == 2))
 
-  case_studies <- case_studies %>%
-    sample_n(30)
-
   scrooge_model <-
     rstan::stan_model(here::here("src", paste0(scrooge_file, ".stan")), model_name = scrooge_file)
 
   sfs <- safely(fit_scrooge)
 
-  doParallel::registerDoParallel(cores = n_cores)
-
-  foreach::getDoParWorkers()
-
   set.seed(42)
-  case_study_fits <-
-    foreach::foreach(i = 1:nrow(case_studies)) %dopar% {
-      out <- sfs(
-        chains = 1,
-        cores = 1,
-        refresh = 25,
-        scrooge_model = scrooge_model,
-        data = case_studies$prepped_fishery[[i]]$scrooge_data,
-        fish = case_studies$prepped_fishery[[i]]$fish,
-        fleet = case_studies$prepped_fishery[[i]]$fleet,
-        experiment = case_studies$experiment[i],
-        economic_model =  case_studies$economic_model[i],
-        likelihood_model = case_studies$likelihood_model[i],
-        scrooge_file = "scrooge",
-        iter = 2000,
-        warmup = 1000,
-        adapt_delta = 0.95,
-        max_treedepth = 8,
-        max_perc_change_f = 0.2,
-        in_clouds = in_clouds,
-        cloud_dir = cloud_dir,
-        cv_effort = 0.5,
-        q_guess = mean(possible_q),
-        r0 = 100,
-        sd_sigma_r = 0.4,
-        sigma_effort = 0.2,
-      )
-    } # close fitting loop
+
+  # case_studies <- case_studies %>%
+  #   filter(experiment %in% c(7,10))
+
+  future::plan(future::multiprocess, workers = n_cores)
+
+  case_study_fits <- future_pmap(
+    list(
+      data = map(case_studies$prepped_fishery, "scrooge_data"),
+      fish = map(case_studies$prepped_fishery, "fish"),
+      fleet = map(case_studies$prepped_fishery, "fleet"),
+      experiment = case_studies$experiment,
+      economic_model =  case_studies$economic_model,
+      likelihood_model = case_studies$likelihood_model
+    ),
+    .f = sfs,
+    chains = 1,
+    cores = 1,
+    refresh = 25,
+    scrooge_model = scrooge_model,
+    scrooge_file = "scrooge",
+    iter = 2000,
+    warmup = 1000,
+    adapt_delta = 0.95,
+    max_treedepth = 8,
+    max_perc_change_f = 0.2,
+    in_clouds = in_clouds,
+    q_guess = mean(possible_q),
+    r0 = 100,
+    sd_sigma_r = 0.4,
+    cv_obs = 0.5,
+    .progress = TRUE
+  )
 
   case_studies$scrooge_fit <- map(case_study_fits, "result")
 
+  saveRDS(case_studies, file = glue::glue("{run_dir}/case_studies.RDS"))
+
   case_studies <- case_studies %>%
-    mutate(performance = map2(prepped_fishery, scrooge_fit, assess_fits))
+    mutate(performance = map2(prepped_fishery, scrooge_fit, safely(assess_fits)))
+
+  case_studies$performance <- case_studies$performance %>% map("result")
 
   perf_summaries <- case_studies %>%
     mutate(others = map(performance, "others")) %>%
@@ -657,48 +660,47 @@ if (run_case_studies == T) {
       observed = mean(observed)
     )
 
-
-  perf_summaries %>%
-    filter(variable == "f", experiment == 36) %>%
-    ggplot() +
-    geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90), fill = "lightgrey") +
-    geom_ribbon(aes(year, ymin = lower_50, ymax = upper_50), fill = "darkgrey") +
-    geom_line(aes(year, mean_predicted), color = "steelblue") +
-    geom_point(
-      aes(year, observed),
-      fill = "tomato",
-      size = 4,
-      shape = 21
-    ) +
-    labs(y = "", x = "Year") +
-    facet_grid(likelihood_model ~ economic_model) +
-    theme_minimal()
+  # perf_summaries %>%
+  #   filter(variable == "f") %>%
+  #   ggplot() +
+  #   geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90), fill = "lightgrey") +
+  #   geom_ribbon(aes(year, ymin = lower_50, ymax = upper_50), fill = "darkgrey") +
+  #   geom_line(aes(year, mean_predicted), color = "steelblue") +
+  #   geom_point(
+  #     aes(year, observed),
+  #     fill = "tomato",
+  #     size = 4,
+  #     shape = 21
+  #   ) +
+  #   labs(y = "", x = "Year") +
+  #   facet_wrap( ~ experiment, scales = "free") +
+  #   theme_minimal()
 
   length_comps <- map(case_studies$performance, "length_comps")
 
-
-  length_comps[[1]] %>%
-    filter(source == "posterior_predictive") %>%
-    group_by(year, .chain, .iteration) %>%
-    mutate(predicted = predicted / sum(predicted)) %>%
-    group_by(year, .chain, length_bin) %>%
-    summarise(
-      lower_90 = quantile(predicted, 0.05),
-      upper_90 = quantile(predicted, 0.95),
-      mean = mean(predicted),
-      observed = unique(observed)
-    ) %>%
-    ggplot() +
-    geom_ribbon(aes(x = length_bin, ymin = lower_90, ymax = upper_90), fill = "lightgrey") +
-    geom_line(aes(length_bin, mean), color = "steelblue") +
-    geom_point(
-      aes(length_bin, observed),
-      size = .5,
-      alpha = 0.5,
-      color = "red"
-    ) +
-    facet_wrap( ~ year) +
-    theme_minimal()
+#
+#   length_comps[[1]] %>%
+#     filter(source == "posterior_predictive") %>%
+#     group_by(year, .chain, .iteration) %>%
+#     mutate(predicted = predicted / sum(predicted)) %>%
+#     group_by(year, .chain, length_bin) %>%
+#     summarise(
+#       lower_90 = quantile(predicted, 0.05),
+#       upper_90 = quantile(predicted, 0.95),
+#       mean = mean(predicted),
+#       observed = unique(observed)
+#     ) %>%
+#     ggplot() +
+#     geom_ribbon(aes(x = length_bin, ymin = lower_90, ymax = upper_90), fill = "lightgrey") +
+#     geom_line(aes(length_bin, mean), color = "steelblue") +
+#     geom_point(
+#       aes(length_bin, observed),
+#       size = .5,
+#       alpha = 0.5,
+#       color = "red"
+#     ) +
+#     facet_wrap( ~ year) +
+#     theme_minimal()
 
   saveRDS(case_studies, file = glue::glue("{run_dir}/case_studies.RDS"))
 

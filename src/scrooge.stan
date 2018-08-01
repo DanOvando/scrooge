@@ -32,6 +32,8 @@ int length_comps_years[n_lcomps]; // time steps in which length comps are availa
 
 //// economic data ////
 
+real <lower = 0> sd_sigma_obs;
+
 row_vector[nt] perc_change_effort;
 
 row_vector[nt] price_t;
@@ -53,8 +55,6 @@ real max_ppue_effort; // guess of ppue maximizing effort
 real max_ppue; // guess of maximum ppue
 
 real max_revenue_guess; // guess of revenue at b0
-
-real<lower = 0> cv_effort;
 
 // real<lower = 0> sigma_effort; //process error for effort model
 
@@ -102,7 +102,7 @@ n_total = nt + n_burn;
 
 parameters{
 
-real<lower = 0> initial_f;
+real<lower = 0> initial_f; // burn in f
 
 vector[nt]  log_effort_dev_t; // f in time t
 
@@ -110,13 +110,11 @@ vector[nt + age_sel]  log_rec_dev_t; //  recruitment deviates
 
 real <lower = 0> sigma_r; // standard deviation of recruitment deviates
 
-real< lower = 0> sigma_effort;
+real< lower = 0> sigma_effort; // standard deviation of effort process error
 
-real<lower = 0> sigma_obs;
+real<lower = 0> sigma_obs; // standard deviation of observation error
 
 real <lower = 0> max_perc_change_effort; // max percent change in effort
-
-// real log_p_response;
 
 real<lower = 0> cr_ratio; // estimated peak cost to revenue ratio
 
@@ -414,7 +412,9 @@ cr_ratio ~ normal(0.5,1);
 
 sigma_effort ~ normal(0.2, 0.2);
 
-sigma_obs ~ cauchy(0, 1);
+sigma_obs ~ normal(0, sd_sigma_obs);
+
+// sigma_obs ~ cauchy(0,1);
 
 //// recruitment prior ////
 
