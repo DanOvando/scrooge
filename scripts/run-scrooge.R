@@ -54,6 +54,8 @@ if (in_clouds == F) {
 
 }
 
+cloud_dir <- here::here("results", "scrooge-results", run_name)
+
 
 if (dir.exists(run_dir) == F) {
   dir.create(run_dir, recursive = T)
@@ -68,7 +70,7 @@ theme_set(scrooge_theme)
 
 # run options -------------------------------------------------------------
 
-sim_fisheries <- FALSE
+sim_fisheries <- TRUE
 
 run_case_studies <- FALSE
 
@@ -76,7 +78,9 @@ run_clouds <- FALSE
 
 fit_models <- FALSE
 
-process_cloud_fits <- FALSE
+process_cloud_fits <- TRUE
+
+n_fisheries <- 10 # number of fisheries to simulate
 
 n_cores <- 2
 
@@ -123,7 +127,6 @@ if (in_clouds == T) {
 
   system("gcsfuse scrooge-data data/scrooge-data")
 
-  cloud_dir <- here::here("results", "scrooge-results", run_name)
 
   if (dir.exists(cloud_dir) == F) {
     dir.create(cloud_dir)
@@ -266,7 +269,6 @@ fleet_model_params <- data_frame(
 
 if (sim_fisheries == T)
 {
-  n_fisheries <- 10
 
   candidate_species <- paste(FishLife::database$Z_ik$Genus,FishLife::database$Z_ik$Species) %>%
     unique() %>%
@@ -274,12 +276,14 @@ if (sim_fisheries == T)
 
     fisheries_sandbox <- data_frame(
     sci_name = sample(
-      "Lepidopsetta polyxystra"
+      candidate_species
       ,
       n_fisheries,
       replace = T
     ),
-    fleet_model = sample(c("open-access"),
+    fleet_model = sample(c("open-access",
+                           "constant-effort",
+                           "random-walk"),
                          n_fisheries,
                          replace = T),
     sigma_r = runif(n_fisheries, 0.01, .7),
@@ -307,66 +311,52 @@ if (sim_fisheries == T)
     percnt_loo_selected = runif(n_fisheries, 0.1, 0.6)
   )
 
+  fisheries_sandbox$sigma_effort[fisheries_sandbox$fleet_model == "random-walk"] <- runif(sum(fisheries_sandbox$fleet_model == "random-walk"), 0.1, 0.4)
+
+
   fisheries_sandbox <- fisheries_sandbox %>%
     left_join(fleet_model_params, by = "fleet_model")
-  # slice(1:4)
 
-  if (file.exists("sim_progress.txt")) {
-    file.remove("sim_progress.txt")
-  }
 
-  a <- Sys.time()
   spf <- safely(prepare_fishery)
 
-  doParallel::registerDoParallel(cores = n_cores)
+  future::plan(future::multiprocess, workers = n_cores)
 
-  foreach::getDoParWorkers()
-
-  prepped_fishery <-
-    foreach::foreach(i = 1:nrow(fisheries_sandbox)) %dopar% {
-      write(
-        glue::glue("{i/nrow(fisheries_sandbox)*100}% done with sims"),
-        "sim_progress.txt",
-        append = T
-      )
-
-      out <- spf(
-        sci_name = fisheries_sandbox$sci_name[i],
-        fleet_model = fisheries_sandbox$fleet_model[i],
-        fleet_params = fisheries_sandbox$fleet_params[[i]],
-        sigma_r = fisheries_sandbox$sigma_r[[i]],
-        sigma_effort = fisheries_sandbox$sigma_effort[i],
-        price_cv = fisheries_sandbox$price_cv[i],
-        cost_cv = fisheries_sandbox$cost_cv[i],
-        q_cv = fisheries_sandbox$q_cv[i],
-        price_slope = fisheries_sandbox$price_slope[i],
-        cost_slope = fisheries_sandbox$cost_slope[i],
-        q_slope = fisheries_sandbox$q_slope[i],
-        price_ac = fisheries_sandbox$price_ac[i],
-        cost_ac = fisheries_sandbox$cost_ac[i],
-        q_ac = fisheries_sandbox$q_ac[i],
-        steepness = fisheries_sandbox$steepness[i],
-        percnt_loo_selected = fisheries_sandbox$percnt_loo_selected[i],
-        obs_error = fisheries_sandbox$obs_error[i],
-        initial_f = fisheries_sandbox$initial_f[i],
-        r0 = fisheries_sandbox$r0[i],
-        price = fisheries_sandbox$price[i],
-        q = fisheries_sandbox$q[i],
-        profit_lags = fisheries_sandbox$profit_lags[i],
-        max_perc_change_f = fisheries_sandbox$max_perc_change_f[i],
-        max_cp_ratio = fisheries_sandbox$max_cp_ratio[i],
-        beta = fisheries_sandbox$beta[i],
-        sim_years = 100,
-        burn_years = 100,
-        cv_len = 0.2,
-        linf_buffer = 1.25
-      )
-
-    } # close dopar
-
-  Sys.time() - a
-
-  fisheries_sandbox$prepped_fishery <- prepped_fishery
+  fisheries_sandbox <- fisheries_sandbox %>%
+    mutate(prepped_fishery =
+             furrr::future_pmap(
+               list(
+                 sci_name = sci_name,
+                 fleet_model = fleet_model,
+                 fleet_params = fleet_params,
+                 sigma_r = sigma_r,
+                 sigma_effort = sigma_effort,
+                 price_cv = price_cv,
+                 cost_cv = cost_cv,
+                 q_cv = q_cv,
+                 price_slope = price_slope,
+                 cost_slope = cost_slope,
+                 q_slope = q_slope,
+                 price_ac = price_ac,
+                 cost_ac = cost_ac,
+                 q_ac = q_ac,
+                 steepness = steepness,
+                 percnt_loo_selected = percnt_loo_selected,
+                 obs_error = obs_error,
+                 initial_f = initial_f,
+                 r0 = r0,
+                 price = price,
+                 q = q,
+                 profit_lags = profit_lags,
+                 max_perc_change_f = max_perc_change_f,
+                 max_cp_ratio = max_cp_ratio,
+                 beta = beta),
+               spf,
+               sim_years = 100,
+               burn_years = 100,
+               cv_len = 0.2,
+               linf_buffer = 1.25
+             ))
 
   no_error <- map(fisheries_sandbox$prepped_fishery, 'error') %>%
     map_lgl(is.null)
@@ -830,8 +820,12 @@ fisheries_sandbox <- fisheries_sandbox %>%
 
 if (in_clouds == T) {
 
-  fisheries_sandbox <- fisheries_sandbox %>%
-    mutate(performance = map2(scrooge_fit, prepped_fishery, summarise_performance, cloud_dir = cloud_dir))
+  future::plan(future::multiprocess, workers = 5)
+
+  processed_sandbox <- fisheries_sandbox %>%
+    mutate(performance = future_map2(scrooge_fit, prepped_fishery, summarise_performance, cloud_dir = cloud_dir, .progress = T))
+
+  saveRDS(processed_sandbox, file = glue::glue("results/scrooge-results/{run_name}/processed_fisheries_sandbox.RDS"))
 
 } else {
   stop("must have in_clouds == T to run full diagnostics, never going to store them locally for now")
@@ -853,7 +847,6 @@ fisheries_sandbox$performance[[1]] %>%
 
 
 # Process cloud fits ------------------------------------------------------
-process_cloud_fits <-  FALSE
 if (process_cloud_fits == T){
 
 
@@ -862,32 +855,26 @@ if (dir.exists(here::here("results","scrooge-results",run_name)) == F){
   system("gcsfuse scrooge-results results/scrooge-results")
 
 }
-# system("umount results/scrooge-results")
-#
-# system("rm -r results/scrooge-results")
-#
-# system("mkdir results/scrooge-results")
-#
-# system("gcsfuse scrooge-results results/scrooge-results")
 
 processed_sandbox <- readRDS(file = glue::glue("results/scrooge-results/{run_name}/processed_fisheries_sandbox.RDS"))
 
 reserve <- processed_sandbox$performance
 
-processed_sandbox$performance <- map(processed_sandbox$performance, "result")
+# processed_sandbox$performance <- map(processed_sandbox$performance, "result")
 
 performance_worked <- map_dbl(map(processed_sandbox$performance, class), length) %>%
   map_lgl(~.x >1)
 
 sandbox_performance <- processed_sandbox %>%
   select(-scrooge_fit, -prepped_fishery,-summary_plot,-fleet_params) %>%
-  filter(performance_worked) %>%
+  filter(performance_worked, fleet_model != "supplied-catch") %>%
   unnest()
 
 
 sandbox_performance <- sandbox_performance%>%
   group_by(fishery,
            experiment,
+           fleet_model,
            period,
            window,
            prop_years_lcomp_data,
@@ -896,12 +883,73 @@ sandbox_performance <- sandbox_performance%>%
            likelihood_model) %>%
   summarise(rmse = sqrt(mean(sq_er)),
             bias = median((predicted - observed) / observed)) %>%
-  mutate(fit_model = glue::glue("em{economic_model}_lm{likelihood_model}"))
+  mutate(fit_model = glue::glue("em{economic_model}_lm{likelihood_model}"),
+         log_rmse = log(rmse))
+
+performance_model <- rstanarm::stan_glmer(log_rmse ~ factor(fishery) + (1|fit_model),
+                                          data = sandbox_performance, chains = 2, cores = 2)
+
+tidy_performance <- tidybayes::spread_draws(performance_model, b[intercept,model])
+
+rmse_effect_plot <- tidy_performance %>%
+  group_by(model) %>%
+  mutate(mrmse = mean(b)) %>%
+  ungroup() %>%
+  mutate(model = fct_reorder(model,b,.fun = mean, .desc = TRUE)) %>%
+  ggplot(aes(b, fill = model)) +
+  geom_vline(aes(xintercept = 0)) +
+  geom_density_ridges(aes(x = b, y = model),alpha = 0.75, show.legend = FALSE)  +
+  scale_fill_viridis_d(option = "E") +
+  labs(x = "Effect on RMSE") +
+  theme(axis.title.x = element_blank())
+
+saveRDS(object = performance_model,file =  paste0(run_dir,"/performance_model.RDS"))
+
+saveRDS(object = sandbox_performance,file =  paste0(run_dir,"/sandbox_performance.RDS"))
 
 
-model_performance <- rstanarm::stan_glmer(rmse ~ fishery + (1|economic_model),
-                                          data = sandbox_performance)
+mod_select <- sandbox_performance %>%
+  group_by(fishery,
+           experiment,
+           fleet_model,
+           period,
+           window,
+           prop_years_lcomp_data,
+           variable) %>%
+  filter(rmse == min(rmse))
 
+
+model_selected_plot <- mod_select %>%
+  group_by(fit_model) %>%
+  count() %>%
+  ungroup() %>%
+  mutate(p_selected = n / sum(n)) %>%
+  mutate(fit_model = fct_reorder(fit_model, p_selected)) %>%
+  ggplot(aes(fit_model, p_selected)) +
+  geom_col(color = "black", fill = "lightgrey") +
+  scale_y_continuous(labels = percent, name = "Percentage Best Model") +
+  coord_flip() +
+  theme(axis.title.y = element_blank()) +
+  labs(title = "A")
+
+
+econ_selected_plot <- mod_select %>%
+  mutate(econ_model = !(fit_model == "em0_lm0")) %>%
+  group_by(econ_model) %>%
+  count() %>%
+  ungroup() %>%
+  mutate(p_selected = n / sum(n)) %>%
+  # mutate(econ_model = fct_reorder(econ_model, p_selected)) %>%
+  ggplot(aes(econ_model, p_selected)) +
+  geom_col(color = "black", fill = "lightgrey") +
+  scale_y_continuous(labels = percent, name = "Percentage Best Model") +
+  labs(x = "Used Economics?", y = "Percentage Best Model",
+       title = "B")
+
+model_summary_plot <- model_selected_plot + econ_selected_plot
+
+
+model_decision <- dtree_fit <- train(fit_model ~., data = sandbox_performance, method = "rpart")
 
 
 }
@@ -914,5 +962,20 @@ model_performance <- rstanarm::stan_glmer(rmse ~ fishery + (1|economic_model),
 
 
 # make figures ------------------------------------------------------------
+mod_select$experiment
 
+decision_data <- processed_sandbox %>%
+  ungroup() %>%
+  left_join(mod_select %>% ungroup() %>%  select(experiment, fit_model), by = "experiment") %>%
+  select(fit_model, sigma_r, rec_ac, price_cv, q_cv) %>%
+  filter(!is.na(fit_model))
+
+
+decision_tree = train(fit_model ~ .,
+                      method = "rpart",
+                      data =  decision_data,
+                      tuneLength =20)
+
+plot(decision_tree$finalModel)
+text(decision_tree$finalModel, use.n=TRUE, all=TRUE, cex=0.5)
 

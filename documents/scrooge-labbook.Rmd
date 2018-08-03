@@ -5268,4 +5268,122 @@ rstanarm::launch_shinystan(case_studies$scrooge_fit[[2]])
 
 ```
 
+# Whats up with the bad fit cases?
+
+
+```{r}
+
+a <- sandbox_performance %>% 
+  ungroup() %>% 
+  arrange(desc(rmse)) %>% 
+  slice(1)
+
+bad_fishery <- a$fishery
+
+bad_experiment <- a$experiment
+
+
+  hmm <- processed_sandbox %>%
+    filter(experiment == bad_experiment) %>% 
+    select(-scrooge_fit,-prepped_fishery,-summary_plot,-fleet_params) %>%
+    unnest() %>%
+    group_by(
+      year,
+      variable,
+      experiment,
+      fishery,
+      economic_model,
+      likelihood_model,
+      period,
+      window,
+      prop_years_lcomp_data
+    ) %>%
+    summarise(
+      lower_90 = quantile(predicted, 0.05),
+      upper_90 = quantile(predicted, 0.95),
+      lower_50 = quantile(predicted, 0.25),
+      upper_50 = quantile(predicted, 0.75),
+      mean_predicted = mean(predicted),
+      mean_predicted = median(mean_predicted),
+      observed = mean(observed)
+    )
+
+hmm %>% 
+  filter(experiment == bad_experiment) %>% 
+  filter(variable == "f") %>% 
+  ggplot() + 
+  geom_line(aes(year, mean_predicted)) + 
+  geom_point(aes(year, observed))
+
+  wtf <- processed_sandbox %>%
+    filter(experiment == bad_experiment) 
+  
+  wtf$summary_plot
+
+  fisheries_sandbox <- wtf
+
+    future::plan(future::multiprocess, workers = 1)
+
+      spf <- safely(prepare_fishery)
+      
+      fisheries_sandbox$fleet_model <- "random-walk"
+
+          fisheries_sandbox$sigma_effort[fisheries_sandbox$fleet_model == "random-walk"] <- runif(sum(fisheries_sandbox$fleet_model == "random-walk"), 0.1, 0.4)
+
+  
+      
+  blerg <- fisheries_sandbox %>% 
+    mutate(prepped_fishery = 
+    furrr::future_pmap(
+      list(
+        sci_name = sci_name,
+        fleet_model = fleet_model,
+        fleet_params = fleet_params,
+        sigma_r = sigma_r,
+        sigma_effort = sigma_effort,
+        price_cv = price_cv,
+        cost_cv = cost_cv,
+        q_cv = q_cv,
+        price_slope = price_slope,
+        cost_slope = cost_slope,
+        q_slope = q_slope,
+        price_ac = price_ac,
+        cost_ac = cost_ac,
+        q_ac = q_ac,
+        steepness = steepness,
+        percnt_loo_selected = percnt_loo_selected,
+        obs_error = obs_error,
+        initial_f = initial_f,
+        r0 = r0,
+        price = price,
+        q = q,
+        profit_lags = profit_lags,
+        max_perc_change_f = max_perc_change_f,
+        max_cp_ratio = max_cp_ratio,
+        beta = beta),
+        spf,
+        sim_years = 100,
+        burn_years = 100,
+        cv_len = 0.2,
+        linf_buffer = 1.25
+      ))
+  
+
+  no_error <- map(blerg$prepped_fishery, 'error') %>%
+    map_lgl(is.null)
+
+  blerg <- blerg %>%
+    filter(no_error == T)
+
+  blerg <- blerg %>%
+    mutate(prepped_fishery = map(prepped_fishery, "result")) %>%
+    mutate(summary_plot = map(prepped_fishery, plot_simmed_fishery))
+
+  blerg$summary_plot
+  
+
+  
+```
+
+
 

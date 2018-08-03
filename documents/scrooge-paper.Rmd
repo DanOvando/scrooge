@@ -1,10 +1,10 @@
 ---
-title: "scrooge-paper"
+title: "Improving Fisheries Stock Assessments by Integrating Economic Datar"
 author: "Dan Ovando"
 date: "3/7/2018"
 output: bookdown::html_document2
 linkcolor: blue
-bibliography: dissertation.bib
+# bibliography: dissertation.bib
 biblio-style: apalike
 ---
 
@@ -17,35 +17,49 @@ library(hrbrthemes)
 library(extrafont)
 library(scales)
 library(rstan)
-library(tidyverse)
 library(wesanderson)
 library(patchwork)
+library(rstanarm)
+library(tidybayes)
+library(ggridges)
+library(caret)
+library(tidyverse)
+
 extrafont::loadfonts()
 rstan::rstan_options(auto_write = TRUE)
-  functions <- list.files(here::here("functions"))
+functions <- list.files(here::here("functions"))
 
-  walk(functions, ~ here::here("functions", .x) %>% source()) # load local functions
+walk(functions, ~ here::here("functions", .x) %>% source()) # load local functions
+
+in_clouds <-  F
+
+run_name <- "d1.0"
+
+scrooge_theme <-
+theme_ipsum(
+base_size = 16,
+axis_title_size = 18,
+strip_text_size = 18
+)
+
+theme_set(scrooge_theme)
+
+run_dir <- here::here("results", run_name)
+
+load(here::here("processed_data", "fisheries_sandbox.Rdata"))
 
 
-  scrooge_theme <- theme_ipsum(base_size = 14, axis_title_size = 18)
+case_studies <- readRDS(file = here::here("results", run_name,"case_studies.RDS"))
 
-  theme_set(scrooge_theme)
+perf_summaries <- readRDS(file = here::here("results", run_name,"perf_summaries.RDS"))
 
-load(here::here("processed_data","fisheries_sandbox.Rdata"))
+performance_model <-
+readRDS(file =   here::here("results", run_name,"performance_model.RDS"))
 
-# load(here::here("presentations","gaines-lab.Rdata"))
+sandbox_performance <-
+readRDS(file = here::here("results", run_name,"sandbox_performance.RDS"))
 
-  functions <- list.files(here::here("functions"))
-
-  walk(functions, ~ here::here("functions", .x) %>% source()) # load local functions
-
-  in_clouds <-  F
-
-  run_name <- "v3.0"
-
-    scrooge_theme <- theme_ipsum(base_size = 16, axis_title_size = 18, strip_text_size = 18)
-
-  theme_set(scrooge_theme)
+processed_sandbox <- readRDS(file =here::here("results","scrooge-results",run_name,"processed_fisheries_sandbox.RDS"))
 
 
 ```
@@ -262,27 +276,35 @@ where *C()* represents that Baranov catch equation [citation].
 
 Notice now that the components price (*p*), catchability (*q*), and cost (*c*) are allowed to vary over time. This is because the model allows for user supplied information on the evoloution of these economic traits over time, either in the form of actual values (e.g. the price in a given year), or in relative changes (prices are 10% higher than they were last year). For the relative change cases, user supplied inputs are converted to deviations from a mean value and then multiplied by a default mean value set by the model. 
 
-One challenge in this is that the dynamics of the open access model are driven by the relative proitability of the fishery, and as such largely to the relative scale of revenue and costs. Therefore, getting the relative magnitude of prices and costs to be relatively correct is important. Unfortunately, while prices can be relatively easily determined, costs are much more difficult to obtain, especially in units matching the exact effort units of the operating model. 
+One challenge in this is that the dynamics of the open access model are driven by the relative profitability of the fishery, and as such largely to the relative scale of revenue and costs. Therefore, getting the relative magnitude of prices and costs to be relatively correct is important. Unfortunately, while prices can be relatively easily determined, costs are much more difficult to obtain, especially in units matching the exact effort units of the operating model. 
 
 To solve this problem, we estimate an additional parameter in this estimation model, $c^{max}$. The cost in any time is then calculated as
 
 $$c_t  = c^{max}c^{rel}$$
 
-where $c^{rel}$ are the relative costs (scaled from 0 to 1) over time supplied by users. $c^{max}$ itself is tuned in a rather long process that results in much cleaner estimation that can actually be provided with informative priors. Rather than estimating  $c^{max}$ itself, we estimate a costs to revenue ratio at the start of the fishery. We first estimate a guess of, given the simulated nature of the fishery, something close to maximum profits (assumed to come by fishing a bit harder than *m* when the population is completely unfished). We then calculate the revenues at this max profits for a given estimate cost to revenue
+where $c^{rel}$ are the relative costs (scaled from 0 to 1) over time supplied by users. $c^{max}$ itself is tuned in a rather long process that results in much cleaner estimation that can actually be provided with informative priors. Rather than estimating  $c^{max}$ itself, we estimate a costs to revenue ratio at the start of the fishery. We first estimate a guess of, given the simulated nature of the fishery, something close to maximum revenues (assumed to come by fishing a bit harder than *m* when the population is completely unfished). We then calculate the profits associated with these maximum reveunes given the current estimate of the cost to revenue ratio CR. 
 
-$$REVENUE^{max} = PROFITS^{max}(1 - CR) $$
-
-
-Given this $REVENUE^{max}$, we then solve for the actual $c^max$ that would produce these revenues, given the other blah blah. 
-
-sigmas
+$$PROFITS^{max} \sim  MAX(PRICE)CATCH^{B0}*(1 - CR) $$
 
 
-#### Model requirements
+Given this estimate of $PROFITS^{max}$, we can then back out the cost coefficient $c_{max}$ that, given the other parameters, would produce those profits. 
 
-concept, likelihood, options, etc.
+Estimating the cost to revenue ratio instead of the actual costs allows for informative priors to be set. A fishery that at its heyday was incredible profitablt will have a low cost to revenue ratio, while a fishery that was scrapign on its best day would have a high cost to revenue ratio. 
 
-economic shock explanation and illustration
+While the prior can be informed from local stakeholders, we set a zero truncated normal prior on the cost ratio of 
+
+$$CR \sim normal(0.5,1)$$
+
+The other challenging parameter in the open access equation is $\theta$, the amount that effort changes for a one unit change in $PPUE$. Similarly to estimating the cost to revenue ratio instead of raw costs, rather than estimate $theta$ directly, we estimate the maximum percentage change in effort from one time step to the next. As part of the CR process, we estimated the maximum profits, and the effor that would produce those profies. Together that provides us with the maxium expected PPUE. For a given max percentage change ($\Delta^{max}$) in effort then, we calculate $\theta$ as
+
+$$\theta = (\Delta^{max} * E^{MAX}) / PPUE^{MAX}$$
+
+While $\theta$ has no intuitative sense for most stakeholders, the maximum percentage year-to-year change in effort can be elicitied from stakeholders. For now, we assume a zero truncated normal prior on the max expansion
+
+$$\Delta^{max} \sim normal(0,0.25)$$
+
+
+
 
 ## Results
 
@@ -307,7 +329,6 @@ modelo_name <- c(
 perf_summaries <- perf_summaries %>% 
   mutate(model = glue::glue("em{economic_model}_lm{likelihood_model}"))
 
-
 performance_stats <- case_studies %>% 
   select(-scrooge_fit, -prepped_fishery) %>% 
   mutate(others = map(performance,"others")) %>% 
@@ -319,7 +340,8 @@ performance_stats <- case_studies %>%
            window,
            prop_years_lcomp_data,
            model, 
-           variable) %>% 
+           variable,
+           .iteration) %>% 
   summarise(rmse = sqrt(mean(sq_er)),
             bias = median((predicted - observed) / observed))
 
@@ -330,6 +352,21 @@ cs1_summary <- performance_stats %>%
          variable == "f",
          model == "em0_lm0" | model == "em1_lm1")
 
+cs1_summary$model <- fct_recode(as.factor(cs1_summary$model),  "Lengths Only" = "em0_lm0",
+                                "Lengths + Economics" = "em1_lm1" )
+cs1_summ_plot <- cs1_summary %>% 
+  gather(metric, value, rmse:bias) %>% 
+  ggplot(aes(value, fill = model)) + 
+  geom_density_ridges(aes(x = value, y = metric, fill = model), alpha = 0.75, show.legend = F) +
+  theme(plot.margin = unit(c(0,0,0,1), units = "lines"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank()) + 
+  geom_vline(aes(xintercept = 0)) +
+  theme(legend.title = element_blank()) +
+  ggsci::scale_fill_aaas()
+
+
+
 lcomp_years <- case_studies %>% 
   filter(case_study == "realistic",
          prop_years_lcomp_data == max(prop_years_lcomp_data),
@@ -339,14 +376,13 @@ lcomp_years <- lcomp_years$prepped_fishery[[1]]$scrooge_data$length_comps_years
 
 
 cs1_summary$model <- fct_recode(as.factor(cs1_summary$model),  "Lengths Only" = "em0_lm0",
-   "Lengths + Economics" = "em1_lm1" )
+                                "Lengths + Economics" = "em1_lm1" )
 
 cs1 <- perf_summaries %>% 
   ungroup() %>% 
   filter(case_study == "realistic",
          prop_years_lcomp_data == 1,
-          model == "em0_lm0" | model == "em1_lm1") 
-
+         model == "em0_lm0" | model == "em1_lm1") 
 
 fill_vector <- rep("transparent", length (unique(cs1$year[cs1$variable == "f"])))
 
@@ -371,19 +407,10 @@ cs1_plot <- cs1 %>%
         panel.spacing = unit(0.1, units = "lines"),
         axis.title.x = element_blank())
 
-cs1_summ_plot <- cs1_summary %>% 
-  gather(metric, value, rmse:bias) %>% 
-  ggplot(aes(model, value, fill = metric)) + 
-  geom_col(position = "dodge", color = "black") + 
-  theme(plot.margin = unit(c(0,0,0,1), units = "lines"),
-        axis.title.y = element_blank(),
-        axis.title.x = element_blank()) + 
-  geom_hline(aes(yintercept = 0)) +
-  theme(axis.text.x = element_text(size = 8, angle = 35, vjust = 0.75), 
-        legend.position = "top", legend.title = element_blank()) 
 
 
 cs1_plot + cs1_summ_plot + plot_layout(nrow = 1, ncol = 2, widths = c(3,1))
+
 
 ```
 
@@ -391,31 +418,33 @@ cs1_plot + cs1_summ_plot + plot_layout(nrow = 1, ncol = 2, widths = c(3,1))
 
 ```{r}
 
-perf_summaries <- perf_summaries %>% 
-  mutate(model = glue::glue("em{economic_model}_lm{likelihood_model}"))
-
-
-performance_stats <- case_studies %>% 
-  select(-scrooge_fit, -prepped_fishery) %>% 
-  mutate(others = map(performance,"others")) %>% 
-  select(-performance) %>% 
-  unnest() %>% 
-  mutate(model = glue::glue("em{economic_model}_lm{likelihood_model}")) %>% 
-  group_by(case_study, 
-           period,
-           window,
-           prop_years_lcomp_data,
-           model, 
-           variable) %>% 
-  summarise(rmse = sqrt(mean(sq_er)),
-            bias = median((predicted - observed) / observed))
-
 cs2_summary <- performance_stats %>% 
   ungroup() %>% 
   filter(case_study == "realistic",
          prop_years_lcomp_data == min(prop_years_lcomp_data),
          variable == "f",
          model == "em0_lm0" | model == "em1_lm1")
+
+cs2_summary$model <-
+  fct_recode(
+  as.factor(cs2_summary$model),
+  "Lengths Only" = "em0_lm0",
+  "Lengths + Economics" = "em1_lm1"
+  )
+  
+cs2_summary$model <- fct_recode(as.factor(cs2_summary$model),  "Lengths Only" = "em0_lm0",
+                                "Lengths + Economics" = "em1_lm1" )
+
+cs2_summ_plot <- cs2_summary %>% 
+  gather(metric, value, rmse:bias) %>% 
+  ggplot(aes(value, fill = model)) + 
+  geom_density_ridges(aes(x = value, y = metric, fill = model), alpha = 0.75, show.legend = F) +
+  theme(plot.margin = unit(c(0,0,0,1), units = "lines"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank()) + 
+  geom_vline(aes(xintercept = 0)) +
+  theme(legend.title = element_blank()) +
+  ggsci::scale_fill_aaas()
 
 lcomp_years <- case_studies %>% 
   filter(case_study == "realistic",
@@ -425,15 +454,11 @@ lcomp_years <- case_studies %>%
 lcomp_years <- lcomp_years$prepped_fishery[[1]]$scrooge_data$length_comps_years
 
 
-cs2_summary$model <- fct_recode(as.factor(cs2_summary$model),  "Lengths Only" = "em0_lm0",
-   "Lengths + Economics" = "em1_lm1" )
-
 cs2 <- perf_summaries %>% 
   ungroup() %>% 
   filter(case_study == "realistic",
          prop_years_lcomp_data == min(prop_years_lcomp_data),
-          model == "em0_lm0" | model == "em1_lm1") 
-
+         model == "em0_lm0" | model == "em1_lm1") 
 
 fill_vector <- rep("transparent", length (unique(cs2$year[cs2$variable == "f"])))
 
@@ -458,18 +483,6 @@ cs2_plot <- cs2 %>%
         panel.spacing = unit(0.1, units = "lines"),
         axis.title.x = element_blank())
 
-cs2_summ_plot <- cs2_summary %>% 
-  gather(metric, value, rmse:bias) %>% 
-  ggplot(aes(model, value, fill = metric)) + 
-  geom_col(position = "dodge", color = "black") + 
-  theme(plot.margin = unit(c(0,0,0,1), units = "lines"),
-        axis.title.y = element_blank(),
-        axis.title.x = element_blank()) + 
-  geom_hline(aes(yintercept = 0)) +
-  theme(axis.text.x = element_text(size = 8, angle = 35, vjust = 0.75), 
-        legend.position = "top", legend.title = element_blank()) 
-
-
 cs2_plot + cs2_summ_plot + plot_layout(nrow = 1, ncol = 2, widths = c(3,1))
 
 
@@ -477,32 +490,33 @@ cs2_plot + cs2_summ_plot + plot_layout(nrow = 1, ncol = 2, widths = c(3,1))
 
 
 ```{r}
-
-perf_summaries <- perf_summaries %>% 
-  mutate(model = glue::glue("em{economic_model}_lm{likelihood_model}"))
-
-
-performance_stats <- case_studies %>% 
-  select(-scrooge_fit, -prepped_fishery) %>% 
-  mutate(others = map(performance,"others")) %>% 
-  select(-performance) %>% 
-  unnest() %>% 
-  mutate(model = glue::glue("em{economic_model}_lm{likelihood_model}")) %>% 
-  group_by(case_study, 
-           period,
-           window,
-           prop_years_lcomp_data,
-           model, 
-           variable) %>% 
-  summarise(rmse = sqrt(mean(sq_er)),
-            bias = median((predicted - observed) / observed))
-
 cs3_summary <- performance_stats %>% 
   ungroup() %>% 
   filter(case_study == "decoupled",
          prop_years_lcomp_data == min(prop_years_lcomp_data),
          variable == "f",
          model == "em0_lm0" | model == "em1_lm1")
+
+cs3_summary$model <-
+  fct_recode(
+  as.factor(cs3_summary$model),
+  "Lengths Only" = "em0_lm0",
+  "Lengths + Economics" = "em1_lm1"
+  )
+  
+cs3_summary$model <- fct_recode(as.factor(cs3_summary$model),  "Lengths Only" = "em0_lm0",
+                                "Lengths + Economics" = "em1_lm1" )
+
+cs3_summ_plot <- cs3_summary %>% 
+  gather(metric, value, rmse:bias) %>% 
+  ggplot(aes(value, fill = model)) + 
+  geom_density_ridges(aes(x = value, y = metric, fill = model), alpha = 0.75, show.legend = F) +
+  theme(plot.margin = unit(c(0,0,0,1), units = "lines"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank()) + 
+  geom_vline(aes(xintercept = 0)) +
+  theme(legend.title = element_blank()) +
+  ggsci::scale_fill_aaas()
 
 lcomp_years <- case_studies %>% 
   filter(case_study == "decoupled",
@@ -512,15 +526,11 @@ lcomp_years <- case_studies %>%
 lcomp_years <- lcomp_years$prepped_fishery[[1]]$scrooge_data$length_comps_years
 
 
-cs3_summary$model <- fct_recode(as.factor(cs3_summary$model),  "Lengths Only" = "em0_lm0",
-   "Lengths + Economics" = "em1_lm1" )
-
 cs3 <- perf_summaries %>% 
   ungroup() %>% 
   filter(case_study == "decoupled",
          prop_years_lcomp_data == min(prop_years_lcomp_data),
-          model == "em0_lm0" | model == "em1_lm1") 
-
+         model == "em0_lm0" | model == "em1_lm1") 
 
 fill_vector <- rep("transparent", length (unique(cs3$year[cs3$variable == "f"])))
 
@@ -545,20 +555,7 @@ cs3_plot <- cs3 %>%
         panel.spacing = unit(0.1, units = "lines"),
         axis.title.x = element_blank())
 
-cs3_summ_plot <- cs3_summary %>% 
-  gather(metric, value, rmse:bias) %>% 
-  ggplot(aes(model, value, fill = metric)) + 
-  geom_col(position = "dodge", color = "black") + 
-  theme(plot.margin = unit(c(0,0,0,1), units = "lines"),
-        axis.title.y = element_blank(),
-        axis.title.x = element_blank()) + 
-  geom_hline(aes(yintercept = 0)) +
-  theme(axis.text.x = element_text(size = 8, angle = 35, vjust = 0.75), 
-        legend.position = "top", legend.title = element_blank()) 
-
-
 cs3_plot + cs3_summ_plot + plot_layout(nrow = 1, ncol = 2, widths = c(3,1))
-
 
 ```
 
@@ -570,7 +567,91 @@ For the case studies, the point is to highlight the general performance of the m
 
 ### Broader performance stats
 
-PCA/regression/machine learning style exploration of what drives RMSE/BIAS/whatever it is.
+```{r best-models}
+
+tidy_performance <- tidybayes::spread_draws(performance_model, b[intercept,model])
+
+rmse_effect_plot <- tidy_performance %>%
+  group_by(model) %>%
+  mutate(mrmse = mean(b)) %>%
+  ungroup() %>%
+  mutate(model = fct_reorder(model,b,.fun = mean, .desc = TRUE)) %>%
+  ggplot(aes(b, fill = model)) +
+  geom_vline(aes(xintercept = 0), color = "red", linetype = 2) +
+  geom_density_ridges(aes(x = b, y = model),alpha = 0.75, show.legend = FALSE)  +
+  scale_fill_viridis_d(option = "E") +
+  labs(x = "Effect on RMSE") +
+  theme(axis.title.x = element_blank())
+
+rmse_effect_plot
+
+```
+
+
+```{r which-chosen}
+
+mod_select <- sandbox_performance %>%
+  group_by(fishery,
+           experiment,
+           fleet_model,
+           period,
+           window,
+           prop_years_lcomp_data,
+           variable) %>%
+  filter(rmse == min(rmse))
+
+
+model_selected_plot <- mod_select %>%
+  group_by(fit_model) %>%
+  count() %>%
+  ungroup() %>%
+  mutate(p_selected = n / sum(n)) %>%
+  mutate(fit_model = fct_reorder(fit_model, p_selected)) %>%
+  ggplot(aes(fit_model, p_selected)) +
+  geom_col(color = "black", fill = "lightgrey") +
+  scale_y_continuous(labels = percent, name = "Percentage Best Model") +
+  coord_flip() +
+  theme(axis.title.y = element_blank()) +
+  labs(title = "A")
+
+
+econ_selected_plot <- mod_select %>%
+  mutate(econ_model = !(fit_model == "em0_lm0")) %>%
+  group_by(econ_model) %>%
+  count() %>%
+  ungroup() %>%
+  mutate(p_selected = n / sum(n)) %>%
+  # mutate(econ_model = fct_reorder(econ_model, p_selected)) %>%
+  ggplot(aes(econ_model, p_selected)) +
+  geom_col(color = "black", fill = "lightgrey") +
+  scale_y_continuous(labels = percent, name = "Percentage Best Model") +
+  labs(x = "Used Economics?", y = "Percentage Best Model",
+       title = "B")
+
+model_summary_plot <- model_selected_plot + econ_selected_plot
+
+model_summary_plot
+
+```
+
+
+```{r dtree}
+decision_data <- processed_sandbox %>%
+  ungroup() %>%
+  left_join(mod_select %>% ungroup() %>%  select(experiment, fit_model), by = "experiment") %>%
+  select(fit_model, sigma_r, rec_ac, price_cv, q_cv) %>%
+  filter(!is.na(fit_model))
+
+set.seed(42)
+decision_tree = train(fit_model ~ .,
+                      method = "rpart",
+                      data =  decision_data,
+                      tuneLength =40)
+
+plot(decision_tree$finalModel)
+text(decision_tree$finalModel, use.n=TRUE, all=TRUE, cex=0.5)
+```
+
 
 
 

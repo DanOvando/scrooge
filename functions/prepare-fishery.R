@@ -69,6 +69,7 @@ prepare_fishery <-
       cost_cv =  cost_cv,
       cost_ac = cost_ac,
       cost_slope = cost_slope,
+      q = q,
       q_cv = q_cv,
       q_ac = q_ac,
       q_slope = q_slope,
@@ -82,10 +83,12 @@ prepare_fishery <-
     }
 
     if (fleet_model == "constant-effort"){
+
       fleet <- create_fleet(
         fish = fish,
         cost_cv =  cost_cv,
         cost_ac = cost_ac,
+        q = q,
         q_cv = q_cv,
         q_ac = q_ac,
         cost_slope = cost_slope,
@@ -98,11 +101,33 @@ prepare_fishery <-
       )
     }
 
+    if (fleet_model == "random-walk"){
+
+      fleet <- create_fleet(
+        fish = fish,
+        cost_cv =  cost_cv,
+        cost_ac = cost_ac,
+        q = q,
+        q_cv = q_cv,
+        q_ac = q_ac,
+        cost_slope = cost_slope,
+        q_slope = q_slope,
+        fleet_model = fleet_model,
+        initial_effort = initial_effort,
+        cost = cost,
+        sigma_effort = sigma_effort,
+        effort_ac = 0.75,
+        length_50_sel = percnt_loo_selected * fish$linf
+      )
+    }
+
+
     if (fleet_model == "supplied-catch"){
       fleet <- create_fleet(
         fish = fish,
         cost_cv =  cost_cv,
         cost_ac = cost_ac,
+        q = q,
         q_cv = q_cv,
         q_ac = q_ac,
         cost_slope = cost_slope,
