@@ -70,7 +70,7 @@ theme_set(scrooge_theme)
 
 # run options -------------------------------------------------------------
 
-sim_fisheries <- TRUE
+sim_fisheries <- FALSE
 
 run_case_studies <- FALSE
 
@@ -862,16 +862,30 @@ reserve <- processed_sandbox$performance
 
 # processed_sandbox$performance <- map(processed_sandbox$performance, "result")
 
-performance_worked <- map_dbl(map(processed_sandbox$performance, class), length) %>%
-  map_lgl(~.x >1)
+performance_worked <- map_lgl(map(processed_sandbox$performance, "error"), is.null)
+
+processed_sandbox$performance <- map(processed_sandbox$performance,"result")
+
+processed_sandbox <- processed_sandbox %>%
+  filter(performance_worked)
+
+# performance_worked2 <- map_dbl(map(processed_sandbox$performance, class), length) %>%
+#   map_lgl(~.x >1)
 
 sandbox_performance <- processed_sandbox %>%
   select(-scrooge_fit, -prepped_fishery,-summary_plot,-fleet_params) %>%
-  filter(performance_worked, fleet_model != "supplied-catch") %>%
   unnest()
 
 
+bad_experiments <- sandbox_performance %>%
+  group_by(experiment) %>%
+  filter(variable == "f") %>%
+  summarise(max_f = max(observed)) %>%
+  ungroup() %>%
+  filter(max_f > 3)
+
 sandbox_performance <- sandbox_performance%>%
+  filter(!experiment %in% bad_experiments$experiment) %>%
   group_by(fishery,
            experiment,
            fleet_model,
@@ -884,10 +898,29 @@ sandbox_performance <- sandbox_performance%>%
   summarise(rmse = sqrt(mean(sq_er)),
             bias = median((predicted - observed) / observed)) %>%
   mutate(fit_model = glue::glue("em{economic_model}_lm{likelihood_model}"),
-         log_rmse = log(rmse))
+         log_rmse = log(rmse)) %>%
+  left_join(processed_sandbox %>%
+              select(experiment, sigma_r:percnt_loo_selected), by = "experiment")
 
-performance_model <- rstanarm::stan_glmer(log_rmse ~ factor(fishery) + (1|fit_model),
-                                          data = sandbox_performance, chains = 2, cores = 2)
+sandbox_performance <- sandbox_performance %>%
+  ungroup()
+
+
+prep_performance <- sandbox_performance %>%
+  select(log_rmse, fit_model,sigma_r:percnt_loo_selected) %>% {
+  recipes::recipe(log_rmse ~ ., data = .)
+  } %>%
+  step_nzv(all_predictors()) %>%
+  step_center(all_numeric(),-all_outcomes()) %>%
+  step_scale(all_numeric(),-all_outcomes()) %>%
+  prep(data = sandbox_performance, retain = T) %>%
+  juice()
+
+model_formula <- paste0("log_rmse ~ ",paste(colnames(prep_performance %>% select(-log_rmse, -fit_model)), collapse = "+"),
+"+ (1|fit_model)")
+
+performance_model <- rstanarm::stan_glmer(model_formula,
+                                          data = prep_performance, chains = 2, cores = 2)
 
 tidy_performance <- tidybayes::spread_draws(performance_model, b[intercept,model])
 
@@ -909,14 +942,10 @@ saveRDS(object = sandbox_performance,file =  paste0(run_dir,"/sandbox_performanc
 
 
 mod_select <- sandbox_performance %>%
-  group_by(fishery,
-           experiment,
-           fleet_model,
-           period,
-           window,
-           prop_years_lcomp_data,
-           variable) %>%
-  filter(rmse == min(rmse))
+  group_by(fishery) %>%
+  filter(variable == "f") %>%
+  filter(rmse == min(rmse)) %>%
+  ungroup()
 
 
 model_selected_plot <- mod_select %>%
@@ -949,7 +978,7 @@ econ_selected_plot <- mod_select %>%
 model_summary_plot <- model_selected_plot + econ_selected_plot
 
 
-model_decision <- dtree_fit <- train(fit_model ~., data = sandbox_performance, method = "rpart")
+model_decision <- dtree_fit <- train(fit_model ~., data = prep_performance %>% select(-log_rmse), method = "rpart")
 
 
 }

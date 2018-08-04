@@ -213,20 +213,19 @@ The estimating model itself, which, since it is motivated by money we call `scro
   - An estimate of natural mortality 
   - An estimate of Beverton-Holt steepness
 
-We will focus our discussion on the estimation model. 
+We will focus our discussion on the estimation model. We constructed four candidate process models describing the economic behavior of the fishing flee  and three candidate likelihoods, each defined by different structural assumptions and data availability. We then fit factorial combinations of each process model with each likelihood structure, omitting combinations that would have double counted some information as both a prior and data (see Table.XX).
 
-The model has a number of parameters it must estimate, namely fishing mortality rates, recruitment deviates, the length at 50% selectivity, and associated process and observation errors as required. 
+The model has a number of parameters it must estimate, namely fishing mortality rates, recruitment deviates, the length at 50% selectivity, and associated process and observation errors as required (see Table.XX for a complete description of all estimated parameters and their prior distributions). The model is initialized at unfished biomass, and then an estimate of initial fishing mortality is applied for 100 burn-in years, achieving a level of depletion at the start of the data-period of the model. The data period of the model is of length *t*, and defines the timesteps during which the model estiamtes dynamic parameters, though the model estimate *t* + age 50% selectivity recruitment deviates, to allow the model to estimate recruitment pulses which start before the data-period but whose signal can be observed during the early years of the data period. Length-composition data must be available for 1 or more years of the data-period, but are not required in all years. For example, the model can function if given ten years of economic information and only one year of length composition data available at the end of the time period. 
 
-To begin with, all estimation models share a common components of recruitment deviates and length composition data. Recruitment is assumed to on average have Beverton-Holt dynamics [@Beverton1959], reparemeterized around steepness. Process error around this mean relationship is assumed to be log-normally distributed with a bias correction
+All estimation models share common components of recruitment deviates and length composition data. Recruitment is assumed to on average have Beverton-Holt dynamics [@Beverton1959], reparemeterized around steepness. Process error around this mean relationship is assumed to be log-normally distributed with a bias correction
 
-XX mention that recruitment starts before burn-in period ends
 
 $$r_{t} = BH(SSB_{t-1},h)e^{r^{dev}_{t}}$$
 
 
 $$r^{dev}_{t} \sim normal(-\sigma_{r}^2/2, \sigma_r)$$
 
-$$\sigma_r ~ normal(0.4,0.4)$$
+$$\sigma_r \sim normal(0.4,0.4)$$
 
 Length composition data are structured as discrete numbers of fish counted within 1cm length bins per year. While each estimation model differs in its methods for estimating fishing mortality rates, for a given generated mortality rate, vector of estimated recruitment events $r$, and estimated selectivity $s^{50}$, the model produces a vector of probability of capture at length $p^{capture}$ for each time step, given the structural population equations of the model $g()$. 
 
@@ -238,7 +237,7 @@ $N_{t,1:L} \sim multinomial(p^{capture}_{t,1:L})$
 
 The key difference in the estimation models is how they estimate *f* and the data that enter the likelihood. All estimation of *f* begins by estimating a parameter $f^{init}$, which is the fishing mortality rate that is held constant over a burn-in period to achieve a given level of depletion by the time of the start of the data period of the model. The estimation models diverge from there in that each specifies a different structural model for how *f* evolves from $f^{init}$. 
 
-#### Random Walk Model
+#### Random Walk Model (random-walk)
 
 This estimation model is similar in flavor to the penalty on deviations in fishing mortality used in LIME. Under this model, effort deviates $E^{dev}$ are assumed to be lognormally distributed
 
@@ -260,13 +259,14 @@ $$E_{t} = E_{t-1}e^{E^{dev}_{t}}$$
 
 $$f_{t} = qE_{t}$$
 
-# Bioeconomic Model with Incentives Data
+#### Bioeconomic Model with Profit Ingredients (profit-ingredients)
 
-We now turn to our class of bioeconomic models. ALl of these operate under the form
+We now turn to our class of bioeconomic models. All bioeconomic models hav the form
 
 $$E_{t + 1} = E_{t} + \theta{\hat{PPUE_{t}}}$$
 
-where $\hat{PPUE_{t}}$ the profit per unit effort, and $\theta$ adjusts the responsiveness of effort to *PPUE*. 
+where $\hat{PPUE_{t}}$ the profit per unit effort, and $\theta$ adjusts the responsiveness of effort to *PPUE*. Under the `ingredients` model, the user supplies some data on absolute or relative changes in prices *p*, costs *c*, and technology (catchability) *q* (which can be thought of as ingredients of profitability). For example, users could report a 25% increase in prices due to the arrival of a new buyer with access to a lucrative foreign market, a 10% decrease in fishing costs due to a government fuel subsidy, and/or a increase in catchability due to the introduciton of fish-finder technology. These ingredients of profitability can be provided either as qualititave information or hard data. Any ingredients for which no estimtes of relative rates of change are available are assumed to remain constant over the time period of the model. The key feature of this model is that it uses these ingredients to inform our prior on $\hat{PPUE_{t}}$ in a given time step. Therefore, if costs go down and prices go up in a given time step, our prior on $\hat{PPUE_{t}}$ will increase appropriately, subsequently increasing our prior on the amount of effort in the following timestep. 
+
 
 Under this model, $\hat{PPUE_{t}}$ is calculated as 
 
@@ -274,9 +274,9 @@ $$\hat{PPUE_{t}} = \frac{p_{t}C(q_{t},B_{t},E_t,s^{50}) - c_{t}E_{t}^2}{E_{t}}$$
 
 where *C()* represents that Baranov catch equation [citation]. 
 
-Notice now that the components price (*p*), catchability (*q*), and cost (*c*) are allowed to vary over time. This is because the model allows for user supplied information on the evoloution of these economic traits over time, either in the form of actual values (e.g. the price in a given year), or in relative changes (prices are 10% higher than they were last year). For the relative change cases, user supplied inputs are converted to deviations from a mean value and then multiplied by a default mean value set by the model. 
+Notice now that the components price (*p*), catchability (*q*), and cost (*c*) are allowed to vary over time. This is because the model allows for user supplied information on the evoloution of these economic traits over time, either in the form of actual values (e.g. the price in a given year), or in relative changes (prices are 10% higher than they were last year). For the relative change cases, user supplied inputs are converted to deviations from a mean value and then multiplied by a default mean value set by the model. This is the default for both *q* and *c*, since converting user knowledge into the appropriate units is challenging. 
 
-One challenge in this is that the dynamics of the open access model are driven by the relative profitability of the fishery, and as such largely to the relative scale of revenue and costs. Therefore, getting the relative magnitude of prices and costs to be relatively correct is important. Unfortunately, while prices can be relatively easily determined, costs are much more difficult to obtain, especially in units matching the exact effort units of the operating model. 
+One difficulty in this is that the dynamics of the open access model are driven by the relative profitability of the fishery, and as such largely to the relative scale of revenue and costs. Therefore, getting the relative magnitude of prices and costs to be relatively correct is important. Unfortunately, while prices can be relatively easily determined, costs are much more difficult to obtain, especially in units matching the exact effort units of the operating model. 
 
 To solve this problem, we estimate an additional parameter in this estimation model, $c^{max}$. The cost in any time is then calculated as
 
@@ -303,12 +303,22 @@ While $\theta$ has no intuitative sense for most stakeholders, the maximum perce
 
 $$\Delta^{max} \sim normal(0,0.25)$$
 
+Together, the `ingredients` model allows us to utilize provided ingredients of profitability to drive our prior expectations of the dynamcis of fishing efforts. 
+
+
+#### Bioeconomic Model with PPUE Data (`ppue`)
+
+The `ingredients` 
+
+
+#### Effort Data Model (`effort`)
 
 
 
-## Results
 
-### Case Studies
+### Results
+
+#### Case Studies
 
 
 ```{r prep_figures}

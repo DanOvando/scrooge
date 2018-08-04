@@ -5273,6 +5273,7 @@ rstanarm::launch_shinystan(case_studies$scrooge_fit[[2]])
 
 ```{r}
 
+
 a <- sandbox_performance %>% 
   ungroup() %>% 
   arrange(desc(rmse)) %>% 
@@ -5317,6 +5318,12 @@ hmm %>%
 
   wtf <- processed_sandbox %>%
     filter(experiment == bad_experiment) 
+  
+  wtf$prepped_fishery[[1]]$simed_fishery %>% 
+    group_by(year) %>% 
+    summarise(q = unique(f / effort)) %>% 
+    ggplot(aes(year, q)) + 
+    geom_point()
   
   wtf$summary_plot
 
