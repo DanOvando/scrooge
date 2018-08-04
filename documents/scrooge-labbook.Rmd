@@ -5394,3 +5394,48 @@ hmm %>%
 
 
 
+# length plots
+
+```{r}
+
+  # perf_summaries %>%
+  #   filter(variable == "f") %>%
+  #   ggplot() +
+  #   geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90), fill = "lightgrey") +
+  #   geom_ribbon(aes(year, ymin = lower_50, ymax = upper_50), fill = "darkgrey") +
+  #   geom_line(aes(year, mean_predicted), color = "steelblue") +
+  #   geom_point(
+  #     aes(year, observed),
+  #     fill = "tomato",
+  #     size = 4,
+  #     shape = 21
+  #   ) +
+  #   labs(y = "", x = "Year") +
+  #   facet_wrap( ~ experiment, scales = "free") +
+  #   theme_minimal()
+
+#
+#   length_comps[[1]] %>%
+#     filter(source == "posterior_predictive") %>%
+#     group_by(year, .chain, .iteration) %>%
+#     mutate(predicted = predicted / sum(predicted)) %>%
+#     group_by(year, .chain, length_bin) %>%
+#     summarise(
+#       lower_90 = quantile(predicted, 0.05),
+#       upper_90 = quantile(predicted, 0.95),
+#       mean = mean(predicted),
+#       observed = unique(observed)
+#     ) %>%
+#     ggplot() +
+#     geom_ribbon(aes(x = length_bin, ymin = lower_90, ymax = upper_90), fill = "lightgrey") +
+#     geom_line(aes(length_bin, mean), color = "steelblue") +
+#     geom_point(
+#       aes(length_bin, observed),
+#       size = .5,
+#       alpha = 0.5,
+#       color = "red"
+#     ) +
+#     facet_wrap( ~ year) +
+#     theme_minimal()
+```
+

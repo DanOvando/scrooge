@@ -70,7 +70,7 @@ theme_set(scrooge_theme)
 
 # run options -------------------------------------------------------------
 
-sim_fisheries <- FALSE
+sim_fisheries <- TRUE
 
 run_case_studies <- FALSE
 
@@ -80,11 +80,13 @@ fit_models <- FALSE
 
 process_cloud_fits <- TRUE
 
-n_fisheries <- 10 # number of fisheries to simulate
+n_fisheries <- 200 # number of fisheries to simulate
 
 n_cores <- 2
 
 n_chains <- 1
+
+max_realistic_f <- 3
 
 if (in_clouds == T) {
 
@@ -355,7 +357,8 @@ if (sim_fisheries == T)
                sim_years = 100,
                burn_years = 100,
                cv_len = 0.2,
-               linf_buffer = 1.25
+               linf_buffer = 1.25,
+               .progress = T
              ))
 
   no_error <- map(fisheries_sandbox$prepped_fishery, 'error') %>%
@@ -370,6 +373,15 @@ if (sim_fisheries == T)
 
   fisheries_sandbox$fishery <- 1:nrow(fisheries_sandbox)
 
+  bad_fisheries <- fisheries_sandbox %>%
+    select(fishery,prepped_fishery) %>%
+    mutate(max_f = map_dbl(prepped_fishery, ~.x$simed_fishery$f %>% max())) %>%
+    filter(max_f > max_realistic_f)
+
+  fisheries_sandbox <- fisheries_sandbox %>%
+    filter(!(fishery %in% bad_fisheries$fishery)) %>%
+    ungroup() %>%
+    mutate(fishery = 1:nrow(.))
 
   if (in_clouds == FALSE) {
     saveRDS(fisheries_sandbox,
@@ -477,42 +489,36 @@ if (run_case_studies == T) {
 
   realistic_plot <- plot_simmed_fishery(realistic)
 
-  realistic_plot
+  # realistic_plot
 
-  realistic$simed_fishery %>%
-    group_by(year) %>%
-    summarise(rec_dev = unique(exp(rec_dev))) %>%
-    ggplot(aes(year, rec_dev)) +
-    geom_point()
-
-  realistic$simed_fishery %>%
-    group_by(year) %>%
-    summarise(
-      profits = sum(profits),
-      effort = unique(effort),
-      f = unique(f)
-    ) %>%
-    ungroup() %>%
-    mutate(
-      ppue = profits / effort,
-      delta_effort = lead(effort) - effort,
-      delta_f = lead(f) - f
-    ) %>%
-    ggplot(aes(year, ppue)) +
-    geom_point()
+  # realistic$simed_fishery %>%
+  #   group_by(year) %>%
+  #   summarise(
+  #     profits = sum(profits),
+  #     effort = unique(effort),
+  #     f = unique(f)
+  #   ) %>%
+  #   ungroup() %>%
+  #   mutate(
+  #     ppue = profits / effort,
+  #     delta_effort = lead(effort) - effort,
+  #     delta_f = lead(f) - f
+  #   ) %>%
+  #   ggplot(aes(year, ppue)) +
+  #   geom_point()
 
 
   # decoupled
 
   decoupled <- prepare_fishery(
     sci_name = "Lutjanus campechanus",
-    fleet_model = "supplied-catch",
+    fleet_model = "random-walk",
     sigma_r = 0.5,
     rec_ac = 0.5,
-    sigma_effort = 0,
+    sigma_effort = 0.1,
     price_cv = 0.4,
     cost_cv = 0.2,
-    q_cv = 0.5,
+    q_cv = 0.2,
     price_slope = .0075,
     cost_slope =  -0.001,
     q_slope = 0.005,
@@ -522,19 +528,19 @@ if (run_case_studies == T) {
     steepness = 0.9,
     percnt_loo_selected = 0.3,
     obs_error = 0,
-    initial_f = .025,
+    initial_f = 0.2,
     r0 = 100,
     price = 4,
     q = 1e-3,
     profit_lags = 0,
-    max_perc_change_f = 0.2,
+    max_perc_change_f = 0.1,
     max_cp_ratio = 0.01,
     beta = 2,
     sim_years = 100,
     burn_years = 100,
     cv_len = 0.2,
     linf_buffer = 1.25,
-    fleet_params = fleet_model_params$fleet_params[fleet_model_params$fleet_model == "supplied-catch"][[1]]
+    seed = 32
   )
 
   decoupled_plot <- plot_simmed_fishery(decoupled)
@@ -571,12 +577,6 @@ if (run_case_studies == T) {
       ),
       subsample_data
     )) %>%
-    # filter(
-    #   case_study == "realistic",
-    #   period == "beginning",
-    #   window == 15,
-    #   prop_years_lcomp_data == 0.5
-    # ) %>%
     filter(!(likelihood_model == 2 & economic_model == 3)) %>%
     filter(!(likelihood_model == 1 & economic_model == 2))
 
@@ -586,10 +586,6 @@ if (run_case_studies == T) {
   sfs <- safely(fit_scrooge)
 
   set.seed(42)
-
-  # case_studies <- case_studies %>%
-  #   filter(economic_model == 1, likelihood_model == 1) %>%
-  #   slice(1:2)
 
   future::plan(future::multiprocess, workers = n_cores)
 
@@ -655,75 +651,36 @@ if (run_case_studies == T) {
       observed = mean(observed)
     )
 
-  # perf_summaries %>%
-  #   filter(variable == "f") %>%
-  #   ggplot() +
-  #   geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90), fill = "lightgrey") +
-  #   geom_ribbon(aes(year, ymin = lower_50, ymax = upper_50), fill = "darkgrey") +
-  #   geom_line(aes(year, mean_predicted), color = "steelblue") +
-  #   geom_point(
-  #     aes(year, observed),
-  #     fill = "tomato",
-  #     size = 4,
-  #     shape = 21
-  #   ) +
-  #   labs(y = "", x = "Year") +
-  #   facet_wrap( ~ experiment, scales = "free") +
-  #   theme_minimal()
-
   length_comps <- map(case_studies$performance, "length_comps")
-
-#
-#   length_comps[[1]] %>%
-#     filter(source == "posterior_predictive") %>%
-#     group_by(year, .chain, .iteration) %>%
-#     mutate(predicted = predicted / sum(predicted)) %>%
-#     group_by(year, .chain, length_bin) %>%
-#     summarise(
-#       lower_90 = quantile(predicted, 0.05),
-#       upper_90 = quantile(predicted, 0.95),
-#       mean = mean(predicted),
-#       observed = unique(observed)
-#     ) %>%
-#     ggplot() +
-#     geom_ribbon(aes(x = length_bin, ymin = lower_90, ymax = upper_90), fill = "lightgrey") +
-#     geom_line(aes(length_bin, mean), color = "steelblue") +
-#     geom_point(
-#       aes(length_bin, observed),
-#       size = .5,
-#       alpha = 0.5,
-#       color = "red"
-#     ) +
-#     facet_wrap( ~ year) +
-#     theme_minimal()
 
   saveRDS(case_studies, file = glue::glue("{run_dir}/case_studies.RDS"))
 
   saveRDS(perf_summaries, file = glue::glue("{run_dir}/perf_summaries.RDS"))
 
-} else {
-
-  case_studies <- readRDS(glue::glue("{run_dir}/case_studies.RDS"))
-
-  perf_summaries <- readRDS(glue::glue("{run_dir}/perf_summaries.RDS"))
-
-}# close case studies runs
+} #else {
+#
+#   case_studies <- readRDS(glue::glue("{run_dir}/case_studies.RDS"))
+#
+#   perf_summaries <- readRDS(glue::glue("{run_dir}/perf_summaries.RDS"))
+#
+# }# close case studies runs
 
 if (run_clouds == T){
 if (fit_models == T) {
   experiments <- expand.grid(
-    period = c("beginning", "middle", "end"),
-    window = c(5, 10, 15),
+    period = c("middle"),
+    window = c(15),
     economic_model = c(0, 1, 2, 3),
     likelihood_model = c(0, 1, 2),
-    prop_years_lcomp_data = c(0.1, .5, 1),
-    fishery = unique(fisheries_sandbox$fishery),
+    prop_years_lcomp_data = c(0.25,1),
+    fishery =   unique(fisheries_sandbox$fishery),
     stringsAsFactors = F
-  )
+  ) %>%
+    filter(!(economic_model == 2 & likelihood_model == 1),
+           !(economic_model == 3 & likelihood_model == 2))
 
   fisheries_sandbox <- experiments %>%
     left_join(fisheries_sandbox, by = "fishery") %>%
-    sample_n(2) %>%
     mutate(experiment = 1:nrow(.)) %>%
     mutate(prepped_fishery = pmap(
       list(
