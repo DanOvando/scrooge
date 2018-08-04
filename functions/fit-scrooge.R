@@ -55,7 +55,7 @@ fit_scrooge <-
 
     data$sd_sigma_r <- sd_sigma_r
 
-    if (economic_model == 0){
+    if (economic_model %in% c(0,2,3)){
 
       data$q_t <- rep(mean(data$q_t), length(data$q_t))
 

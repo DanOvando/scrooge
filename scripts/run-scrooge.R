@@ -647,7 +647,7 @@ if (run_case_studies == T) {
       lower_50 = quantile(predicted, 0.25),
       upper_50 = quantile(predicted, 0.75),
       mean_predicted = mean(predicted),
-      mean_predicted = median(mean_predicted),
+      median_predicted = median(mean_predicted),
       observed = mean(observed)
     )
 
@@ -780,7 +780,7 @@ if (in_clouds == T) {
   future::plan(future::multiprocess, workers = 5)
 
   processed_sandbox <- fisheries_sandbox %>%
-    mutate(performance = future_map2(scrooge_fit, prepped_fishery, summarise_performance, cloud_dir = cloud_dir, .progress = T))
+    mutate(performance = future_map2(scrooge_fit, prepped_fishery, safely(summarise_performance), cloud_dir = cloud_dir, .progress = T))
 
   saveRDS(processed_sandbox, file = glue::glue("results/scrooge-results/{run_name}/processed_fisheries_sandbox.RDS"))
 
@@ -948,20 +948,4 @@ model_decision <- dtree_fit <- train(fit_model ~., data = prep_performance %>% s
 
 
 # make figures ------------------------------------------------------------
-mod_select$experiment
-
-decision_data <- processed_sandbox %>%
-  ungroup() %>%
-  left_join(mod_select %>% ungroup() %>%  select(experiment, fit_model), by = "experiment") %>%
-  select(fit_model, sigma_r, rec_ac, price_cv, q_cv) %>%
-  filter(!is.na(fit_model))
-
-
-decision_tree = train(fit_model ~ .,
-                      method = "rpart",
-                      data =  decision_data,
-                      tuneLength =20)
-
-plot(decision_tree$finalModel)
-text(decision_tree$finalModel, use.n=TRUE, all=TRUE, cex=0.5)
 

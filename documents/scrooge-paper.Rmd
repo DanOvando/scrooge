@@ -261,28 +261,31 @@ $$f_{t} = qE_{t}$$
 
 #### Bioeconomic Model with Profit Ingredients (profit-ingredients)
 
-We now turn to our class of bioeconomic models. All bioeconomic models hav the form
-
-$$E_{t + 1} = E_{t} + \theta{\hat{PPUE_{t}}}$$
-
-where $\hat{PPUE_{t}}$ the profit per unit effort, and $\theta$ adjusts the responsiveness of effort to *PPUE*. Under the `ingredients` model, the user supplies some data on absolute or relative changes in prices *p*, costs *c*, and technology (catchability) *q* (which can be thought of as ingredients of profitability). For example, users could report a 25% increase in prices due to the arrival of a new buyer with access to a lucrative foreign market, a 10% decrease in fishing costs due to a government fuel subsidy, and/or a increase in catchability due to the introduciton of fish-finder technology. These ingredients of profitability can be provided either as qualititave information or hard data. Any ingredients for which no estimtes of relative rates of change are available are assumed to remain constant over the time period of the model. The key feature of this model is that it uses these ingredients to inform our prior on $\hat{PPUE_{t}}$ in a given time step. Therefore, if costs go down and prices go up in a given time step, our prior on $\hat{PPUE_{t}}$ will increase appropriately, subsequently increasing our prior on the amount of effort in the following timestep. 
+We now turn to our class of bioeconomic models. Across all evaluated bioeconomic models, we assume that fishermen respond to average not marginal profits, per @Gordon1954, which we quantify as profits per unit effort, or *PPUE*. Under the `ingredients` model, the user supplies some data on absolute or relative changes in prices *p*, costs *c*, and technology (catchability) *q* (which can be thought of as ingredients of profitability). For example, users could report a 25% increase in prices due to the arrival of a new buyer with access to a lucrative foreign market, a 10% decrease in fishing costs due to a government fuel subsidy, and/or a increase in catchability due to the introduciton of fish-finder technology. These ingredients of profitability can be provided either as qualititave information or hard data. Any ingredients for which no estimtes of relative rates of change are available are assumed to remain constant over the time period of the model. The key feature of this model is that it uses these ingredients to inform our prior on $\hat{PPUE_{t}}$ in a given time step. Therefore, if costs go down and prices go up in a given time step, our prior on $\hat{PPUE_{t}}$ will increase appropriately, subsequently increasing our prior on the amount of effort in the following timestep. 
 
 
 Under this model, $\hat{PPUE_{t}}$ is calculated as 
 
 $$\hat{PPUE_{t}} = \frac{p_{t}C(q_{t},B_{t},E_t,s^{50}) - c_{t}E_{t}^2}{E_{t}}$$
 
+
 where *C()* represents that Baranov catch equation [citation]. 
 
-Notice now that the components price (*p*), catchability (*q*), and cost (*c*) are allowed to vary over time. This is because the model allows for user supplied information on the evoloution of these economic traits over time, either in the form of actual values (e.g. the price in a given year), or in relative changes (prices are 10% higher than they were last year). For the relative change cases, user supplied inputs are converted to deviations from a mean value and then multiplied by a default mean value set by the model. This is the default for both *q* and *c*, since converting user knowledge into the appropriate units is challenging. 
+Notice now that the components price (*p*), catchability (*q*), and cost (*c*) are allowed to vary over time. This is because the model allows for user supplied information on the evoloution of these economic traits over time, either in the form of actual values (e.g. the price in a given year), or in relative changes (prices are 10% higher than they were last year). For the relative change cases, user supplied inputs are converted to deviations from a mean value and then multiplied by a default mean value set by the model. This is the default for both *q* and *c*, since converting user knowledge into the appropriate units is challenging. For a given value of $\hat{PPUE_{t}}$, we calcualte effort in the next time step per
 
-One difficulty in this is that the dynamics of the open access model are driven by the relative profitability of the fishery, and as such largely to the relative scale of revenue and costs. Therefore, getting the relative magnitude of prices and costs to be relatively correct is important. Unfortunately, while prices can be relatively easily determined, costs are much more difficult to obtain, especially in units matching the exact effort units of the operating model. 
 
-To solve this problem, we estimate an additional parameter in this estimation model, $c^{max}$. The cost in any time is then calculated as
+$$E_{t + 1} = (E_{t} + \theta{\hat{PPUE_{t}}})e^{E^{dev}_{t}}$$
+
+where $\hat{PPUE_{t}}$ the profit per unit effort, and $\theta$ adjusts the responsiveness of effort to *PPUE*. From there
+
+$$f_{t} = q_{t}E_{t}$$
+
+
+One difficulty in this is that the dynamics of the open access model are driven by the relative profitability of the fishery, and as such largely to the relative scale of revenue and costs. Therefore, getting the relative magnitude of prices and costs to be relatively correct is important. Unfortunately, while prices can be relatively easily determined, costs are much more difficult to obtain, especially in units matching the exact effort units of the operating model. To solve this problem, we estimate an additional parameter in this estimation model, $c^{max}$. The cost in any time is then calculated as
 
 $$c_t  = c^{max}c^{rel}$$
 
-where $c^{rel}$ are the relative costs (scaled from 0 to 1) over time supplied by users. $c^{max}$ itself is tuned in a rather long process that results in much cleaner estimation that can actually be provided with informative priors. Rather than estimating  $c^{max}$ itself, we estimate a costs to revenue ratio at the start of the fishery. We first estimate a guess of, given the simulated nature of the fishery, something close to maximum revenues (assumed to come by fishing a bit harder than *m* when the population is completely unfished). We then calculate the profits associated with these maximum reveunes given the current estimate of the cost to revenue ratio CR. 
+where $c^{rel}$ are the relative costs (scaled from 0 to 1) over time *t* supplied by users. $c^{max}$ itself is tuned in a rather long process that results in much cleaner estimation that can actually be provided with informative priors. Rather than estimating  $c^{max}$ itself, we estimate a cost-to-revenue ratio at the start of the fishery. We first estimate a guess of, given the simulated nature of the fishery, something close to maximum revenues (assumed to come by fishing a bit harder than *m* when the population is completely unfished). We then calculate the profits associated with these maximum reveunes given the current estimate of the cost to revenue ratio CR. 
 
 $$PROFITS^{max} \sim  MAX(PRICE)CATCH^{B0}*(1 - CR) $$
 
@@ -297,7 +300,7 @@ $$CR \sim normal(0.5,1)$$
 
 The other challenging parameter in the open access equation is $\theta$, the amount that effort changes for a one unit change in $PPUE$. Similarly to estimating the cost to revenue ratio instead of raw costs, rather than estimate $theta$ directly, we estimate the maximum percentage change in effort from one time step to the next. As part of the CR process, we estimated the maximum profits, and the effor that would produce those profies. Together that provides us with the maxium expected PPUE. For a given max percentage change ($\Delta^{max}$) in effort then, we calculate $\theta$ as
 
-$$\theta = (\Delta^{max} * E^{MAX}) / PPUE^{MAX}$$
+$$\theta = (\Delta^{max}  E^{MAX}) / PPUE^{MAX}$$
 
 While $\theta$ has no intuitative sense for most stakeholders, the maximum percentage year-to-year change in effort can be elicitied from stakeholders. For now, we assume a zero truncated normal prior on the max expansion
 
@@ -308,15 +311,41 @@ Together, the `ingredients` model allows us to utilize provided ingredients of p
 
 #### Bioeconomic Model with PPUE Data (`ppue`)
 
-The `ingredients` 
+The `ingredients` model makes use of individual components of the factors that make up profitability, and under the theory that a) these data are informative to the evolution of effort and b) these data may be easier to obtain than for example actual mean profitability across the fishery. However, we can also consider an effort process model in which *PPUE* is assumed to be known. While complete knowledge of average *PPUE* in a fishery is unlikely, especially in a data-limited context, survey methods could be constructed to collect estimates of *PPUE*, which being a central part of a fisherman's business, is not an unreasonable piece of information to think could be obtained, given the right questions and sufficient trust. 
+
+So, the the `ppue` model, rather than estimating $\hat{PPUE_{t}}$ as a function of its ingredients, we simply take collected values of *PPUE* as data, and estimate effort per 
+
+$$E_{t + 1} = (E_{t} + \theta{PPUE_{t}})e^{E^{dev}_{t}}$$
+
+We estimate $\theta$ using the same methods described in the `ingredients` method (estimating the maximum percent change in year-to-year effort instead of $\theta$ directly). 
+
+Since we no longer assume knowledge of technology changes over time, we assume a static *q*. This assumption could be relaxed in future model runs to consider knowledge of both PPUE and technlogy, but for now we make this assumption to make a cleaner distinction between the `ingredients` model and the other models. 
+
+$$f_{t} = qE_{t}$$
 
 
 #### Effort Data Model (`effort`)
 
+Both of the bio-economic methods `ingredients` and `ppue` model the change in effort as a function of profits per unit effort. Their key function, from the perspective of a model focused on estimating biological fishery metrics, is to help inform estimates of timestep-to-timestep changes in fishing mortality. To follow the old adage "keep it simple stupid", we also build a model that assumes data on the timestep-to-timestep proportional changes in fishing effort. While such data are unlikely to be available for a fishery covering a large and diverse geographic range, for more localized small-scale fisheries such knowledge is not unreasonable. For example, fishing cooperative in Chile often maintain data on fishing effort [citation]. 
+
+Under the `effort` model then, we assume knowledge of the proportional changes in effort over time $\Delta^{effort}$, where
+
+$$\Delta^{effort} = E_{t+1}/E_{t}$$
+
+and 
+
+$$E_{t + 1} = (E_{t}\Delta^{effort})e^{E^{dev}_{t}}$$
+
+and 
+
+$$f_{t} = qE_{t}$$
 
 
+#### Simulation Testing
 
 ### Results
+
+####
 
 #### Case Studies
 
