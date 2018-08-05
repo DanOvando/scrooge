@@ -22,6 +22,7 @@ library(patchwork)
 library(rstanarm)
 library(tidybayes)
 library(ggridges)
+library(scales)
 library(caret)
 library(tidyverse)
 
@@ -711,13 +712,12 @@ Distribution of winners
 
 mod_select <- sandbox_performance %>%
   group_by(fishery,
-           experiment,
-           fleet_model,
            period,
            window,
-           prop_years_lcomp_data,
-           variable) %>%
-  filter(rmse == min(rmse))
+           prop_years_lcomp_data) %>%
+  filter(variable == "f") %>%
+  filter(rmedse == min(rmedse)) %>%
+  ungroup()
 
 
 model_selected_plot <- mod_select %>%
@@ -757,16 +757,21 @@ model_summary_plot
 Which do you pick?
 
 ```{r dtree}
-decision_data <- processed_sandbox %>%
-  ungroup() %>%
-  left_join(mod_select %>% ungroup() %>%  select(experiment, fit_model), by = "experiment") %>%
-  select(fit_model, sigma_r, rec_ac, price_cv, q_cv) %>%
-  filter(!is.na(fit_model))
+prep_performance <- sandbox_performance %>%
+  select(w_rmse, fit_model,sigma_r:percnt_loo_selected) %>% {
+  recipes::recipe(w_rmse ~ ., data = .)
+  } %>%
+  step_log(all_outcomes()) %>%
+  step_nzv(all_predictors()) %>%
+  step_center(all_numeric(),-all_outcomes()) %>%
+  step_scale(all_numeric(),-all_outcomes()) %>%
+  prep(data = sandbox_performance, retain = T) %>%
+  juice()
 
 set.seed(42)
 decision_tree = train(fit_model ~ .,
                       method = "rpart",
-                      data =  decision_data,
+                      data =  prep_performance %>% select(-w_rmse),
                       tuneLength =40)
 
 plot(decision_tree$finalModel)
@@ -779,6 +784,8 @@ text(decision_tree$finalModel, use.n=TRUE, all=TRUE, cex=0.5)
 Limitations
 - what about a managed fishery?
 - importance of priors to estimate all this crap
+
+garbage in garbage out - but same problem for any data and you can talk to humans. 
 
 This isn't just a tweak to length-based assessments, foundation for a new branch of assessment.
 

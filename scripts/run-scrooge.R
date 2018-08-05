@@ -23,6 +23,9 @@ library(stringr)
 library(glue)
 library(broom)
 library(furrr)
+library(ggridges)
+library(scales)
+library(recipes)
 library(tidyverse)
 rstan::rstan_options(auto_write = TRUE)
 extrafont::loadfonts()
@@ -72,13 +75,13 @@ theme_set(scrooge_theme)
 
 sim_fisheries <- FALSE
 
-run_case_studies <- TRUE
+run_case_studies <- FALSE
 
 run_clouds <- FALSE
 
 fit_models <- FALSE
 
-process_cloud_fits <- FALSE
+process_cloud_fits <- TRUE
 
 n_fisheries <- 10 # number of fisheries to simulate
 
@@ -815,7 +818,7 @@ if (dir.exists(here::here("results","scrooge-results",run_name)) == F){
 
 processed_sandbox <- readRDS(file = glue::glue("results/scrooge-results/{run_name}/processed_fisheries_sandbox.RDS"))
 
-reserve <- processed_sandbox$performance
+# reserve <- processed_sandbox$performance
 
 # processed_sandbox$performance <- map(processed_sandbox$performance, "result")
 
@@ -833,16 +836,7 @@ sandbox_performance <- processed_sandbox %>%
   select(-scrooge_fit, -prepped_fishery,-summary_plot,-fleet_params) %>%
   unnest()
 
-
-bad_experiments <- sandbox_performance %>%
-  group_by(experiment) %>%
-  filter(variable == "f") %>%
-  summarise(max_f = max(observed)) %>%
-  ungroup() %>%
-  filter(max_f > 3)
-
 sandbox_performance <- sandbox_performance%>%
-  filter(!experiment %in% bad_experiments$experiment) %>%
   group_by(fishery,
            experiment,
            fleet_model,
@@ -853,7 +847,12 @@ sandbox_performance <- sandbox_performance%>%
            economic_model,
            likelihood_model) %>%
   summarise(rmse = sqrt(mean(sq_er)),
-            bias = median((predicted - observed) / observed)) %>%
+            mean_bias = mean(predicted - observed),
+            median_bias = median(predicted-observed),
+            percent_bias = median((predicted - observed) / observed),
+            mare = median(abs(predicted - observed) / observed),
+            rmedse = sqrt(median(sq_er)),
+            w_rmse = sqrt(weighted.mean(sq_er, w = year))) %>%
   mutate(fit_model = glue::glue("em{economic_model}_lm{likelihood_model}"),
          log_rmse = log(rmse)) %>%
   left_join(processed_sandbox %>%
@@ -864,16 +863,17 @@ sandbox_performance <- sandbox_performance %>%
 
 
 prep_performance <- sandbox_performance %>%
-  select(log_rmse, fit_model,sigma_r:percnt_loo_selected) %>% {
-  recipes::recipe(log_rmse ~ ., data = .)
+  select(w_rmse, fit_model,sigma_r:percnt_loo_selected) %>% {
+  recipes::recipe(w_rmse ~ ., data = .)
   } %>%
+  step_log(all_outcomes()) %>%
   step_nzv(all_predictors()) %>%
   step_center(all_numeric(),-all_outcomes()) %>%
   step_scale(all_numeric(),-all_outcomes()) %>%
   prep(data = sandbox_performance, retain = T) %>%
   juice()
 
-model_formula <- paste0("log_rmse ~ ",paste(colnames(prep_performance %>% select(-log_rmse, -fit_model)), collapse = "+"),
+model_formula <- paste0("w_rmse ~ ",paste(colnames(prep_performance %>% select(-w_rmse, -fit_model)), collapse = "+"),
 "+ (1|fit_model)")
 
 performance_model <- rstanarm::stan_glmer(model_formula,
@@ -899,7 +899,10 @@ saveRDS(object = sandbox_performance,file =  paste0(run_dir,"/sandbox_performanc
 
 
 mod_select <- sandbox_performance %>%
-  group_by(fishery) %>%
+  group_by(fishery,
+           period,
+           window,
+           prop_years_lcomp_data) %>%
   filter(variable == "f") %>%
   filter(rmse == min(rmse)) %>%
   ungroup()
@@ -935,9 +938,13 @@ econ_selected_plot <- mod_select %>%
 model_summary_plot <- model_selected_plot + econ_selected_plot
 
 
-model_decision <- dtree_fit <- train(fit_model ~., data = prep_performance %>% select(-log_rmse), method = "rpart")
+decision_tree = train(fit_model ~ .,
+                      method = "rpart",
+                      data =  prep_performance %>% select(-log_rmse),
+                      tuneLength =40)
 
-
+plot(decision_tree$finalModel)
+text(decision_tree$finalModel, use.n=TRUE, all=TRUE, cex=0.5)
 }
 
 
