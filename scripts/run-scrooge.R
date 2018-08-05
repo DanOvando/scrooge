@@ -70,19 +70,19 @@ theme_set(scrooge_theme)
 
 # run options -------------------------------------------------------------
 
-sim_fisheries <- TRUE
+sim_fisheries <- FALSE
 
-run_case_studies <- FALSE
+run_case_studies <- TRUE
 
 run_clouds <- FALSE
 
 fit_models <- FALSE
 
-process_cloud_fits <- TRUE
+process_cloud_fits <- FALSE
 
 n_fisheries <- 10 # number of fisheries to simulate
 
-n_cores <- 1
+n_cores <- 2
 
 n_chains <- 1
 

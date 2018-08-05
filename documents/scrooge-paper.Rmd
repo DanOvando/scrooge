@@ -344,13 +344,82 @@ $$f_{t} = qE_{t}$$
 
 #### Likelihood Models
 
-The economic operatin models represent alternative 
+The economic process models represent alternative hypotheses as to the true operating model driving the evolution of fishing effort, and partly be extension fishing mortality, in a fishery. In other words, the economic process models inform our prior on the evolution of effort. However, a central motivation of this research is to diversify both the data available to our assessment operating models (as we have done with the use of economic data as components of Bayesian priors), and the data with which we confront these models. The traditional pantheon of data with which we confront models in fisheries are abundance indicies (derived from either fishery dependent or independent sources) and length/age composition data [citation]. We propose to add profit per unit effort and proportional changes in effort to this group, at least as a starting point in the data-limited context of this study. 
+
+##### PPUE as an Index of Effort (`length + ppue`)
+
+XX cite that maunder paper Jim mentioned for fitting random effects to an index
+
+
+We consider catch-per-unit-effort to be informative in fisheries (on a good day) through the relationship
+
+$$CPUE_{t} = \frac{q_{t}E_tB_t}{E_t} = q_tB_t$$
+
+A constant or time-varying estimate of *q* then is our link between an observed CPUE data and an unobserved state of nature, $B_t$ that we wish to estimate. 
+
+We propose a similar use for profit per unit effort, but rather than PPUE informing an index of abundance, it serves as an index in the rate of change in effort (and by extension conditaionl on *q*), fishing mortality. Per a standard open-access model of effort development, 
+
+$$E_{t + 1} = E_{t} + \theta{PPUE_{t}}$$
+
+Simply rearranging this equation, we can provide a link between PPUE and the change in effort as
+
+$$PPUE_{t} = \frac{E_{t + 1} - E_{t}}{\theta}$$
+
+We can therefore use PPUE as an index of the change in timestep-to-timestep effort. In other words, given that our model estiamtes $\hat{E}$ through one of our process models, 
+
+$$\hat{PPUE_{t}} = \frac{\hat{E_{t + 1}} - \hat{E_{t}}}{\theta}$$
+
+$\theta$ is estimated in the same manner as outlined in the economic process models, and from there we can utilize $PPUE$ in the likelihood per
+
+$$PPUE_{t} \sim normal(\hat{PPUE_{t}},\sigma_{obs})$$
+
+Remember though that in our models we are estimating $\hat{E_{t}}$. Clearly then, the above likelihood is only identifiable XX if we either provide a constraining prior on the evolution of $\hat{E_{t}}$ (as all of our economic operation models do) and/or include other components to the likelihood, which we do by fitting to the length composition data in all runs. In other words, when we include $PPUE_{t}$ in the likelihood, the model estimates a vector of efforts that maximize the likelihood of both the PPUE and length composition, conditional on the prior probabilities assigned to the evolution of effort by our effort process model. 
+
+It is also worth noting that by including $PPUE$ in the likelihood, we are now including both process error (quantified as $\sigma_E$ in the estiamted effort deviates) and observation error ($\sigma_obs$), in a similar manner to the methods outlined in [Thorson2015b], though the Bayesian nature of our analysis makes it hierarchichal rather than "mixed effect" in nature, since technically all variables are random in a Bayesian setting [@Gelman2013] XX. Given the data constraints, we are only able to identify both process and observation error by providing constraining priors on our estimates of both. 
+
+Our prior for $\sigma_{obs}$ is a zero-truncated normal distribution with a user-specified CV
+
+$$ \sigma_{obs} \sim normal(0, CV^{PPUE}\frac{1}{T}\sum_{t = 1:T}{PPUE_{t}})$$
+
+
+#### Index of Effort Changes (`length + effort`)
+
+Trying to keep it simple one last time, in our `effort` process model, we assumed knowledge of the relative change in effort over time. Rather then than fitting to an index of the change in effort, we could in theory then simply fit a model to the change in effort data, assuming some observation error. 
+
+$$\Delta^{effort} \sim normal(\frac{\hat{E_{t+1}}}{\hat{E_{t}}}, \sigma_{obs})$$
+
+This likelihood model follows the same identification constraints as the PPUE model. XX
 
 #### Simulation Testing
 
-### Results
+We simulation tested factorial combinations of these process models and likelihood forms XX (omitting combinations that double count data, e.g. pairing the `ppue` process model with the `length+ppue` likelihood model) using a single species age-structured bio-economic operating model. For each run of the model, a species of fish, and its associated life history data, was randomly selected from the database provided by @Thorson2017d. The only stochastic process in the biological model are (potentially) autocorrelated a drifint recruitment deviates. For that run, a fleet model is also chosen from one of three options
 
-####
+- `open-access`
+  - fishing effort responds to profit per unit effort, governed by chosen values and dynamics of price, cost, q, the the change in effort per unit of PPUE
+- `constant-effort`
+  - fishing effort is held constant at some initial value 
+- `random-walk`
+  - fishing effort evolves through a random walk behavior
+  
+For all of these fleet models, the user specifies the degree of variation, autocorrelation, and drift for prices, costs, and catchability. The selected parameters are used to simulate a fishery over a 100 year period. For each time step, length composition data are sampled from the fisheries catch using a multinomial distribution, assuming a CV of the length-at-age key of 20%. 
+
+We simulated two case studies for this paper; an open access model which while containing noise still conforms to the open-access dynamics central to much of the assessed models assumptions, and a random-walk model in which while economic data are still collected, change in effort are completely unrelated to changes in economci conditions. ALong with these case studies, we also simulated 200 fisheries, each with random draws of the simulation parameters (e.g. species, fleet model, degree of variation and drift of economic parameters). 
+
+For every simulated fishery, we then stipuled a range of the data to sample, and a combination of an process model and a likelihood structure to fit `scrooge` to those data. In this study, we sampled length composition and economic data for a period of up to 15 years during the middle of the simulated fishery's evolution. Within this 15 year window, we consider two cases, one where length composition data are available for all 15 years, and another where while economic data are available for all 15 years, length composition data are only available for the last 4 years of the time series. We then pass the chosen model configuration, data and associated life-history parameters to `scrooge` to fit the model. 
+
+For now, we focus on estimation of fishing mortality rates. As the model also estimates selectivity, given assumptions about the spawning biomass at age, it is trivial to also estimate and present common metrics such as the spawning potential ratio (SPR). However, for brevity's sake here, we focus on demonstrating the potential of the model to estiamte *f*. XX. In addition, we do not consider observation error at this time. While this is clearly not a remotely realistic choice, we made this decision due to the novel nature of the the integrated use of economic data and dynamcis into the stock assessment process. If `scrooge` is unable to provide substantial improvemnts (or actually provides worse estimates) than a standard lengths-only assessments model, in the form of @Rudd2017 or @Hordyk2014, even with perfect information, then it is unlikely to do well with imprefect knowledge. However, future testing will clearly need to address this step, which our operating model is already capable of incorporating. XX Mention simulattion constraints. 
+
+#### Model Comparison
+
+Metrics for comparing models
+
+RMSE, BIAS, instead of MARE due to low-F properties. 
+
+tidyposterior stuff
+
+decision tree
+
+### Results
 
 #### Case Studies
 
@@ -462,7 +531,7 @@ cs1_plot + cs1_summ_plot + plot_layout(nrow = 1, ncol = 2, widths = c(3,1))
 
 
 
-```{r}
+```{r cs2}
 
 cs2_summary <- performance_stats %>% 
   ungroup() %>% 
@@ -535,7 +604,7 @@ cs2_plot + cs2_summ_plot + plot_layout(nrow = 1, ncol = 2, widths = c(3,1))
 ```
 
 
-```{r}
+```{r cs3}
 cs3_summary <- performance_stats %>% 
   ungroup() %>% 
   filter(case_study == "decoupled",
@@ -613,6 +682,8 @@ For the case studies, the point is to highlight the general performance of the m
 
 ### Broader performance stats
 
+Overall winners
+
 ```{r best-models}
 
 tidy_performance <- tidybayes::spread_draws(performance_model, b[intercept,model])
@@ -632,6 +703,8 @@ rmse_effect_plot <- tidy_performance %>%
 rmse_effect_plot
 
 ```
+
+Distribution of winners
 
 
 ```{r which-chosen}
@@ -681,6 +754,8 @@ model_summary_plot
 ```
 
 
+Which do you pick?
+
 ```{r dtree}
 decision_data <- processed_sandbox %>%
   ungroup() %>%
@@ -699,13 +774,11 @@ text(decision_tree$finalModel, use.n=TRUE, all=TRUE, cex=0.5)
 ```
 
 
-
-
-### Application to PISCO data
-
-show assessment results for PISCO data
-
 ## Discussion
+
+Limitations
+- what about a managed fishery?
+- importance of priors to estimate all this crap
 
 This isn't just a tweak to length-based assessments, foundation for a new branch of assessment.
 
