@@ -80,9 +80,9 @@ fit_models <- FALSE
 
 process_cloud_fits <- TRUE
 
-n_fisheries <- 200 # number of fisheries to simulate
+n_fisheries <- 10 # number of fisheries to simulate
 
-n_cores <- 2
+n_cores <- 1
 
 n_chains <- 1
 
@@ -290,15 +290,15 @@ if (sim_fisheries == T)
                          replace = T),
     sigma_r = runif(n_fisheries, 0.01, .7),
     rec_ac = runif(n_fisheries, 0, 0.4),
-    sigma_effort = runif(n_fisheries, 0, 0),
+    sigma_effort = runif(n_fisheries, 0, .1),
     price_cv = runif(n_fisheries, 0, 0.2),
     cost_cv = runif(n_fisheries, 0, 0.2),
-    q_cv = runif(n_fisheries, 0, 0.2),
+    q_cv = runif(n_fisheries, 0, 0.1),
     price_slope = runif(n_fisheries, 0, 0.005),
     cost_slope = runif(n_fisheries,-0.005, 0.005),
     q_slope = runif(n_fisheries, 0, 0.005),
-    price_ac = runif(n_fisheries, 0.5, 0.75),
-    cost_ac = runif(n_fisheries, 0.5, 0.75),
+    price_ac = runif(n_fisheries, 0.25, 0.75),
+    cost_ac = runif(n_fisheries, 0.25, 0.75),
     q_ac = runif(n_fisheries, 0.5, 0.75),
     steepness = runif(n_fisheries, 0.6, 0.9),
     obs_error = runif(n_fisheries, 0, 0),
@@ -459,10 +459,10 @@ if (run_case_studies == T) {
     fleet_model = "open-access",
     sigma_r = 0.4,
     rec_ac = 0.5,
-    sigma_effort = 0,
+    sigma_effort = 0.1,
     price_cv = 0.4,
     cost_cv = 0.2,
-    q_cv = 0.5,
+    q_cv = 0.05,
     price_slope = 0,
     cost_slope =  0,
     q_slope = 0.0025,
@@ -518,10 +518,10 @@ if (run_case_studies == T) {
     sigma_effort = 0.1,
     price_cv = 0.4,
     cost_cv = 0.2,
-    q_cv = 0.2,
+    q_cv = 0.05,
     price_slope = .0075,
     cost_slope =  -0.001,
-    q_slope = 0.005,
+    q_slope = 0.0025,
     price_ac = 0.75,
     cost_ac = 0.75,
     q_ac = 0.75,
@@ -557,8 +557,8 @@ if (run_case_studies == T) {
   experiments <- expand.grid(
     period = c("middle"),
     window = c(15),
-    economic_model = c(0, 1),
-    likelihood_model = c(0, 1, 2),
+    economic_model = c(0, 1, 2),
+    likelihood_model = c(0, 1),
     prop_years_lcomp_data = c(0.2, 1),
     case_study = unique(case_studies$case_study),
     stringsAsFactors = F

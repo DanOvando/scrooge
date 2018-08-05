@@ -237,7 +237,9 @@ $N_{t,1:L} \sim multinomial(p^{capture}_{t,1:L})$
 
 The key difference in the estimation models is how they estimate *f* and the data that enter the likelihood. All estimation of *f* begins by estimating a parameter $f^{init}$, which is the fishing mortality rate that is held constant over a burn-in period to achieve a given level of depletion by the time of the start of the data period of the model. The estimation models diverge from there in that each specifies a different structural model for how *f* evolves from $f^{init}$. 
 
-#### Random Walk Model (random-walk)
+#### Effort Models
+
+##### Random Walk Model (random-walk)
 
 This estimation model is similar in flavor to the penalty on deviations in fishing mortality used in LIME. Under this model, effort deviates $E^{dev}$ are assumed to be lognormally distributed
 
@@ -259,7 +261,7 @@ $$E_{t} = E_{t-1}e^{E^{dev}_{t}}$$
 
 $$f_{t} = qE_{t}$$
 
-#### Bioeconomic Model with Profit Ingredients (profit-ingredients)
+##### Bioeconomic Model with Profit Ingredients (profit-ingredients)
 
 We now turn to our class of bioeconomic models. Across all evaluated bioeconomic models, we assume that fishermen respond to average not marginal profits, per @Gordon1954, which we quantify as profits per unit effort, or *PPUE*. Under the `ingredients` model, the user supplies some data on absolute or relative changes in prices *p*, costs *c*, and technology (catchability) *q* (which can be thought of as ingredients of profitability). For example, users could report a 25% increase in prices due to the arrival of a new buyer with access to a lucrative foreign market, a 10% decrease in fishing costs due to a government fuel subsidy, and/or a increase in catchability due to the introduciton of fish-finder technology. These ingredients of profitability can be provided either as qualititave information or hard data. Any ingredients for which no estimtes of relative rates of change are available are assumed to remain constant over the time period of the model. The key feature of this model is that it uses these ingredients to inform our prior on $\hat{PPUE_{t}}$ in a given time step. Therefore, if costs go down and prices go up in a given time step, our prior on $\hat{PPUE_{t}}$ will increase appropriately, subsequently increasing our prior on the amount of effort in the following timestep. 
 
@@ -309,7 +311,7 @@ $$\Delta^{max} \sim normal(0,0.25)$$
 Together, the `ingredients` model allows us to utilize provided ingredients of profitability to drive our prior expectations of the dynamcis of fishing efforts. 
 
 
-#### Bioeconomic Model with PPUE Data (`ppue`)
+##### Bioeconomic Model with PPUE Data (`ppue`)
 
 The `ingredients` model makes use of individual components of the factors that make up profitability, and under the theory that a) these data are informative to the evolution of effort and b) these data may be easier to obtain than for example actual mean profitability across the fishery. However, we can also consider an effort process model in which *PPUE* is assumed to be known. While complete knowledge of average *PPUE* in a fishery is unlikely, especially in a data-limited context, survey methods could be constructed to collect estimates of *PPUE*, which being a central part of a fisherman's business, is not an unreasonable piece of information to think could be obtained, given the right questions and sufficient trust. 
 
@@ -324,7 +326,7 @@ Since we no longer assume knowledge of technology changes over time, we assume a
 $$f_{t} = qE_{t}$$
 
 
-#### Effort Data Model (`effort`)
+##### Effort Data Model (`effort`)
 
 Both of the bio-economic methods `ingredients` and `ppue` model the change in effort as a function of profits per unit effort. Their key function, from the perspective of a model focused on estimating biological fishery metrics, is to help inform estimates of timestep-to-timestep changes in fishing mortality. To follow the old adage "keep it simple stupid", we also build a model that assumes data on the timestep-to-timestep proportional changes in fishing effort. While such data are unlikely to be available for a fishery covering a large and diverse geographic range, for more localized small-scale fisheries such knowledge is not unreasonable. For example, fishing cooperative in Chile often maintain data on fishing effort [citation]. 
 
@@ -340,6 +342,9 @@ and
 
 $$f_{t} = qE_{t}$$
 
+#### Likelihood Models
+
+The economic operatin models represent alternative 
 
 #### Simulation Testing
 
@@ -359,12 +364,6 @@ modelo_name <- c(
   em1_lm1 =  "Lengths + Economics"
 )
 
-
-```
-
-
-```{r cs1, fig.cap = "Summary of performance under case study 1"}
-
 perf_summaries <- perf_summaries %>% 
   mutate(model = glue::glue("em{economic_model}_lm{likelihood_model}"))
 
@@ -383,6 +382,14 @@ performance_stats <- case_studies %>%
            .iteration) %>% 
   summarise(rmse = sqrt(mean(sq_er)),
             bias = median((predicted - observed) / observed))
+
+
+```
+
+
+```{r cs1, fig.cap = "Summary of performance under case study 1"}
+
+
 
 cs1_summary <- performance_stats %>% 
   ungroup() %>% 
