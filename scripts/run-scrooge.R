@@ -81,7 +81,9 @@ run_clouds <- FALSE
 
 fit_models <- FALSE
 
-process_cloud_fits <- TRUE
+process_cloud_fits <- FALSE
+
+run_lime <- TRUE
 
 n_fisheries <- 10 # number of fisheries to simulate
 
@@ -948,7 +950,50 @@ text(decision_tree$finalModel, use.n=TRUE, all=TRUE, cex=0.5)
 }
 
 
-# the idea
+# compare to LIME
+
+if (run_lime == TRUE){
+
+  processed_sandbox <- readRDS(file = glue::glue("results/scrooge-results/{run_name}/processed_fisheries_sandbox.RDS"))
+
+lime_fits <- pmap(list(
+  fish = map(processed_sandbox$prepped_fishery,"fish"),
+  fleet = map(processed_sandbox$prepped_fishery,"fleet"),
+  data = map(processed_sandbox$prepped_fishery, "scrooge_data")
+),
+safely(fit_lime))
+
+lime_worked <- map(lime_fits,"error") %>% map_lgl(is.null)
+
+lime_fits <- map(lime_fits, "result")
+
+saveRDS(object = lime_fits,file =  paste0(run_dir,"/lime_fits.RDS"))
+
+lcomp_years <- map(processed_sandbox$prepped_fishery,c("scrooge_data","length_comps_years"))
+
+processed_limes <- map2(lime_fits, lcomp_years, process_lime)
+
+saveRDS(object = processed_limes,file =  paste0(run_dir,"/processed_limes.RDS"))
+
+processed_sandbox <- processed_sandbox %>%
+  mutate(performance = map(performance, "result")) %>%
+  mutate(lime_v_scrooge = map2(processed_limes,performance, compare_lime_and_scrooge))
+
+whoops <- test %>%
+  select(experiment, economic_model, likelihood_model,lime_v_scrooge) %>%
+  unnest() %>%
+  filter(!is.na(lime_pred)) %>%
+  gather(model, estimate, contains("_pred")) %>%
+  group_by(experiment, economic_model, likelihood_model, model) %>%
+  summarise(rmse = sqrt(mean((observed - estimate)^2))) %>%
+  ggplot(aes(rmse, fill = model)) +
+  geom_density() +
+  facet_wrap(~model, scales = "free")
+
+
+
+}
+
 
 
 # run diagnostics ---------------------------------------------------------

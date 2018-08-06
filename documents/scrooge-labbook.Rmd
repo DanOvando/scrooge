@@ -5273,10 +5273,19 @@ rstanarm::launch_shinystan(case_studies$scrooge_fit[[2]])
 
 ```{r}
 
+  bad_fisheries <- processed_sandbox %>%
+    select(fishery,performance) %>%
+    mutate(performance = map(performance, "result")) %>% 
+    mutate(max_f = map_dbl(performance, ~.x$observed[.x$variable == "f"] %>% max())) %>%
+    filter(max_f > max_realistic_f | max_f < .02| !is.finite(max_f))
+
+
 
 a <- sandbox_performance %>% 
   ungroup() %>% 
-  arrange(desc(rmse)) %>% 
+  filter(!(fishery %in% unique(bad_fisheries$fishery))) %>% 
+  filter(economic_model == 1) %>% 
+  arrange((rmse)) %>% 
   slice(1)
 
 bad_fishery <- a$fishery
@@ -5287,6 +5296,7 @@ bad_experiment <- a$experiment
   hmm <- processed_sandbox %>%
     filter(experiment == bad_experiment) %>% 
     select(-scrooge_fit,-prepped_fishery,-summary_plot,-fleet_params) %>%
+    mutate(performance = map(performance, "result")) %>% 
     unnest() %>%
     group_by(
       year,
@@ -5388,9 +5398,9 @@ hmm %>%
 
   blerg$summary_plot
   
-
-  
 ```
+
+Aha, so you've got some nonsensically low f's running around in there, need to talk care of that... see what happens to performance without them. 
 
 
 

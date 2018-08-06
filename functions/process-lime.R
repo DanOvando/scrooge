@@ -1,7 +1,8 @@
 process_lime <-
   function(fit,
            sampled_years,
-           vars = c("log_F_t_input")) {
+           vars = c("log_F_ft")) {
+
     report_names <- fit$Sdreport %>%
       summary() %>%
       rownames()
@@ -14,13 +15,14 @@ process_lime <-
       filter(variable %in% vars) %>%
       mutate(year = sampled_years) %>%
       mutate(
-        estimate = exp(Estimate),
+        predicted = exp(Estimate),
         lower = exp(Estimate - 1.96 * `Std. Error`),
         upper = exp(Estimate + 1.96 * `Std. Error`)
       )
-    out <- sd_report %>%
-      select(variable, year, estimate, lower, upper) %>%
+
+     out <- sd_report %>%
+      select(variable, year, predicted, lower, upper) %>%
       mutate(model = "lime") %>%
-      mutate(variable = "f_t")
+      mutate(variable = "f_lime")
 
   }

@@ -1,10 +1,13 @@
 ---
-title: "Improving Fisheries Stock Assessments by Integrating Economic Datar"
+title: "Improving Fisheries Stock Assessments by Integrating Economic Data"
 author: "Dan Ovando"
 date: "3/7/2018"
-output: bookdown::html_document2
+output: 
+  bookdown::pdf_document2:
+    latex_engine: xelatex
+  bookdown::html_document2: default
 linkcolor: blue
-# bibliography: dissertation.bib
+bibliography: dissertation.bib
 biblio-style: apalike
 ---
 
@@ -24,6 +27,7 @@ library(tidybayes)
 library(ggridges)
 library(scales)
 library(caret)
+library(recipes)
 library(tidyverse)
 
 extrafont::loadfonts()
@@ -63,27 +67,25 @@ readRDS(file = here::here("results", run_name,"sandbox_performance.RDS"))
 processed_sandbox <- readRDS(file =here::here("results","scrooge-results",run_name,"processed_fisheries_sandbox.RDS"))
 
 
+max_realistic_f <- 3
+
 ```
 
 
 ## Abstract
 
-The wellbeing of coastal communities and ecosystems around the world depends on our ability to provide accurate and timely assessments of the status of fished populations. This is typically accomplished by collecting biologically-focused data such as the amount and size of fish captured, and using those data to fit statistical models that estimate factors such as current biomass levels and exploitation rates, usually relative to some benchmark set by stakeholders.
+The well-being of coastal communities and ecosystems around the world depends on our ability to provide accurate and timely assessments of the status of fished populations. This is typically accomplished by collecting biologically-focused data such as the amount and size of fish captured, and using those data to fit statistical models that estimate factors such as current biomass levels and exploitation rates, usually relative to some benchmark set by stakeholders.
 
 This stock assessment process has had successes throughout the world especially where the data and resources are available to perform what we might call "traditional" statistical stock assessments [@Hilborn2014]. While many of the world's largest and most valuable fisheries fall into this category, the majority of people that depend on fisheries do so in smaller scale operations that lack the capacity for traditional stock assessment, a group that has been generally called "data limited fisheries"[wakefield citation]. This problem has led to an explosion of "data limited stock assessments" (DLAs), that aim to provide management advice using fewer data (but more assumptions). These DLAs have made fisheries assessment possible in previously unassessed places, but increasingly they have sought to simply use more involved statistics to extract more knowledge from the same data (often length composition of the catch).
 
 This study improves the management capacity of data-limited fisheries by demonstrating how expanding the pool of available data to include economic and biological information together can dramatically (hopefully) improve the accuracy of stock assessments.
 
-While fisheries are coupled socio-eclogical systems [@Ostrom2009], the human dimensions of fisheries, the incentives that drive behavior, have been left to economists and other social scientists, while the stock assessment side of the equation has focused on the ecological and biological aspects of a fishery. Our results build off of fisheries economics to show that utilizing data on the economic history of a fishery (prices, costs, technology, labor, and profitability) together with biological data can dramatically improve the ability of stock assessment models to accurately estimate fishing mortality rates. In many realistic simulations, we demonstrate that this bio-economic estimation model provides XX% more accurate results than published methods utilizing biological data alone. We also show that inclusion of these data result in XX% greater confidence when applied to real-world data. Lastly,  we  provide a generalizable simulation framework using machine learning techniques to assess the the relative performance of these models under different states of nature.
+While fisheries are coupled socio-ecological systems [@Ostrom2009], the human dimensions of fisheries, the incentives that drive behavior, have been left to economists and other social scientists, while the stock assessment side of the equation has focused on the ecological and biological aspects of a fishery. Our results build off of fisheries economics to show that utilizing data on the economic history of a fishery (prices, costs, technology, labor, and profitability) together with biological data can dramatically improve the ability of stock assessment models to accurately estimate fishing mortality rates. In many realistic simulations, we demonstrate that this bio-economic estimation model provides XX% more accurate results than published methods utilizing biological data alone. We also show that inclusion of these data result in XX% greater confidence when applied to real-world data. Lastly,  we  provide a generalizable simulation framework using machine learning techniques to assess the the relative performance of these models under different states of nature.
 
 Our results demonstrate how often available, but to date underutilized, data can improve stock assessment in data-limited contexts. While we present one specific methodology for incorporating economic data into stock assessment, these results can serve as a foundation for a broader field of study investigating methods for utilizing economic data in biological stock assessment, improving both the accuracy and effectiveness of fisheries management around the globe.
 
 
 ## Introduction
-
-Why are data limited assessments worse?
-
-### General fisheries stuff
 
 Effective fisheries management requires that managers and stakeholders have some ability to estimate and react to the abundance of fishes in the ocean. The history of fisheries science is largely concerned with developing and improving our ability to accomplish this difficult task, starting from early models of growth overfishing [citation] and leading up to multi-species bio-geo-economic models[e.g. citation some mice model].  While the field has made dramatic advances in our ability to assess the status of fisheries, by and large we have found two solutions to this problem: Fit highly complex integrated statistical models to diverse data streams [cite fancy stock assessment technique], or utilize increasing levels of statistical wizardry to try and squeeze more information out of limited data [what has lately been termed Data Limited Stock Assessments, or DLAs; cite]. The explosion of DLAs has been both promising and concerning. The majority of fisheries in the world lack the resources for fully integrated stock assessments, and so depend on this world of "data limited stock assessment". While there has been tremendous growth in this field, nearly all DLAs rely on the same streams of information that would have been available to a fisheries scientist in the 1800s: lengths [cite], captures [cite], and catch per unit effort[cite], generally only one at a time. While these biological data can be highly informative, economic data can also provide information as to the history and status of a fishery. We present here a novel tool for combining historic economic information with traditional fisheries data to improve fisheries stock assessment.
 
@@ -91,7 +93,7 @@ Why do we need a new line of evidence in stock assessment? One could certainly m
 
 What defines a data limited assessment? @Dowling2015 provides a useful summary of what we mean by a data-limited fishery, but for now we can broadly consider data-limited assessments as fisheries lacking sufficient quality information to perform a "traditional" stock assessment, meaning at minimum total catch records and catch-per-unit-effort, on up to a fully integrated statistical catch-at-age model requiring catch, CPUE, length compositions, growth and aging, tagging, etc. A common example of a data-limited fishery might then include a fishery for which only CPUE data is available, or for which the only species-specific information are sampled length frequencies from the port or market.
 
-This paper builds off the length-based DLA literature, and so we focus our discussion on the nature of these methods. See  @Carruthers2014 and @Andersona for thorough summaries of catch-based DLAs. Length-based DLAs all use life history data or assumptions of some kind to translate the distribution of observed lengths in a fished population into some meaningful management metric. Catch-curves, perhaps the oldest of the DLAs, dating back to at least @Chapman1960, use assumptions and estimates of the age-at-length relationship to translate lengths into ages, and measure the slope of the logarithm of the numbers at age to provide an estimate of total mortality *Z*. Assumptions or estimates of natural mortality *m* can then be used to extract fishing mortality *f* simply by $f = Z - m$. Recently, newer methods have evolved that try and estimate fishing mortality rates, recruitment, and selectivity by examining the overall shape of the length composition data[@Hordyk2014; @Rudd2017]. These models use life history data (or assumptions) to simulate what the length composition of a given population would be expected to be if it were left unfished. This estimate of the unfished length composition is then compared to the observed length composition, and estimates of *f*, recruitment, and selectivity are made that best explain the observed length composition, given the expectation provided by life history data.
+This paper builds off the length-based DLA literature, and so we focus our discussion on the nature of these methods. See  @Carruthers2014 and @Anderson2017 for thorough summaries of catch-based DLAs. Length-based DLAs all use life history data or assumptions of some kind to translate the distribution of observed lengths in a fished population into some meaningful management metric. Catch-curves, perhaps the oldest of the DLAs, dating back to at least @Chapman1960, use assumptions and estimates of the age-at-length relationship to translate lengths into ages, and measure the slope of the logarithm of the numbers at age to provide an estimate of total mortality *Z*. Assumptions or estimates of natural mortality *m* can then be used to extract fishing mortality *f* simply by $f = Z - m$. Recently, newer methods have evolved that try and estimate fishing mortality rates, recruitment, and selectivity by examining the overall shape of the length composition data[@Hordyk2014; @Rudd2017]. These models use life history data (or assumptions) to simulate what the length composition of a given population would be expected to be if it were left unfished. This estimate of the unfished length composition is then compared to the observed length composition, and estimates of *f*, recruitment, and selectivity are made that best explain the observed length composition, given the expectation provided by life history data.
 
 These methods have proven effective and useful in many circumstances, but their reliance length composition leaves them sensitive to relatively common features in fisheries such as autocorrelated shifts in recruitment regimes [citations]. Given length data alone, it is difficult to separate out recruitment from fishing mortality, since both manifest themselves as change in the relative proportions of different length classes. The most straightforward solution to this problem is to assume that the population is at equilibrium, and any deviations in expected recruitment are on average zero during the time period of analysis. Year-to-year shifts in the length composition are then attributed to fishing mortality. Given limited data, say only one year of length composition data, this may be the only assumption possible.
 
@@ -99,15 +101,9 @@ Since recruitment regimes are likely to be more the rule than the exception thou
 
 The other important feature of the LIME model though is that it allows the user to add in additional lines of evidence, for example catch-per-unit effort data... this is good.
 
-An informal synthesis presented at the 2015 Wakefield Symposium
-
-@Dowling2016, @Carruthers2014, and @Prince2003
-
 ### What's the Problem that Economic Data Fix?
 
-GET TO HERE FASTER. USE ECONOMIC DATA. HERE'S AN EXAMPLE OF WHY. FOLLOW YOUR OWN ADVICE AND MENTION THE ECON STUFF EARLIER.
-
-LIME presents an important framework for integrating multiple streams of "limited data" together into a comprehensive assessment. However, the data types that can be incorporated into LIME are all components of the traditional fisheries toolbox: lengths, catches, and CPUEs XX. These data are important and useful, but there is an untapped source of information present in many fisheries that our model makes use of: economic data. NEEDS TO BE CLEAR HERE THAT LENGTH BASED IS JUST A VEHICLE FOR THE BIGGER POINT
+LIME presents an important framework for integrating multiple streams of "limited data" together into a comprehensive assessment. However, the data types that can be incorporated into LIME are all components of the traditional fisheries toolbox: lengths, catches, and CPUEs XX. These data are important and useful, but there is an untapped source of information present in many fisheries that our model makes use of: economic data. 
 
 Why should we expect economic data to be useful?
 
@@ -132,59 +128,39 @@ Summary of fisheries as bio-economic systems
 
 -[@vanPutten2012] theories and behavioral drivers underlying fleet dynamics. See @Vermard2008 for some modeling examples. Has lots of useful references in here. Random utility models for individual behavior. Basically, has a nice summary of sources for different ways to model and think about behavior. So, you can start with the profit maximizing side of things, but expand that out for different types of fleet dynamics.
 
-- @Marchal2013 added value of fleet dynamics in models. This one looks at MSE style problems again, but has aome interesting fleet model specifications that you could steal. Equation 11 is handy, just more justification for change is the effort last year times some factor and profits over the last few years
+- @Marchal2013 added value of fleet dynamics in models. This one looks at MSE style problems again, but has some interesting fleet model specifications that you could steal. Equation 11 is handy, just more justification for change is the effort last year times some factor and profits over the last few years
 
 - @Clark1990
 
 - @Hoff2008
 
 
-### Research statement
-
-This paper demonstrates the how to use historic economic information to improve outcomes of fisheries stock assessments.
-
 ## Methods
 
-The overall method for this paper are as follows:
-
   - We utilize and age-structured bio-economic operating model to database of simulated fisheries
-  - Fishing mortality rates from the simulated fishery are estiamted using our bio-economic estimation model, which can take a variety of forms
+  - Fishing mortality rates from the simulated fishery are estimated using our bio-economic estimation model, which can take a variety of forms
     - Random walk behavior
     - Open access 
-    - ...
+    - Constant effort
   - We assess the performance of the estimation model using a set of case study fisheries
-  - We assess broader model performance using a Bayesian hierarchichal model and classification algorithms
+  - We assess broader model performance using a Bayesian hierarchical model and classification algorithms
   
 
 ### Equations
 
+Will fill this in this week
+
 Process Name | Equation Number |Equation
 -------------|--------------------------
-Thing        |                  |$y \sim x$
+Thing        |      1            |$y \sim x$
 
-
-### Operating Model
-
-The operating model is adapted from @Ovando2014. It is a relatively straightforward sinlge-species age-structured bioeconomic model. For our case study runs we utilized a more or less "standard" species, red snapper (*Lutjanus campechanus*). For our broader simulation analysis, we randomly selected fish species from the commercial landings statistics of the Food and Agriculture Organziation of the United Nations [FAO, @FAO2018]. Life history data were then estimated for that species using the `FishLife` [@Thorson2017d] package in `R` [@RCoreTeam2018]. Additionally, for each run we drawn random levels of recruitment variaions ($\sigma_r$ from the range 0 to 0.75), as well as recruitment autocorrelation ($ac_{r}$) from the range of 0 to 0.75. 
-
-The economic component of the operating model has four possible modes that are selected for any given simulation... blah blah
-
-
-Fit alternative models
-
-scrooge-lite
-
-scrooge
-
-LIME/LBSPR/MAYBE
-
-compare fit and bias
 
 ### Why A Bayesian Approach?
 
-A general argument for informative priors in data limited assessment
+Bayesian methods play an important role in fisheries science. Informative priors can help estimate challenging functions such as the stock-recruitment relationship, and the outcomes of Bayesian assessment provide estimates of posterior probability of states of nature, greatly aiding the management strategy evaluation process [@Punt1997; @Myers2002]. While decisions about prior distributions can in some cases dramatically affect assessment accuracy [@Thorson2017a], properly implemented Bayesian methods can provide improved estimates of uncertainty over maximum likelihood approaches [find that citation].
 
-statistical rethinking,
+While there are statistical reasons to favor (and in some circumstances resist) a Bayesian approach to fisheries assessment, our choice of a Bayesian method here is to provide a quantitative framework for bringing local knowledge into the fisheries stock assessment process. To our knowledge, the use of informative priors in data-limited fisheries has focused on biological traits such as growth rates [@Jiao2011] or depletion [@Cope2013]. The core hypothesis behind our model though is that economic data can inform stock status. While economic data in the form of official government statistics maybe hard to come by, may fisheries can be data-limited but knowledge rich, especially where economic histories are concerned. We selected a Bayesian methodology then as an explicit way of bringing this economic knowledge, whether qualitative or quantitative, into the fisheries stock assessment process. 
+
 
 @McElreath2016
 
@@ -202,10 +178,6 @@ statistical rethinking,
 
 @McAllister1998
 
-@Punt1997 (IMPORTANT TO INCLUDE)
-
-
-
 ### `scrooge` Model
 
 The estimating model itself, which, since it is motivated by money we call `scrooge`, was coded in `stan` using the `rstan` package [citation]. The core internal operating model is an age structured model identical in structure to the operating model used for the simulations. This means that the model requires user-supplied estimates of life history data, specifically
@@ -216,7 +188,7 @@ The estimating model itself, which, since it is motivated by money we call `scro
 
 We will focus our discussion on the estimation model. We constructed four candidate process models describing the economic behavior of the fishing flee  and three candidate likelihoods, each defined by different structural assumptions and data availability. We then fit factorial combinations of each process model with each likelihood structure, omitting combinations that would have double counted some information as both a prior and data (see Table.XX).
 
-The model has a number of parameters it must estimate, namely fishing mortality rates, recruitment deviates, the length at 50% selectivity, and associated process and observation errors as required (see Table.XX for a complete description of all estimated parameters and their prior distributions). The model is initialized at unfished biomass, and then an estimate of initial fishing mortality is applied for 100 burn-in years, achieving a level of depletion at the start of the data-period of the model. The data period of the model is of length *t*, and defines the timesteps during which the model estiamtes dynamic parameters, though the model estimate *t* + age 50% selectivity recruitment deviates, to allow the model to estimate recruitment pulses which start before the data-period but whose signal can be observed during the early years of the data period. Length-composition data must be available for 1 or more years of the data-period, but are not required in all years. For example, the model can function if given ten years of economic information and only one year of length composition data available at the end of the time period. 
+The model has a number of parameters it must estimate, namely fishing mortality rates, recruitment deviates, the length at 50% selectivity, and associated process and observation errors as required (see Table.XX for a complete description of all estimated parameters and their prior distributions). The model is initialized at unfished biomass, and then an estimate of initial fishing mortality is applied for 100 burn-in years, achieving a level of depletion at the start of the data-period of the model. The data period of the model is of length *t*, and defines the time-steps during which the model estimates dynamic parameters, though the model estimate *t* + age 50% selectivity recruitment deviates, to allow the model to estimate recruitment pulses which start before the data-period but whose signal can be observed during the early years of the data period. Length-composition data must be available for 1 or more years of the data-period, but are not required in all years. For example, the model can function if given ten years of economic information and only one year of length composition data available at the end of the time period. 
 
 All estimation models share common components of recruitment deviates and length composition data. Recruitment is assumed to on average have Beverton-Holt dynamics [@Beverton1959], reparemeterized around steepness. Process error around this mean relationship is assumed to be log-normally distributed with a bias correction
 
@@ -242,7 +214,7 @@ The key difference in the estimation models is how they estimate *f* and the dat
 
 ##### Random Walk Model (random-walk)
 
-This estimation model is similar in flavor to the penalty on deviations in fishing mortality used in LIME. Under this model, effort deviates $E^{dev}$ are assumed to be lognormally distributed
+This estimation model is similar in flavor to the penalty on deviations in fishing mortality used in LIME. Under this model, effort deviates $E^{dev}$ are assumed to be log-normally distributed
 
 $$E^{dev}_{t} \sim normal(-\sigma_{E}^2/2, \sigma_E)$$
 
@@ -256,7 +228,7 @@ $$f_{1} = qE_{1}$$
 
 Where *q* is a catchability coefficient, held at 1e-3. 
 
-For the remaining *T* timesteps
+For the remaining *T* time-steps
 
 $$E_{t} = E_{t-1}e^{E^{dev}_{t}}$$
 
@@ -264,7 +236,7 @@ $$f_{t} = qE_{t}$$
 
 ##### Bioeconomic Model with Profit Ingredients (profit-ingredients)
 
-We now turn to our class of bioeconomic models. Across all evaluated bioeconomic models, we assume that fishermen respond to average not marginal profits, per @Gordon1954, which we quantify as profits per unit effort, or *PPUE*. Under the `ingredients` model, the user supplies some data on absolute or relative changes in prices *p*, costs *c*, and technology (catchability) *q* (which can be thought of as ingredients of profitability). For example, users could report a 25% increase in prices due to the arrival of a new buyer with access to a lucrative foreign market, a 10% decrease in fishing costs due to a government fuel subsidy, and/or a increase in catchability due to the introduciton of fish-finder technology. These ingredients of profitability can be provided either as qualititave information or hard data. Any ingredients for which no estimtes of relative rates of change are available are assumed to remain constant over the time period of the model. The key feature of this model is that it uses these ingredients to inform our prior on $\hat{PPUE_{t}}$ in a given time step. Therefore, if costs go down and prices go up in a given time step, our prior on $\hat{PPUE_{t}}$ will increase appropriately, subsequently increasing our prior on the amount of effort in the following timestep. 
+We now turn to our class of bio-economic models. Across all evaluated bio-economic models, we assume that fishermen respond to average not marginal profits, per @Gordon1954, which we quantify as profits per unit effort, or *PPUE*. Under the `ingredients` model, the user supplies some data on absolute or relative changes in prices *p*, costs *c*, and technology (catchability) *q* (which can be thought of as ingredients of profitability). For example, users could report a 25% increase in prices due to the arrival of a new buyer with access to a lucrative foreign market, a 10% decrease in fishing costs due to a government fuel subsidy, and/or a increase in catchability due to the introduction of fish-finder technology. These ingredients of profitability can be provided either as qualitative information or hard data. Any ingredients for which no estimates of relative rates of change are available are assumed to remain constant over the time period of the model. The key feature of this model is that it uses these ingredients to inform our prior on $\hat{PPUE_{t}}$ in a given time step. Therefore, if costs go down and prices go up in a given time step, our prior on $\hat{PPUE_{t}}$ will increase appropriately, subsequently increasing our prior on the amount of effort in the following time-step. 
 
 
 Under this model, $\hat{PPUE_{t}}$ is calculated as 
@@ -274,7 +246,7 @@ $$\hat{PPUE_{t}} = \frac{p_{t}C(q_{t},B_{t},E_t,s^{50}) - c_{t}E_{t}^2}{E_{t}}$$
 
 where *C()* represents that Baranov catch equation [citation]. 
 
-Notice now that the components price (*p*), catchability (*q*), and cost (*c*) are allowed to vary over time. This is because the model allows for user supplied information on the evoloution of these economic traits over time, either in the form of actual values (e.g. the price in a given year), or in relative changes (prices are 10% higher than they were last year). For the relative change cases, user supplied inputs are converted to deviations from a mean value and then multiplied by a default mean value set by the model. This is the default for both *q* and *c*, since converting user knowledge into the appropriate units is challenging. For a given value of $\hat{PPUE_{t}}$, we calcualte effort in the next time step per
+Notice now that the components price (*p*), catchability (*q*), and cost (*c*) are allowed to vary over time. This is because the model allows for user supplied information on the evolution of these economic traits over time, either in the form of actual values (e.g. the price in a given year), or in relative changes (prices are 10% higher than they were last year). For the relative change cases, user supplied inputs are converted to deviations from a mean value and then multiplied by a default mean value set by the model. This is the default for both *q* and *c*, since converting user knowledge into the appropriate units is challenging. For a given value of $\hat{PPUE_{t}}$, we calculate effort in the next time step per
 
 
 $$E_{t + 1} = (E_{t} + \theta{\hat{PPUE_{t}}})e^{E^{dev}_{t}}$$
@@ -288,28 +260,28 @@ One difficulty in this is that the dynamics of the open access model are driven 
 
 $$c_t  = c^{max}c^{rel}$$
 
-where $c^{rel}$ are the relative costs (scaled from 0 to 1) over time *t* supplied by users. $c^{max}$ itself is tuned in a rather long process that results in much cleaner estimation that can actually be provided with informative priors. Rather than estimating  $c^{max}$ itself, we estimate a cost-to-revenue ratio at the start of the fishery. We first estimate a guess of, given the simulated nature of the fishery, something close to maximum revenues (assumed to come by fishing a bit harder than *m* when the population is completely unfished). We then calculate the profits associated with these maximum reveunes given the current estimate of the cost to revenue ratio CR. 
+where $c^{rel}$ are the relative costs (scaled from 0 to 1) over time *t* supplied by users. $c^{max}$ itself is tuned in a rather long process that results in much cleaner estimation that can actually be provided with informative priors. Rather than estimating  $c^{max}$ itself, we estimate a cost-to-revenue ratio at the start of the fishery. We first estimate a guess of, given the simulated nature of the fishery, something close to maximum revenues (assumed to come by fishing a bit harder than *m* when the population is completely unfished). We then calculate the profits associated with these maximum revenues given the current estimate of the cost to revenue ratio CR. 
 
 $$PROFITS^{max} \sim  MAX(PRICE)CATCH^{B0}*(1 - CR) $$
 
 
 Given this estimate of $PROFITS^{max}$, we can then back out the cost coefficient $c_{max}$ that, given the other parameters, would produce those profits. 
 
-Estimating the cost to revenue ratio instead of the actual costs allows for informative priors to be set. A fishery that at its heyday was incredible profitablt will have a low cost to revenue ratio, while a fishery that was scrapign on its best day would have a high cost to revenue ratio. 
+Estimating the cost to revenue ratio instead of the actual costs allows for informative priors to be set. A fishery that at its heyday was incredible profitable will have a low cost to revenue ratio, while a fishery that was scrapping on its best day would have a high cost to revenue ratio. 
 
 While the prior can be informed from local stakeholders, we set a zero truncated normal prior on the cost ratio of 
 
 $$CR \sim normal(0.5,1)$$
 
-The other challenging parameter in the open access equation is $\theta$, the amount that effort changes for a one unit change in $PPUE$. Similarly to estimating the cost to revenue ratio instead of raw costs, rather than estimate $theta$ directly, we estimate the maximum percentage change in effort from one time step to the next. As part of the CR process, we estimated the maximum profits, and the effor that would produce those profies. Together that provides us with the maxium expected PPUE. For a given max percentage change ($\Delta^{max}$) in effort then, we calculate $\theta$ as
+The other challenging parameter in the open access equation is $\theta$, the amount that effort changes for a one unit change in $PPUE$. Similarly to estimating the cost to revenue ratio instead of raw costs, rather than estimate $theta$ directly, we estimate the maximum percentage change in effort from one time step to the next. As part of the CR process, we estimated the maximum profits, and the effort that would produce those profits. Together that provides us with the maximum expected PPUE. For a given max percentage change ($\Delta^{max}$) in effort then, we calculate $\theta$ as
 
 $$\theta = (\Delta^{max}  E^{MAX}) / PPUE^{MAX}$$
 
-While $\theta$ has no intuitative sense for most stakeholders, the maximum percentage year-to-year change in effort can be elicitied from stakeholders. For now, we assume a zero truncated normal prior on the max expansion
+While $\theta$ has no intuitive sense for most stakeholders, the maximum percentage year-to-year change in effort can be elicited from stakeholders. For now, we assume a zero truncated normal prior on the max expansion
 
 $$\Delta^{max} \sim normal(0,0.25)$$
 
-Together, the `ingredients` model allows us to utilize provided ingredients of profitability to drive our prior expectations of the dynamcis of fishing efforts. 
+Together, the `ingredients` model allows us to utilize provided ingredients of profitability to drive our prior expectations of the dynamics of fishing efforts. 
 
 
 ##### Bioeconomic Model with PPUE Data (`ppue`)
@@ -322,14 +294,13 @@ $$E_{t + 1} = (E_{t} + \theta{PPUE_{t}})e^{E^{dev}_{t}}$$
 
 We estimate $\theta$ using the same methods described in the `ingredients` method (estimating the maximum percent change in year-to-year effort instead of $\theta$ directly). 
 
-Since we no longer assume knowledge of technology changes over time, we assume a static *q*. This assumption could be relaxed in future model runs to consider knowledge of both PPUE and technlogy, but for now we make this assumption to make a cleaner distinction between the `ingredients` model and the other models. 
+Since we no longer assume knowledge of technology changes over time, we assume a static *q*. This assumption could be relaxed in future model runs to consider knowledge of both PPUE and technology, but for now we make this assumption to make a cleaner distinction between the `ingredients` model and the other models. 
 
 $$f_{t} = qE_{t}$$
 
-
 ##### Effort Data Model (`effort`)
 
-Both of the bio-economic methods `ingredients` and `ppue` model the change in effort as a function of profits per unit effort. Their key function, from the perspective of a model focused on estimating biological fishery metrics, is to help inform estimates of timestep-to-timestep changes in fishing mortality. To follow the old adage "keep it simple stupid", we also build a model that assumes data on the timestep-to-timestep proportional changes in fishing effort. While such data are unlikely to be available for a fishery covering a large and diverse geographic range, for more localized small-scale fisheries such knowledge is not unreasonable. For example, fishing cooperative in Chile often maintain data on fishing effort [citation]. 
+Both of the bio-economic methods `ingredients` and `ppue` model the change in effort as a function of profits per unit effort. Their key function, from the perspective of a model focused on estimating biological fishery metrics, is to help inform estimates of time-step-to-time-step changes in fishing mortality. To follow the old adage "keep it simple stupid", we also build a model that assumes data on the time-step-to-time-step proportional changes in fishing effort. While such data are unlikely to be available for a fishery covering a large and diverse geographic range, for more localized small-scale fisheries such knowledge is not unreasonable. For example, fishing cooperative in Chile often maintain data on fishing effort [citation]. 
 
 Under the `effort` model then, we assume knowledge of the proportional changes in effort over time $\Delta^{effort}$, where
 
@@ -345,7 +316,7 @@ $$f_{t} = qE_{t}$$
 
 #### Likelihood Models
 
-The economic process models represent alternative hypotheses as to the true operating model driving the evolution of fishing effort, and partly be extension fishing mortality, in a fishery. In other words, the economic process models inform our prior on the evolution of effort. However, a central motivation of this research is to diversify both the data available to our assessment operating models (as we have done with the use of economic data as components of Bayesian priors), and the data with which we confront these models. The traditional pantheon of data with which we confront models in fisheries are abundance indicies (derived from either fishery dependent or independent sources) and length/age composition data [citation]. We propose to add profit per unit effort and proportional changes in effort to this group, at least as a starting point in the data-limited context of this study. 
+The economic process models represent alternative hypotheses as to the true operating model driving the evolution of fishing effort, and partly be extension fishing mortality, in a fishery. In other words, the economic process models inform our prior on the evolution of effort. However, a central motivation of this research is to diversify both the data available to our assessment operating models (as we have done with the use of economic data as components of Bayesian priors), and the data with which we confront these models. The traditional pantheon of data with which we confront models in fisheries are abundance indices (derived from either fishery dependent or independent sources) and length/age composition data [citation]. We propose to add profit per unit effort and proportional changes in effort to this group, at least as a starting point in the data-limited context of this study. 
 
 ##### PPUE as an Index of Effort (`length + ppue`)
 
@@ -358,7 +329,7 @@ $$CPUE_{t} = \frac{q_{t}E_tB_t}{E_t} = q_tB_t$$
 
 A constant or time-varying estimate of *q* then is our link between an observed CPUE data and an unobserved state of nature, $B_t$ that we wish to estimate. 
 
-We propose a similar use for profit per unit effort, but rather than PPUE informing an index of abundance, it serves as an index in the rate of change in effort (and by extension conditaionl on *q*), fishing mortality. Per a standard open-access model of effort development, 
+We propose a similar use for profit per unit effort, but rather than PPUE informing an index of abundance, it serves as an index in the rate of change in effort (and by extension conditional on *q*), fishing mortality. Per a standard open-access model of effort development, 
 
 $$E_{t + 1} = E_{t} + \theta{PPUE_{t}}$$
 
@@ -366,7 +337,7 @@ Simply rearranging this equation, we can provide a link between PPUE and the cha
 
 $$PPUE_{t} = \frac{E_{t + 1} - E_{t}}{\theta}$$
 
-We can therefore use PPUE as an index of the change in timestep-to-timestep effort. In other words, given that our model estiamtes $\hat{E}$ through one of our process models, 
+We can therefore use PPUE as an index of the change in time-step-to-time-step effort. In other words, given that our model estimates $\hat{E}$ through one of our process models, 
 
 $$\hat{PPUE_{t}} = \frac{\hat{E_{t + 1}} - \hat{E_{t}}}{\theta}$$
 
@@ -376,7 +347,7 @@ $$PPUE_{t} \sim normal(\hat{PPUE_{t}},\sigma_{obs})$$
 
 Remember though that in our models we are estimating $\hat{E_{t}}$. Clearly then, the above likelihood is only identifiable XX if we either provide a constraining prior on the evolution of $\hat{E_{t}}$ (as all of our economic operation models do) and/or include other components to the likelihood, which we do by fitting to the length composition data in all runs. In other words, when we include $PPUE_{t}$ in the likelihood, the model estimates a vector of efforts that maximize the likelihood of both the PPUE and length composition, conditional on the prior probabilities assigned to the evolution of effort by our effort process model. 
 
-It is also worth noting that by including $PPUE$ in the likelihood, we are now including both process error (quantified as $\sigma_E$ in the estiamted effort deviates) and observation error ($\sigma_obs$), in a similar manner to the methods outlined in [Thorson2015b], though the Bayesian nature of our analysis makes it hierarchichal rather than "mixed effect" in nature, since technically all variables are random in a Bayesian setting [@Gelman2013] XX. Given the data constraints, we are only able to identify both process and observation error by providing constraining priors on our estimates of both. 
+It is also worth noting that by including $PPUE$ in the likelihood, we are now including both process error (quantified as $\sigma_E$ in the estimated effort deviates) and observation error ($\sigma_obs$), in a similar manner to the methods outlined in [Thorson2015b], though the Bayesian nature of our analysis makes it hierarchical rather than "mixed effect" in nature, since technically all variables are random in a Bayesian setting [@Gelman2013] XX. Given the data constraints, we are only able to identify both process and observation error by providing constraining priors on our estimates of both. 
 
 Our prior for $\sigma_{obs}$ is a zero-truncated normal distribution with a user-specified CV
 
@@ -393,7 +364,7 @@ This likelihood model follows the same identification constraints as the PPUE mo
 
 #### Simulation Testing
 
-We simulation tested factorial combinations of these process models and likelihood forms XX (omitting combinations that double count data, e.g. pairing the `ppue` process model with the `length+ppue` likelihood model) using a single species age-structured bio-economic operating model. For each run of the model, a species of fish, and its associated life history data, was randomly selected from the database provided by @Thorson2017d. The only stochastic process in the biological model are (potentially) autocorrelated a drifint recruitment deviates. For that run, a fleet model is also chosen from one of three options
+We simulation tested factorial combinations of these process models and likelihood forms XX (omitting combinations that double count data, e.g. pairing the `ppue` process model with the `length+ppue` likelihood model) using a single species age-structured bio-economic operating model. For each run of the model, a species of fish, and its associated life history data, was randomly selected from the database provided by @Thorson2017d. The only stochastic process in the biological model are (potentially) autocorrelated a drifting recruitment deviates. For that run, a fleet model is also chosen from one of three options
 
 - `open-access`
   - fishing effort responds to profit per unit effort, governed by chosen values and dynamics of price, cost, q, the the change in effort per unit of PPUE
@@ -404,25 +375,31 @@ We simulation tested factorial combinations of these process models and likeliho
   
 For all of these fleet models, the user specifies the degree of variation, autocorrelation, and drift for prices, costs, and catchability. The selected parameters are used to simulate a fishery over a 100 year period. For each time step, length composition data are sampled from the fisheries catch using a multinomial distribution, assuming a CV of the length-at-age key of 20%. 
 
-We simulated two case studies for this paper; an open access model which while containing noise still conforms to the open-access dynamics central to much of the assessed models assumptions, and a random-walk model in which while economic data are still collected, change in effort are completely unrelated to changes in economci conditions. ALong with these case studies, we also simulated 200 fisheries, each with random draws of the simulation parameters (e.g. species, fleet model, degree of variation and drift of economic parameters). 
+We simulated two case studies for this paper; an open access model which while containing noise still conforms to the open-access dynamics central to much of the assessed models assumptions, and a random-walk model in which while economic data are still collected, change in effort are completely unrelated to changes in economic conditions. Along with these case studies, we also simulated 200 fisheries, each with random draws of the simulation parameters (e.g. species, fleet model, degree of variation and drift of economic parameters). 
 
-For every simulated fishery, we then stipuled a range of the data to sample, and a combination of an process model and a likelihood structure to fit `scrooge` to those data. In this study, we sampled length composition and economic data for a period of up to 15 years during the middle of the simulated fishery's evolution. Within this 15 year window, we consider two cases, one where length composition data are available for all 15 years, and another where while economic data are available for all 15 years, length composition data are only available for the last 4 years of the time series. We then pass the chosen model configuration, data and associated life-history parameters to `scrooge` to fit the model. 
+For every simulated fishery, we then stipulated a range of the data to sample, and a combination of an process model and a likelihood structure to fit `scrooge` to those data. In this study, we sampled length composition and economic data for a period of up to 15 years during the middle of the simulated fishery's evolution. Within this 15 year window, we consider two cases, one where length composition data are available for all 15 years, and another where while economic data are available for all 15 years, length composition data are only available for the last 4 years of the time series. We then pass the chosen model configuration, data and associated life-history parameters to `scrooge` to fit the model. 
 
-For now, we focus on estimation of fishing mortality rates. As the model also estimates selectivity, given assumptions about the spawning biomass at age, it is trivial to also estimate and present common metrics such as the spawning potential ratio (SPR). However, for brevity's sake here, we focus on demonstrating the potential of the model to estiamte *f*. XX. In addition, we do not consider observation error at this time. While this is clearly not a remotely realistic choice, we made this decision due to the novel nature of the the integrated use of economic data and dynamcis into the stock assessment process. If `scrooge` is unable to provide substantial improvemnts (or actually provides worse estimates) than a standard lengths-only assessments model, in the form of @Rudd2017 or @Hordyk2014, even with perfect information, then it is unlikely to do well with imprefect knowledge. However, future testing will clearly need to address this step, which our operating model is already capable of incorporating. XX Mention simulattion constraints. 
+For now, we focus on estimation of fishing mortality rates. As the model also estimates selectivity, given assumptions about the spawning biomass at age, it is trivial to also estimate and present common metrics such as the spawning potential ratio (SPR). However, for brevity's sake here, we focus on demonstrating the potential of the model to estimate *f*. XX. In addition, we do not consider observation error at this time. While this is clearly not a remotely realistic choice, we made this decision due to the novel nature of the the integrated use of economic data and dynamics into the stock assessment process. If `scrooge` is unable to provide substantial improvements (or actually provides worse estimates) than a standard lengths-only assessments model, in the form of @Rudd2017 or @Hordyk2014, even with perfect information, then it is unlikely to do well with imperfect knowledge. However, future testing will clearly need to address this step, which our operating model is already capable of incorporating. XX Mention simulation constraints. 
 
 #### Model Comparison
 
-Metrics for comparing models
+We focused on two variables for model comparison: root median squared error (rmse) and bias in the (up to) most recent five years of the data. For every run of our model we obtained *i* iterations of *t* estimates of fishing mortality rates from our HMC chain. For each iteration *i*, we then calculated the rmse and bias as
 
-RMSE, BIAS, instead of MARE due to low-F properties. 
+$$rmse_{i} = sqrt(median((predicted_{i,t} - observed{i,t})^2))$$
 
-tidyposterior stuff
+and bias as 
 
-decision tree
+$$bias_{i} = median(predicted_{i,t} - observed_{i,t})$$
 
-### Results
+There are many other potential metrics for use, but we focus on these since the units are interpretable, since both the median and bias are in units of fishing mortality rates. We could also compare estimates such as median relative error, which expresses the median percentage error of a given iteration. While this is useful, we felt that, given the potential low values of fishing mortality this metric could be misleading at times. For example, suppose that the true fishing mortality rate is 0.05, and we estimate a fishing mortality rate of 0.1. The MRE for this case would be 100%. But, if the true fishing mortality is 0.5, and we estimate 0.55, our MRE would only be 10%. From a management perspective though. But, from a management perspective, the two are, we would argue, equally accurate, which RMSE captures. By calculating rmse and bias in terms of absolute (rather than relative) deviations, we can provide managers with a sense of whether the expected uncertainty for a given model spans a large or small range of fishing mortality rates. 
 
-#### Case Studies
+We use rmse and bias to assess the performance of `scrooge` in our case studies. We also used rmse to provide a higher level summary of overall and context specific performance of the candidate `scrooge` models. To judge overall performance, we fit a hierarchical Bayesian model to our simulated fits, in which the dependent variable is rmse, and the independent variables include simulation characteristics such as the degree of recruitment variation, the degree of variation in economic parameters, the life history of the species, and hierarchical effects for each `scrooge` model. This model then provides posterior probability estimates of the average effect of each candidate `scrooge` model on RMSE, controlling for covariates. 
+
+This method provides estimates of overall model performance, but it is likely that different `scrooge` models will perform best under different circumstances. To examine this possibility, we fit a decision tree model using the `rpart` function implemented in the `caret` package [citation], where the dependent variable is, for each simulated fishery, the best (in terms of RMSE) scrooge model, and the independent data are the simulation characteristics. This method provides an algorithm for deciding on the best `scrooge` model configuration given the characteristics of a fishery. 
+
+## Results
+
+### Case Studies
 
 
 ```{r prep_figures}
@@ -430,8 +407,8 @@ prep_figures <-
   
   
 modelo_name <- c(
-  em0_lm0 = "Lengths Only",
-  em1_lm1 =  "Lengths + Economics"
+  em0_lm0 = "Lengths Only (`random walk` + `lcomps`)",
+  em1_lm1 =  "Lengths + Economics (`ingredients` + `lcomps + ppue`)"
 )
 
 perf_summaries <- perf_summaries %>% 
@@ -450,245 +427,144 @@ performance_stats <- case_studies %>%
            model, 
            variable,
            .iteration) %>% 
+ summarise(rmse = sqrt(mean(sq_er)),
+            mean_bias = mean(predicted - observed),
+            median_bias = median(predicted-observed),
+            percent_bias = median((predicted - observed) / observed),
+            mare = median(abs(predicted - observed) / observed),
+            rmedse = sqrt(median(sq_er)),
+            w_rmse = sqrt(weighted.mean(sq_er, w = year)),
+            recent_rmse = sqrt(median(sq_er[year >= (max(year) - 5)])),
+           recent_median_bias = median((predicted-observed)[year >= (max(year) - 5)]))
+
+```
+
+Recall that each `scrooge` model configuration can be defined by the economic process model and the likelihood. We describe these in the text as `economic process model`/ `likelihood model`. So, a model using the `random-walk` economic process model and just length composition data would be `random-walk`/`lcomps`. A model using `random-walk` and length composition and PPUE data in the likelihood would be `random-walk`/`ppue` (if additional data sources besides length compositions are included in the likelihood we only note the additional data, since length composition data are always included). 
+
+
+All case studies examine the performance of a `scrooge` model fit using the `radom-walk` fleet model and only length composition data in the likelihood (`random-walk`/`lcomps`), to a `scrooge` model with an open-access economic process model informed by data on prices, costs, and technology, and a likelihood comprised of length composition data and PPUE (`ingredients`/`ppue`). We use these two `scrooge` model structures for all the case studies, so for shorthand in the case studies we will refer to `random-walk`/`lcomps` as the length only model, and the  (`ingredients`/`ppue`) configuration as the lengths + economics model. XX This is really confusing, figure out a better nomenclature XX. 
+
+For the first case study, we consider a scenario where 15 years of length composition and economic data are available, and the underlying dynamics contain stochasticity and drift in recruitment and economic parameters, but satisfy the open-access assumptions of the scrooge model utilizing economic data. In this case, both the lengths only and length + economics models estimate the rough magnitude of fishing mortality over the span of the data. However, the lengths only model misses the slow upward trend in fishing mortality. The lengths + economics model incorrectly estimates that a large upward spike in fishing mortality occurred in year four, but captures the upward trend in fishing mortality rates over the last five years of the data. RMSE and bias were both nearer to zero for the lengths + economics model over the last five years of the data (Fig.\@ref(fig:cs1)). 
+
+
+```{r cs1, fig.cap = " A) Observed (points) and predicted mean (line) and 90% credible intervel (ribbon) of fishing mortality. Filled red points indicate that length compositiond data were available that time step. B) Posterior distribution of RMSE and bias (colors map to ribbon colors in A)"}
+
+
+cs1_plot <- plot_case_studies(cs1 = "em0_lm0", cs2 = "em1_lm1",
+                              cs_name = "realistic",
+                              lcomp_years = "max",
+                              performance_stats = performance_stats,
+                              case_studies = case_studies)
+
+cs1_plot
+
+
+```
+
+The second case study is identical to the first, except that now length composition data are only available for the final three years of the evaluation period. The results are very similar to the first case study; the length+economics model is able to capture the recent upward trend in fishing mortality, while the length-only cannot (Fig.\@ref(fig:cs2)). 
+
+```{r cs2,fig.cap = "Case Study 2. A) Observed (points) and predicted mean (line) and 90% credible intervel (ribbon) of fishing mortality. Filled red points indicate that length compositiond data were available that time step. B) Posterior distribution of RMSE and bias (colors map to ribbon colors in A)"}
+
+cs2_plot <- plot_case_studies(cs1 = "em0_lm0", cs2 = "em1_lm1",
+                              cs_name = "realistic",
+                              lcomp_years = "min",
+                              performance_stats = performance_stats,
+                              case_studies = case_studies)
+
+cs2_plot
+
+
+```
+
+The first two case studies demonstrate that the length+economics model is capable of outperforming, in terms of rmse and bias, the length only that does not leverage economic information. This should be expected though: through the prior we are feeding the model more information about the operating model, and since we do not incorporate observation error at this time and since the dynamics of the simulation model in this case match the dynamics of `scrooge`'s operating model, we would hope that more data = better results. In an ideal world, we would want `scrooge` to perform better when its assumptions are satisfied, and to not perform dramatically worse when its assumptions are not. 
+
+For the third case study then, we fit the same scrooge models to a simulation in which effort is completely decoupled from profits (effort evolves through a random walk), but data are still collected on economic components of profits (prices, costs, technology, and PPUE). While the lengths only model ignores these data, the lengths + economics model uses these data, and the associated assumption of open-access dynamics, in its fitting procedure. In this case, the 90% credible interval estimated by the lengths only model now covers the upward trend in fishing mortality, though the mean estimated trend is flat. Despite using incorrect assumptions, the lengths + economics model still manages to outperform the lengths only model (Fig.\@ref(fig:cs3)). 
+
+```{r cs3,fig.cap = "Case study 3. A) Observed (points) and predicted mean (line) and 90% credible intervel (ribbon) of fishing mortality. Filled red points indicate that length compositiond data were available that time step. B) Posterior distribution of RMSE and bias (colors map to ribbon colors in A)"}
+
+cs3_plot <- plot_case_studies(cs1 = "em0_lm0", cs2 = "em1_lm1",
+                              cs_name = "decoupled",
+                              lcomp_years = "min",
+                              performance_stats = performance_stats,
+                              case_studies = case_studies)
+
+cs3_plot
+
+```
+
+### Overall Model Performance
+
+
+```{r best-models, include = FALSE}
+
+bad_fisheries <- processed_sandbox %>%
+  select(fishery, performance) %>%
+  mutate(performance = map(performance, "result")) %>%
+  mutate(max_f = map_dbl(performance, ~ .x$observed[.x$variable == "f"] %>% max())) %>%
+  filter(max_f > max_realistic_f | max_f < .02 | !is.finite(max_f))
+  
+
+sandbox_performance <- processed_sandbox %>%
+  filter(!fishery %in% unique(bad_fisheries$fishery)) %>% 
+  mutate(performance = map(performance, "result")) %>%
+  select(-scrooge_fit, -prepped_fishery,-summary_plot,-fleet_params) %>%
+  unnest()
+
+sandbox_performance <- sandbox_performance%>%
+  group_by(fishery,
+           experiment,
+           fleet_model,
+           period,
+           window,
+           prop_years_lcomp_data,
+           variable,
+           economic_model,
+           likelihood_model) %>%
   summarise(rmse = sqrt(mean(sq_er)),
-            bias = median((predicted - observed) / observed))
+            mean_bias = mean(predicted - observed),
+            median_bias = median(predicted-observed),
+            percent_bias = median((predicted - observed) / observed),
+            mare = median(abs(predicted - observed) / observed),
+            rmedse = sqrt(median(sq_er)),
+            w_rmse = sqrt(weighted.mean(sq_er, w = (year - min(year) + 1))),
+            recent_rmse = sqrt(median(sq_er[year >= (max(year) - 5)])),
+            recent_median_bias = median((predicted-observed)[year >= (max(year) - 5)])) %>%
+  mutate(fit_model = glue::glue("em{economic_model}_lm{likelihood_model}")) %>% 
+  left_join(processed_sandbox %>%
+              select(experiment, sigma_r:percnt_loo_selected), by = "experiment")
+
+sandbox_performance <- sandbox_performance %>%
+  ungroup()
 
 
-```
+prep_performance <- sandbox_performance %>%
+  select(recent_rmse, fit_model,sigma_r:percnt_loo_selected) %>% {
+  recipes::recipe(recent_rmse ~ ., data = .)
+  } %>%
+  step_log(all_outcomes()) %>%
+  step_nzv(all_predictors()) %>%
+  step_center(all_numeric(),-all_outcomes()) %>%
+  step_scale(all_numeric(),-all_outcomes()) %>%
+  prep(data = sandbox_performance, retain = T) %>%
+  juice()
 
+model_formula <- paste0("recent_rmse ~ ",paste(colnames(prep_performance %>% select(-recent_rmse, -fit_model)), collapse = "+"),
+"+ (1|fit_model)")
 
-```{r cs1, fig.cap = "Summary of performance under case study 1"}
+performance_model <- rstanarm::stan_glmer(model_formula,
+                                          data = prep_performance, chains = 2, cores = 2)
 
-
-
-cs1_summary <- performance_stats %>% 
-  ungroup() %>% 
-  filter(case_study == "realistic",
-         prop_years_lcomp_data == 1,
-         variable == "f",
-         model == "em0_lm0" | model == "em1_lm1")
-
-cs1_summary$model <- fct_recode(as.factor(cs1_summary$model),  "Lengths Only" = "em0_lm0",
-                                "Lengths + Economics" = "em1_lm1" )
-cs1_summ_plot <- cs1_summary %>% 
-  gather(metric, value, rmse:bias) %>% 
-  ggplot(aes(value, fill = model)) + 
-  geom_density_ridges(aes(x = value, y = metric, fill = model), alpha = 0.75, show.legend = F) +
-  theme(plot.margin = unit(c(0,0,0,1), units = "lines"),
-        axis.title.y = element_blank(),
-        axis.title.x = element_blank()) + 
-  geom_vline(aes(xintercept = 0)) +
-  theme(legend.title = element_blank()) +
-  ggsci::scale_fill_aaas()
-
-
-
-lcomp_years <- case_studies %>% 
-  filter(case_study == "realistic",
-         prop_years_lcomp_data == max(prop_years_lcomp_data),
-         period == "middle")
-
-lcomp_years <- lcomp_years$prepped_fishery[[1]]$scrooge_data$length_comps_years
-
-
-cs1_summary$model <- fct_recode(as.factor(cs1_summary$model),  "Lengths Only" = "em0_lm0",
-                                "Lengths + Economics" = "em1_lm1" )
-
-cs1 <- perf_summaries %>% 
-  ungroup() %>% 
-  filter(case_study == "realistic",
-         prop_years_lcomp_data == 1,
-         model == "em0_lm0" | model == "em1_lm1") 
-
-fill_vector <- rep("transparent", length (unique(cs1$year[cs1$variable == "f"])))
-
-fill_vector[lcomp_years] <- "tomato"
-
-fill_vector <- c(fill_vector, fill_vector)
-
-cs1_plot <- cs1 %>% 
-  filter(variable == "f") %>% 
-  mutate(year = year - min(year) + 1) %>% 
-  mutate(lcomp_year = year %in% lcomp_years) %>% 
-  arrange(experiment) %>% 
-  ggplot() + 
-  geom_point(aes(year, observed), size = 3, alpha = 0.75, shape = 21, fill =fill_vector) +
-  geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90, fill = model), alpha = 0.2, show.legend = FALSE) +
-  geom_line(aes(year,mean_predicted, color = model), show.legend = FALSE) + 
-  labs(x = "Year", y = "Fishing Mortality") + 
-  ggsci::scale_color_aaas() + 
-  ggsci::scale_fill_aaas() + 
-  facet_wrap(~model, labeller = labeller(model = modelo_name)) + 
-  theme(plot.margin = unit(c(0,0,0,0), units = "lines"),
-        panel.spacing = unit(0.1, units = "lines"),
-        axis.title.x = element_blank())
-
-
-
-cs1_plot + cs1_summ_plot + plot_layout(nrow = 1, ncol = 2, widths = c(3,1))
-
-
-```
-
-
-
-```{r cs2}
-
-cs2_summary <- performance_stats %>% 
-  ungroup() %>% 
-  filter(case_study == "realistic",
-         prop_years_lcomp_data == min(prop_years_lcomp_data),
-         variable == "f",
-         model == "em0_lm0" | model == "em1_lm1")
-
-cs2_summary$model <-
-  fct_recode(
-  as.factor(cs2_summary$model),
-  "Lengths Only" = "em0_lm0",
-  "Lengths + Economics" = "em1_lm1"
-  )
-  
-cs2_summary$model <- fct_recode(as.factor(cs2_summary$model),  "Lengths Only" = "em0_lm0",
-                                "Lengths + Economics" = "em1_lm1" )
-
-cs2_summ_plot <- cs2_summary %>% 
-  gather(metric, value, rmse:bias) %>% 
-  ggplot(aes(value, fill = model)) + 
-  geom_density_ridges(aes(x = value, y = metric, fill = model), alpha = 0.75, show.legend = F) +
-  theme(plot.margin = unit(c(0,0,0,1), units = "lines"),
-        axis.title.y = element_blank(),
-        axis.title.x = element_blank()) + 
-  geom_vline(aes(xintercept = 0)) +
-  theme(legend.title = element_blank()) +
-  ggsci::scale_fill_aaas()
-
-lcomp_years <- case_studies %>% 
-  filter(case_study == "realistic",
-         prop_years_lcomp_data == min(prop_years_lcomp_data),
-         period == "middle")
-
-lcomp_years <- lcomp_years$prepped_fishery[[1]]$scrooge_data$length_comps_years
-
-
-cs2 <- perf_summaries %>% 
-  ungroup() %>% 
-  filter(case_study == "realistic",
-         prop_years_lcomp_data == min(prop_years_lcomp_data),
-         model == "em0_lm0" | model == "em1_lm1") 
-
-fill_vector <- rep("transparent", length (unique(cs2$year[cs2$variable == "f"])))
-
-fill_vector[lcomp_years] <- "tomato"
-
-fill_vector <- c(fill_vector, fill_vector)
-
-cs2_plot <- cs2 %>% 
-  filter(variable == "f") %>% 
-  mutate(year = year - min(year) + 1) %>% 
-  mutate(lcomp_year = year %in% lcomp_years) %>% 
-  arrange(experiment) %>% 
-  ggplot() + 
-  geom_point(aes(year, observed), size = 3, alpha = 0.75, shape = 21, fill =fill_vector) +
-  geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90, fill = model), alpha = 0.2, show.legend = FALSE) +
-  geom_line(aes(year,mean_predicted, color = model), show.legend = FALSE) + 
-  labs(x = "Year", y = "Fishing Mortality") + 
-  ggsci::scale_color_aaas() + 
-  ggsci::scale_fill_aaas() + 
-  facet_wrap(~model, labeller = labeller(model = modelo_name)) + 
-  theme(plot.margin = unit(c(0,0,0,0), units = "lines"),
-        panel.spacing = unit(0.1, units = "lines"),
-        axis.title.x = element_blank())
-
-cs2_plot + cs2_summ_plot + plot_layout(nrow = 1, ncol = 2, widths = c(3,1))
-
-
-```
-
-
-```{r cs3}
-cs3_summary <- performance_stats %>% 
-  ungroup() %>% 
-  filter(case_study == "decoupled",
-         prop_years_lcomp_data == min(prop_years_lcomp_data),
-         variable == "f",
-         model == "em0_lm0" | model == "em1_lm1")
-
-cs3_summary$model <-
-  fct_recode(
-  as.factor(cs3_summary$model),
-  "Lengths Only" = "em0_lm0",
-  "Lengths + Economics" = "em1_lm1"
-  )
-  
-cs3_summary$model <- fct_recode(as.factor(cs3_summary$model),  "Lengths Only" = "em0_lm0",
-                                "Lengths + Economics" = "em1_lm1" )
-
-cs3_summ_plot <- cs3_summary %>% 
-  gather(metric, value, rmse:bias) %>% 
-  ggplot(aes(value, fill = model)) + 
-  geom_density_ridges(aes(x = value, y = metric, fill = model), alpha = 0.75, show.legend = F) +
-  theme(plot.margin = unit(c(0,0,0,1), units = "lines"),
-        axis.title.y = element_blank(),
-        axis.title.x = element_blank()) + 
-  geom_vline(aes(xintercept = 0)) +
-  theme(legend.title = element_blank()) +
-  ggsci::scale_fill_aaas()
-
-lcomp_years <- case_studies %>% 
-  filter(case_study == "decoupled",
-         prop_years_lcomp_data == min(prop_years_lcomp_data),
-         period == "middle")
-
-lcomp_years <- lcomp_years$prepped_fishery[[1]]$scrooge_data$length_comps_years
-
-
-cs3 <- perf_summaries %>% 
-  ungroup() %>% 
-  filter(case_study == "decoupled",
-         prop_years_lcomp_data == min(prop_years_lcomp_data),
-         model == "em0_lm0" | model == "em1_lm1") 
-
-fill_vector <- rep("transparent", length (unique(cs3$year[cs3$variable == "f"])))
-
-fill_vector[lcomp_years] <- "tomato"
-
-fill_vector <- c(fill_vector, fill_vector)
-
-cs3_plot <- cs3 %>% 
-  filter(variable == "f") %>% 
-  mutate(year = year - min(year) + 1) %>% 
-  mutate(lcomp_year = year %in% lcomp_years) %>% 
-  arrange(experiment) %>% 
-  ggplot() + 
-  geom_point(aes(year, observed), size = 3, alpha = 0.75, shape = 21, fill =fill_vector) +
-  geom_ribbon(aes(year, ymin = lower_90, ymax = upper_90, fill = model), alpha = 0.2, show.legend = FALSE) +
-  geom_line(aes(year,mean_predicted, color = model), show.legend = FALSE) + 
-  labs(x = "Year", y = "Fishing Mortality") + 
-  ggsci::scale_color_aaas() + 
-  ggsci::scale_fill_aaas() + 
-  facet_wrap(~model, labeller = labeller(model = modelo_name)) + 
-  theme(plot.margin = unit(c(0,0,0,0), units = "lines"),
-        panel.spacing = unit(0.1, units = "lines"),
-        axis.title.x = element_blank())
-
-cs3_plot + cs3_summ_plot + plot_layout(nrow = 1, ncol = 2, widths = c(3,1))
-
-```
-
-Focus on performance using economic priors and LIME priors; more cohesive than also then trying to compare to LIME/LBSPR.
-
-Save that for the mega-run, where you can then say something about when different models are likely to perform well, by predicting RMSE as a function of model with effects for each model scenario.
-
-For the case studies, the point is to highlight the general performance of the model. So, let's hold fishery constant, but now run the assessments no economic prior, and then with all incentive, all effort, and equal weighting, and compare performance
-
-### Broader performance stats
-
-Overall winners
-
-```{r best-models}
 
 tidy_performance <- tidybayes::spread_draws(performance_model, b[intercept,model])
 
+
+```
+
+The case studies provide visual and quantitative evidence that the introduction of economic data and theory through the `scrooge` model can improve estimates of fishing mortality over utilizing length composition data alone. Those were three simple examples though, out of a vast array of possible states of nature a fishery might experience. We used a Bayesian hierarchical modeling routine to provide an overall performance estimate for each of the `scrooge` configurations tested here (defining performance as the effect of a given configuration on rmse over the last five years of the data). This model allows us to estimate, all else being equal, which model will reduce the rmse of our estimates of f the most. 
+
+`scrooge` models incorporating data on the percentage change in effort in the process model (em3), or the likelihood (lm2) provide the greatest expected reduction in rmse. Models utilizing profit ingredients (data on prices, costs, technology) in the open-access operating model show some evidence of actually increasing rmse, while models utilizing PPUE in the process model or the likelihood showed uncertain effects on rmse (Fig. \@ref(fig:best-models-plot))
+
+```{r best-models-plot, fig.cap="Posterior probability distributions of the effect of each tested scrooge configuration on log(rmse)"}
 rmse_effect_plot <- tidy_performance %>%
   group_by(model) %>%
   mutate(mrmse = mean(b)) %>%
@@ -699,16 +575,14 @@ rmse_effect_plot <- tidy_performance %>%
   geom_density_ridges(aes(x = b, y = model),alpha = 0.75, show.legend = FALSE)  +
   scale_fill_viridis_d(option = "E") +
   labs(x = "Effect on RMSE") +
-  theme(axis.title.x = element_blank())
+  scale_x_continuous(labels = percent, name = "~ % affect on RMSE")
 
 rmse_effect_plot
-
 ```
 
-Distribution of winners
+While this hierarchical analysis gives evidence that some models may on average indeed perform better than others, for any one simulated fishery different `scrooge` configurations may be best. To test this idea, for each simulated fishery we chose the `scrooge` configuration that provided the lowest rmse over the last five years of the data, allowing us to see the frequency with which different configurations were selected (Fig.\@ref(fig:which-chosen-1)). As would be expected from the mean expected model performance, the models utilizing data on the percentage change in effort in the process model or likelihood were most frequently selected. A model containing some form of economic data and/or theory was selected nearly in nearly 100% of model runs.  
 
-
-```{r which-chosen}
+```{r which-chosen-1, fig.cap="Frequency of selection for each individual scrooge configuration (A), and grouping by utilization of economic data or not (B)"}
 
 mod_select <- sandbox_performance %>%
   group_by(fishery,
@@ -716,7 +590,7 @@ mod_select <- sandbox_performance %>%
            window,
            prop_years_lcomp_data) %>%
   filter(variable == "f") %>%
-  filter(rmedse == min(rmedse)) %>%
+  filter(recent_rmse == min(recent_rmse)) %>%
   ungroup()
 
 
@@ -754,10 +628,74 @@ model_summary_plot
 ```
 
 
-Which do you pick?
+Our results so far suggest that we would overwhelmingly prefer to have access to data on the the relative change in effort over time to include our data-limited assessment. This though should come as no surprise: Trends in effort are directly proportional to trends in fishing mortality, unless catchability changes substantially over the time period (or effort and catchability vary substantially throughout the fleet). While we include trends and deviations in catchability in the simulation models, under reasonable rates of change of catchability effort is still a good proxy for the evolution of fishing mortality. So, feeding the model data on effort should perform well. 
 
-```{r dtree}
+While the inclusion of effort data is interesting to consider, it is likely to be impractical in many data-limited fisheries. We do not consider observation error here, but unlike say PPUE, in order to be useful the trend in the effort data is not a property of the mean effort but rather the total effort in a fishery. This means that we would need to be able to obtain an estimate of the changes in total effort throughout the fishery, an unlikely task in any but geographically small or relatively data-rich fisheries. Collection of a sample of changes in effort could be strongly biased, in terms of its link to fishing mortality, if for example a few large high-liners are not included in the data. In contrast, profits per unit effort, and the ingredients of PPUE, are sample estimates, meaning that we care what average PPUE is in the fishery, not total. So, even if we miss a few extremely profitably (or unprofitable) fishermen, if we sample well we can get an estimate of the mean PPUE. 
+
+Given this, we re-ran our model selection process, but omitting any `scrogoe` configurations that utilize data on the percentage change in effort. Configurations utilizing PPUE in the likelihood were the most frequently selected, but closely followed by models utilizing only length data, though models utilizing profit ingredients in the economic process model were still selected some of the time. Overall, models incorporating some form of economic data or theory were selected across approximately 75% of simulated fisheries. 
+
+
+```{r, fig.cap = "Frequency of selection for each individual scrooge configuration, (A), and grouping by utilization of economic data or not (B), omitting any configurations using effort data"}
+
+mod_select <- sandbox_performance %>%
+  group_by(fishery,
+           period,
+           window,
+           prop_years_lcomp_data) %>%
+  filter(variable == "f", economic_model != 3, likelihood_model!=2) %>%
+  filter(recent_rmse == min(recent_rmse)) %>%
+  ungroup()
+
+
+model_selected_plot <- mod_select %>%
+  group_by(fit_model) %>%
+  count() %>%
+  ungroup() %>%
+  mutate(p_selected = n / sum(n)) %>%
+  mutate(fit_model = fct_reorder(fit_model, p_selected)) %>%
+  ggplot(aes(fit_model, p_selected)) +
+  geom_col(color = "black", fill = "lightgrey") +
+  scale_y_continuous(labels = percent, name = "Percentage Best Model") +
+  coord_flip() +
+  theme(axis.title.y = element_blank()) +
+  labs(title = "A")
+
+
+econ_selected_plot <- mod_select %>%
+  mutate(econ_model = !(fit_model == "em0_lm0")) %>%
+  group_by(econ_model) %>%
+  count() %>%
+  ungroup() %>%
+  mutate(p_selected = n / sum(n)) %>%
+  # mutate(econ_model = fct_reorder(econ_model, p_selected)) %>%
+  ggplot(aes(econ_model, p_selected)) +
+  geom_col(color = "black", fill = "lightgrey") +
+  scale_y_continuous(labels = percent, name = "Percentage Best Model") +
+  labs(x = "Used Economics?", y = "Percentage Best Model",
+       title = "B")
+
+model_summary_plot <- model_selected_plot + econ_selected_plot
+
+model_summary_plot
+
+
+```
+
+These results show that while some `scrooge` configurations, i.e. process model types and likelihood structures, are more commonly selected than others, nearly every evaluated model was selected on occasion. For a user then, the selection of a `scrooge` configuration can be a daunting task. To facilitate model selection, we used our simulated data to construct a decision tree algorithm for selecting the appropriate scrooge configuration. For each simulated fishery, we identified which configuration minimized rmse over the last five years of the data. From there, we trained the decision tree to choose a configuration based on the characteristics of the simulated fishery. For all of these runs we ignore configurations using effort data, since our earlier results say that if you have it, use it. 
+
+While further work will need to be conducted to translate this tree into user-supplied variables, our results show for example that if you know nothing about the fishery, the best choice is to assume a random walk economic process model while utilizing PPUE in the likelihood. But, if prices have been increasing substantially, then the model utilizing a bio-economic model with profit ingredients as the process model and PPUE in the likelihood may be best. Alternatively, if prices are not increasing and recruitment is not highly autocorrelated, then it may be best to ignore economic data in the assessment (Fig.\@ref(fig:dtree)). 
+
+
+
+```{r dtree, fig.cap="Decision tree suggesting scrooge configurations as a function of fishery characteristics (omitting configurations using effort data). Test indiates the preferred configuration at that node, numbers the proportion of times in the data each configuration were selected, and percentages the percentage of the data that fall into a given node at that level in the tree"}
 prep_performance <- sandbox_performance %>%
+    group_by(fishery,
+           period,
+           window,
+           prop_years_lcomp_data) %>%
+  filter(variable == "f", economic_model != 3, likelihood_model!=2) %>%
+  filter(recent_rmse == min(recent_rmse)) %>%
+  ungroup() %>% 
   select(w_rmse, fit_model,sigma_r:percnt_loo_selected) %>% {
   recipes::recipe(w_rmse ~ ., data = .)
   } %>%
@@ -774,34 +712,37 @@ decision_tree = train(fit_model ~ .,
                       data =  prep_performance %>% select(-w_rmse),
                       tuneLength =40)
 
-plot(decision_tree$finalModel)
-text(decision_tree$finalModel, use.n=TRUE, all=TRUE, cex=0.5)
+rpart.plot::rpart.plot(decision_tree$finalModel)
+
+```
+
+
+### Comparisons
+
+Running comparison to LIME and LBSPR now
+
+```{r}
+
+
 ```
 
 
 ## Discussion
 
-Limitations
-- what about a managed fishery?
-- importance of priors to estimate all this crap
+Fisheries management is a complicated task far a large and varied range of reasons, most centrally the incentives of a common-pool resources, the challenges of placing individual species in an ecosystem context, and the sheer logistical and statistical difficulties in estimating the abundance and exploitation of fish populations whose adults and larvae can cover vast distances while being subjected to a host of environmental drivers. The aim of this study is to demonstrate how integration of economic data and theory can make this problem of estimating status less challenging under the right circumstances. We find that while different kinds of economic information can be useful under different contexts, across our simulated fisheries inclusion of economic data almost always improved our ability to estimate fishing mortality. Our results provide a clear and novel path for the integration of an underutilized form of information in fisheries stock assessment. 
 
-garbage in garbage out - but same problem for any data and you can talk to humans. 
+Looking narrowly at `scrooge`, the length-and-economics DLA proposed here, there are several limitations that must be addressed. Most critically, we do not yet address observation error. We feel that this is justified given the novel nature of the concept proposed here; as a first phase we have demonstrated that, given perfect information, economic data can substantially improve the performance of a length-based data-limited assessment. The critical next step will be to ask, how accurate does economic data utilized in this assessment have to be to remain beneficial? Luckily, this modeling framework makes this a simple task, the only barrier being resources for a much larger number of simulated fisheries and assessments. Beyond that, and similar to most other DLAs, we do not incorporate important but challenging factors such as time-varying and/or environmentally driven growth and mortality, or multi-species interactions. Under a data-limited context, these choices are likely to be inevitable, but the addition of more data in the form of economics opens up potential spaces for identification of more parameters such as these. 
 
-This isn't just a tweak to length-based assessments, foundation for a new branch of assessment.
+From the fleet perspective, we do not yet address the complexities of multiple fleets or time-varying and/or dome-shaped shaped selectivity. We make this choice to make presentation of our initial results tractable, but future investigations can relatively easily incorporate these factors. 
 
+Our results show that accurate data on the percentage changes in total fishing effort are likely to provide the most reduction in root median squared error. If these data are not reliably available though, we find that the choice of which model is "best" is highly dependent on the characteristics of a specific fishery. Future work and theory may identify an emergent set of cases where one particular model configuration is preferable. As the number of assessment methods increases, and the range of fishery scenarios in which we we want to run assessment diversify, relying on qualitative rules of thumb is likely to become more challenging. We propose the pairing of large-scale simulation testing with classification algorithms to resolve this problem. On their own, this process allows the data to inform us which models are likely to perform well under a particular set of circumstances. Further work is needed to translate characteristics of simulated fisheries into parameters questions that users could reliably answer. These methods could also serve as the underpinning for ensemble assessment approaches, such as those presented by @Anderson2017b, that rather than picking one model generate an aggregate output based on predictions of each model weighted by their expected accuracy under given circumstances. We recognize that this approach may seem as a "black box", and we would encourage users not blindly trust algorithm outputs. At a minimum, for such a tool to be useful it would have to inform users as to how similar their particular fishery is to the simulated library of fisheries on which the decision algorithm is based. But, we feel that the use of theory and empirical approaches such as these can make the process of deciding which model to use when easier and, properly done, more transparent.  
 
-@Dowling2014 - need to then link these to control rules for MSE
+Looking more broadly, there are several important challenges to the integration of economic knowledge in stock assessment that need to be addressed. Open-access dynamics are central to all of the `scrooge` configurations except those that assume some knowledge of the percentage changes in effort in the fishery over time. This clearly begs the question, how would this model work in a limited-entry or rationalized fishery? If effort is constrained by both regulation and profits, profits alone may not be informative. While we do not test these scenarios here, we a) could incorporate them to the simulation framework but more importantly b) can use this assessment as a foundation for thinking about how to integrate economic knowledge from fisheries with different types of effort dynamics into the assessment process. For example, in rationalized fisheries, data on the price and dynamics of quota trading could be informative as to fishery perceptions of stock status. While these are real concerns, as a starting place though we fell that assuming open access dynamics is a reasonable assumption for many data-limited fisheries in which we would envision using the `scrooge` assessment model as envisioned here. 
 
-@Dowling2015,
+We also casually suggest that data such as trends in prices, costs, technology, effort, or profit per unit effort be accurately collected and utilized in the assessment process. Our results show that, in theory, collecting these data is likely to be worth it from the perspective of assessment accuracy [though a full cost-benefit management strategy evaluation would be needed to assess the tradeoffs in assessment accuracy with the costs of data collection, as discussed by @Dowling2016]. Why do we feel that these data may be obtainable in a data-limited contexts, where more traditional fisheries data such as total removals are not? The first is that fishermen can talk while fish cannot. In our experience, fishing stakeholders often have detailed knowledge on the economic history of their fishery. While future work is needed to determine the best strategies for translating this knowledge into the form required by `scrooge`, this is a surmountable challenge. Second, governments or stakeholders that have not had the capacity or interest in collecting historic fisheries data may still have official records on data related to the fishing industry, including fuel prices, government subsidies, export prices, and changes in wages. We are under no illusion that obtaining the types of economic data utilized by `scrooge` will be simple, but our results show that it is worth determining how best to obtain and use these data. 
 
-Why is this the most groundbreaking thing ever
+While Bayesian analysis has a strong tradition in fisheries science, informative priors have rarely been used in data-limited fisheries assessment, with notable exceptions such as @Cope2015 and @Jiao2011. Our analysis provides a quantitatively rigorous method for integrating prior knowledge on the economic dynamics of a fishery into the assessment. While we would argue that appropriate informative priors can be useful in data-limited or data-rich contexts, in a data-limited context they can be particularly useful, especially where they allow for local knowledge that does not fit neatly into the traditional fisheries data bins to be included. An important feature of our model is that nearly all of the priors utilized in our model are interpretable by users. For example, rather than requiring users to provide a prior, in the appropriate units, for the responsiveness of effort to a one-unit change in profit per unit of effort, we instead allow users to provide a prior on the most that effort is likely to expand from one year to the next. Priors for parameters such as the standard deviation of recruitment can be drawn from appropriate literature. In addition, the Bayesian nature of our model allows users to specify the degree of confidence that should be assigned to prior beliefs or data. If for example estimates of profit per unit effort are believed to be highly questionable, we can increase our prior on the magnitude of observation or process error in the model. 
 
-Highlight some commonly available economic data for places
-
-Discuss in context of channel islands: what does predictive model say should be performance under those circumstances, relative to other assessment methods
-
-recommend ensemble approach
-
-tease next steps, economic only model other kinds of models, etc.
+The dynamics of fisheries are dictated in part by the interplay of economic incentives and ecological constraints. Natural resource management, and fisheries in particular, have gone a long towards understanding these dynamics, from simple theories of open-access dynamics to agent-based multi-species models. While we have increasingly used this understanding to project the likely consequences of policy choices [@Nielsen2017], we have yet broadly utilize these dynamics in the assessment phase of fisheries management. While methods such as SSCOM, described in @Thorson2013a, utilize economic theory to help inform fisheries assessment, to our knowledge this study is the first to incorporate this theory with data on the dynamics of economic incentives to create an integrated bio-economic stock assessment model. We find that integration of economic information can substantially improve the accuracy of fisheries stock assessment, allowing in this case users from a data-limited context to utilize local fishery knowledge to improve their ability to effectively manage their marine resources. Our hope is that this research can serve as a foundation for a broader field of inquiry linking economic behavior with biological knowledge to improve our knowledge of the state of global fisheries. 
 
 ## Works Cited
