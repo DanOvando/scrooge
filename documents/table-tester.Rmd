@@ -1,0 +1,55 @@
+---
+title: "table-tester"
+author: "Dan Ovando"
+date: "8/8/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+```
+
+```{r, echo = FALSE}
+
+like_table <-
+  data_frame(`Data` = "Length Composition",
+  `Models Used In` = "All",
+  Likelihood = '$N_{t,1:L} \\sim multinomial(p^{capture}_{t,1:L})$
+') %>%
+  rbind(c("Profit Per Unit Effort", "PPUE", '$PPUE_{t} \\sim normal(\\hat{PPUE_{t}},\\sigma_{obs})$
+')) %>%   
+rbind(c("Percent Change in Effort", "effort", '$\\Delta^{effort} \\sim normal(\\frac{\\hat{E_{t+1}}}{\\hat{E_{t}}}, \\sigma_{obs})$
+'))
+  
+  
+kable(like_table, "latex", align="l", booktabs=TRUE, escape = F, row.names = F,
+      caption = "Candidate likelihoods for scrooge") %>%
+  kable_styling(full_width = T, font_size = 9) %>%
+  row_spec(0, bold = T) 
+```
+
+```{r}
+
+prior_table <-
+  data_frame(`Parameter` = "Initial Fishing Mortality",
+  Transformations = "N/A",
+  Prior = "$f^{init} \\sim normal(0,1)$"
+) %>% 
+  rbind(c("Log Rec. Dev", "$RecDev = exp(LogRecDev - \\sigma_{r}^2/2)$", "$LogRecDev \\sim normal(0,1)$")) %>% 
+    rbind(c("Log Effort Dev", "$EffDev = exp(LogEffDev - \\sigma_{e}^2/2)$", "$LogEffDev \\sim normal(0,1)$")) %>% 
+      rbind(c("$\\sigma_r$","NA", "$\\sigma_r \\sim halfnormal(0.4,0.4)$")) %>% 
+        rbind(c("$\\sigma_{obs}$","NA", "$\\sigma_{obs} \\sim halfnormal(0,2*sd(DATA))$")) %>%         rbind(c("Max Percent Change Effort","", "$MaxPercEffort \\sim halfnormal(0, 0.25)$")) 
+      
+
+
+kable(prior_table, "latex", align="l", booktabs=TRUE, escape = F, row.names = F,
+      caption = "Model parameters and priors") %>%
+  kable_styling(full_width = T, font_size = 9) %>%
+  row_spec(0, bold = T) 
+
+```
+
+

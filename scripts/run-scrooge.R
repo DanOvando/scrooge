@@ -75,7 +75,7 @@ theme_set(scrooge_theme)
 
 sim_fisheries <- FALSE
 
-run_case_studies <- FALSE
+run_case_studies <- TRUE
 
 run_clouds <- FALSE
 
@@ -969,32 +969,19 @@ lime_fits <- map(lime_fits, "result")
 
 saveRDS(object = lime_fits,file =  paste0(run_dir,"/lime_fits.RDS"))
 
+processed_sandbox <- readRDS(file = glue::glue("results/scrooge-results/{run_name}/processed_fisheries_sandbox.RDS"))
+
+lime_fits <- readRDS(file =  paste0(run_dir,"/lime_fits.RDS"))
+
+lime_worked <- map_dbl(lime_fits, length)
+
 lcomp_years <- map(processed_sandbox$prepped_fishery,c("scrooge_data","length_comps_years"))
 
-processed_limes <- map2(lime_fits, lcomp_years, process_lime)
+processed_limes <- map2(lime_fits, lcomp_years, safely(process_lime))
 
 saveRDS(object = processed_limes,file =  paste0(run_dir,"/processed_limes.RDS"))
 
-processed_sandbox <- processed_sandbox %>%
-  mutate(performance = map(performance, "result")) %>%
-  mutate(lime_v_scrooge = map2(processed_limes,performance, compare_lime_and_scrooge))
-
-whoops <- test %>%
-  select(experiment, economic_model, likelihood_model,lime_v_scrooge) %>%
-  unnest() %>%
-  filter(!is.na(lime_pred)) %>%
-  gather(model, estimate, contains("_pred")) %>%
-  group_by(experiment, economic_model, likelihood_model, model) %>%
-  summarise(rmse = sqrt(mean((observed - estimate)^2))) %>%
-  ggplot(aes(rmse, fill = model)) +
-  geom_density() +
-  facet_wrap(~model, scales = "free")
-
-
-
 }
-
-
 
 # run diagnostics ---------------------------------------------------------
 
