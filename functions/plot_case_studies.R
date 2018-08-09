@@ -5,7 +5,8 @@ plot_case_studies <- function(cs1,
          cs_name = "realistic",
          lcomp_years = "max",
          plot_variable = "f",
-         plot_period = "middle") {
+         plot_period = "middle",
+         modelo_name) {
 
   if (lcomp_years == "max"){
 
@@ -24,8 +25,8 @@ cs_summary <- performance_stats %>%
          variable == plot_variable,
          model == cs1 | model == cs2)
 
-cs_summary$model <- fct_recode(as.factor(cs_summary$model),  "Lengths Only" = cs1,
-                                "Lengths + Economics" = cs2 )
+# cs_summary$model <- fct_recode(as.factor(cs_summary$model),  "Lengths Only" = cs1,
+#                                 "Lengths + Economics" = cs2 )
 cs_summ_plot <- cs_summary %>%
   gather(metric, value, recent_rmse, recent_median_bias) %>%
   ggplot(aes(value, fill = model)) +

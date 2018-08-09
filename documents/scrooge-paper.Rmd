@@ -83,10 +83,12 @@ sandbox_performance <- readRDS(file = paste0("~/PhD/scrooge/results/",run_name,"
 if (dir.exists("~/PhD/scrooge/results/scrooge-results") == F){
   
   system("mkdir ~/PhD/scrooge/results/scrooge-results")
+  
+}
     
   system("gcsfuse scrooge-results ~/PhD/scrooge/results/scrooge-results")
 
-}
+
 
 processed_sandbox <- readRDS(file = paste0("~/PhD/scrooge/results/scrooge-results/",run_name,"/processed_fisheries_sandbox.RDS"))
   
@@ -177,6 +179,34 @@ While there are statistical reasons to favor (and in some circumstances resist) 
 
 ### `scrooge` Model
 
+`scrooge` can be run using a variety of different combinations of effort process models (e.g. random walk vs open-access) and likelihood structures (e.g. length composition). We use the form `economic process model/ likelihood structure` to denote a configuration. For example a configuration of `random-walk/lcomps` means the model uses a random walk effort process model and fits to the length composition data. We assess factorial combinations of process models and likelihoods, omitting combinations that would double count data (e.g. using profit per unit effort data both in the likelihood). See Table.\@ref(tab:model-table) for a summary of all of the configuration components.
+
+
+```{r model-table}
+
+model_table <-
+  data_frame(Name = "Random Walk",
+  Abbreviation = "random-walk",
+  Description = 'Effort evolves as a random walk independent of economics') %>%
+  rbind(c("Bio-economic model with profit ingredients","ingredients", "Effort responds to profit per unit effort built price, cost, q, etc.")) %>%   
+    rbind(c("Bio-economic model with PPUE","ppue", "Effort responds to profit per unit effort, PPUE data supplised")) %>%   
+    rbind(c("Effort Data","effort", "Effort is adjusted by data on proportional changes in effort"))  %>%  
+    rbind(c("Lengths","lcomp", "Length composition data are the only part of the likelihood")) %>%   
+    rbind(c("Lengths + PPUE","lcomp+ppue", "Likelihood composed of PPUE and length composition data")) %>% 
+    rbind(c("Lengths + Porportional Effort","lcomp+effort", "Likelihood composed of percent change in effort and length composition data"))   
+
+
+  
+kable(model_table, "latex", align="l", booktabs=TRUE, escape = F, row.names = F,linesep = "",
+      caption = "Candidate economic process models and likelihood components of scrooge") %>%
+  kable_styling(latex_options = "striped", full_width = T,font_size = 9) %>% 
+  row_spec(0, bold = T)  %>% 
+  group_rows("Economic Process Models", 1, 4) %>%
+  group_rows("Likelihood Components", 5, 7)
+
+
+```
+
 ```{r like-table}
 
 
@@ -184,32 +214,75 @@ While there are statistical reasons to favor (and in some circumstances resist) 
 
 ```{r prior-table}
 
-
-
+prior_table <-
+  data_frame(`Parameter` = "Initial Fishing Mortality",
+  Transformations = "N/A",
+  Prior = "$f^{init} \\sim halfnormal(0,1)$") %>%
+  rbind(
+  c(
+  "Log Rec. Dev",
+  "$RecDev = exp(\\sigma_{r}LogRecDev - \\sigma_{r}^2/2)$",
+  "$LogRecDev \\sim normal(0,1)$"
+  )
+  ) %>%
+  rbind(
+  c(
+  "Log Effort Dev",
+  "$EffDev = exp(\\sigma_{e}LogEffDev - \\sigma_{e}^2/2)$",
+  "$LogEffDev \\sim normal(0,1)$"
+  )
+  ) %>%
+  rbind(c("$\\sigma_r$", "N/A", "$\\sigma_r \\sim halfnormal(0.4,0.4)$")) %>%
+  rbind(c(
+  "$\\sigma_{obs}$",
+  "N/A",
+  "$\\sigma_{obs} \\sim halfnormal(0,2*sd(DATA))$"
+  )) %>%
+  rbind(c("$\\sigma_e$", "N/A", "$\\sigma_e \\sim halfnormal(0.2,0.2)$")) %>%
+  rbind(c(
+  "Max Percent Change Effort",
+  "N/A",
+  "$MaxPercEffort \\sim halfnormal(0, 0.25)$"
+  )) %>%
+  rbind(c(
+  "Cost to Revenue Ratio",
+  "N/A",
+  "$crRatio \\sim halfnormal(0.5, 1)$"
+  )) %>%
+  rbind(c(
+  "50perc sel as percent of linf",
+  "N/A",
+  "$p50Sel \\sim halfnormal(UserGuess, 0.05)$"
+  ))
+  
+  
+kable(prior_table, "latex", align="l", booktabs=TRUE, escape = F, row.names = F,
+      caption = "Model parameters and prior distributions") %>%
+  kable_styling(latex_options = "striped",full_width = T, font_size = 9) %>%
+  row_spec(0, bold = T) 
 
 ```
 
-
-
-The estimating model itself, which, since it is motivated by money we call `scrooge`, was coded in `stan` using the `rstan` package [citation]. The core internal operating model is an age structured model identical in structure to the operating model used for the simulations. This means that the model requires user-supplied estimates of life history data, specifically
+We now describe each of the components in more detail. The estimating model itself, which, since it is motivated by money we call `scrooge`, was coded in `stan` using the `rstan` package [@StanDevelopmentTeam2018]. The core internal operating model is an age structured model identical in structure to the operating model used for the simulations. This means that the model requires user-supplied estimates of life history data, specifically
   - Von Bertalanffy growth parameters
   - Allometric weight and maturity at length/age equations
   - An estimate of natural mortality 
   - An estimate of Beverton-Holt steepness
 
-We will focus our discussion on the estimation model. We constructed four candidate process models describing the economic behavior of the fishing flee  and three candidate likelihoods, each defined by different structural assumptions and data availability. We then fit factorial combinations of each process model with each likelihood structure, omitting combinations that would have double counted some information as both a prior and data.
+We will focus our discussion on the estimation model. We constructed four candidate process models describing the effort dynamics of the fishing flee and three candidate likelihood structures, each defined by different structural assumptions and data availability. We then fit factorial combinations of each effort process model with each likelihood structure, omitting combinations that would have double counted some information as both a prior and data.
 
-The model has a number of parameters it must estimate, namely fishing mortality rates, recruitment deviates, the length at 50% selectivity, and associated process and observation errors as required (see Table.XX for a complete description of all estimated parameters and their prior distributions). The model is initialized at unfished biomass, and then an estimate of initial fishing mortality is applied for 100 burn-in years, achieving a level of depletion at the start of the data-period of the model. The data period of the model is of length *t*, and defines the time-steps during which the model estimates dynamic parameters, though the model estimate *t* + age 50% selectivity recruitment deviates, to allow the model to estimate recruitment pulses which start before the data-period but whose signal can be observed during the early years of the data period. Length-composition data must be available for 1 or more years of the data-period, but are not required in all years. For example, the model can function if given ten years of economic information and only one year of length composition data available at the end of the time period. 
+The model has a number of parameters it must estimate, namely fishing mortality rates, recruitment deviates, the length at 50% selectivity, and associated process and observation errors as required (see Table.\@ref(tab:prior-table) for a complete description of all estimated parameters and their prior distributions). The model is initialized at unfished biomass, and then an estimate of initial fishing mortality is applied for 100 burn-in years, achieving a level of depletion at the start of the data-period of the model. The data period of the model is of length *t*, and defines the time-steps during which the model estimates dynamic parameters, though the model estimate *t* + age 50% selectivity recruitment deviates, to allow the model to estimate recruitment pulses which start before the data-period but whose signal can be observed during the early years of the data period. Length-composition data must be available for 1 or more years of the data-period, but are not required in all years. For example, the model can function if given ten years of economic information and only one year of length composition data available at the end of the time period. 
 
 All estimation models share common components of recruitment deviates and length composition data. Recruitment is assumed to on average have Beverton-Holt dynamics [@Beverton1959], reparemeterized around steepness. Process error around this mean relationship is assumed to be log-normally distributed with a bias correction
 
 
-$$r_{t} = BH(SSB_{t-1},h)e^{r^{dev}_{t}}$$
+$$r_{t} = BH(SSB_{t-1},h)e^{r^{dev}_{t}-\sigma_{r}^2/2}$$
 
+$$r^{dev}_{t} = \sigma_rLogRecDev_t$$
 
-$$r^{dev}_{t} \sim normal(-\sigma_{r}^2/2, \sigma_r)$$
+$$\sigma_r \sim halfnormal(0.4,0.4)$$
 
-$$\sigma_r \sim normal(0.4,0.4)$$
+$$LogRecDev_t\sim normal(0,1)$$
 
 Length composition data are structured as discrete numbers of fish counted within 1cm length bins per year. While each estimation model differs in its methods for estimating fishing mortality rates, for a given generated mortality rate, vector of estimated recruitment events $r$, and estimated selectivity $s^{50}$, the model produces a vector of probability of capture at length $p^{capture}$ for each time step, given the structural population equations of the model $g()$. 
 
@@ -221,21 +294,30 @@ $$N_{t,1:L} \sim multinomial(p^{capture}_{t,1:L})$$
 
 The key difference in the estimation models is how they estimate *f* and the data that enter the likelihood. All estimation of *f* begins by estimating a parameter $f^{init}$, which is the fishing mortality rate that is held constant over a burn-in period to achieve a given level of depletion by the time of the start of the data period of the model. The estimation models diverge from there in that each specifies a different structural model for how *f* evolves from $f^{init}$. 
 
+#### Effort Process Models
+
+All effort process model have an expected process and a process error component. The process error, $E^{dev}$, is estiamted in the same manner across all the process models 
+
+Effort deviates $E^{dev}$ are assumed to be log-normally distributed
+
+$$E^{dev}_{t} = \sigma_ELogEDev_t$$
+
+$$\sigma_E \sim halfnormal(0.2,0.2)$$
 
 
-#### Effort Models
+$$LogEDev_t\sim normal(0,1)$$
+
+
+The multiplicative effort deviate is then
+
+$$e^{E^{dev}_{t} - \sigma_e^2/2} $$
 
 ##### Random Walk Model (random-walk)
 
-This estimation model is similar in flavor to the penalty on deviations in fishing mortality used in LIME. Under this model, effort deviates $E^{dev}$ are assumed to be log-normally distributed
-
-$$E^{dev}_{t} \sim normal(-\sigma_{E}^2/2, \sigma_E)$$
-
-$$\sigma_E \sim normal(0.4,0.4)$$
-
+This estimation model is similar in flavor to the penalty on deviations in fishing mortality used in LIME. 
 Effort evolves in a random walk manner from there
 
-$$E_{1} = \frac{f^{init}}{q}e^{E^{dev}_{1}}$$
+$$E_{1} = \frac{f^{init}}{q}e^{E^{dev}_{1}-\sigma_{E}^2/2}$$
 
 $$f_{1} = qE_{1}$$
 
@@ -247,9 +329,9 @@ $$E_{t} = E_{t-1}e^{E^{dev}_{t}}$$
 
 $$f_{t} = qE_{t}$$
 
-##### Bioeconomic Model with Profit Ingredients (profit-ingredients)
+##### Bioeconomic Model with Profit Ingredients (ingredients)
 
-We now turn to our class of bio-economic models. Across all evaluated bio-economic models, we assume that fishermen respond to average not marginal profits, per @Gordon1954, which we quantify as profits per unit effort, or *PPUE*. Under the `ingredients` model, the user supplies some data on absolute or relative changes in prices *p*, costs *c*, and technology (catchability) *q* (which can be thought of as ingredients of profitability). For example, users could report a 25% increase in prices due to the arrival of a new buyer with access to a lucrative foreign market, a 10% decrease in fishing costs due to a government fuel subsidy, and/or a increase in catchability due to the introduction of fish-finder technology. These ingredients of profitability can be provided either as qualitative information or hard data. Any ingredients for which no estimates of relative rates of change are available are assumed to remain constant over the time period of the model. The key feature of this model is that it uses these ingredients to inform our prior on $\hat{PPUE_{t}}$ in a given time step. Therefore, if costs go down and prices go up in a given time step, our prior on $\hat{PPUE_{t}}$ will increase appropriately, subsequently increasing our prior on the amount of effort in the following time-step. 
+We now turn to our class of bio-economic effort dynamic models. Across all evaluated bio-economic models, we assume open-access dynamics where fishermen respond to average not marginal profits, per @Gordon1954, which we quantify as profits per unit effort, or *PPUE*. Under the `ingredients` model, the user supplies some data on absolute or relative changes in prices *p*, costs *c*, and technology (catchability) *q*, all of which can be thought of as ingredients of profitability. For example, users could report a 25% increase in prices due to the arrival of a new buyer with access to a lucrative foreign market, a 10% decrease in fishing costs due to a government fuel subsidy, and/or a increase in catchability due to the introduction of fish-finder technology. These ingredients of profitability can be provided either as qualitative information or hard data. Any ingredients for which no estimates of relative rates of change are available are assumed to remain constant over the time period of the model. The key feature of this model is that it uses these ingredients to inform our estimate of $\hat{PPUE_{t}}$ in a given time step. Therefore, if costs go down and prices go up in a given time step, our estimate of $\hat{PPUE_{t}}$ will increase appropriately, subsequently increasing our prior on the amount of effort in the following time-step. 
 
 
 Under this model, $\hat{PPUE_{t}}$ is calculated as 
@@ -257,14 +339,14 @@ Under this model, $\hat{PPUE_{t}}$ is calculated as
 $$\hat{PPUE_{t}} = \frac{p_{t}C(q_{t},B_{t},E_t,s^{50}) - c_{t}E_{t}^2}{E_{t}}$$
 
 
-where *C()* represents that Baranov catch equation [citation]. 
+where *C()* represents that Baranov catch equation [@Baranov1918]. 
 
 Notice now that the components price (*p*), catchability (*q*), and cost (*c*) are allowed to vary over time. This is because the model allows for user supplied information on the evolution of these economic traits over time, either in the form of actual values (e.g. the price in a given year), or in relative changes (prices are 10% higher than they were last year). For the relative change cases, user supplied inputs are converted to deviations from a mean value and then multiplied by a default mean value set by the model. This is the default for both *q* and *c*, since converting user knowledge into the appropriate units is challenging. For a given value of $\hat{PPUE_{t}}$, we calculate effort in the next time step per
 
 
 $$E_{t + 1} = (E_{t} + \theta{\hat{PPUE_{t}}})e^{E^{dev}_{t}}$$
 
-where $\hat{PPUE_{t}}$ the profit per unit effort, and $\theta$ adjusts the responsiveness of effort to *PPUE*. From there
+where $\hat{PPUE_{t}}$ the profit per unit effort, and $\theta$ adjusts the responsiveness of effort to *PPUE*. Note that the model includes the same effort process error as utilzied in the random-walk processmodel. 
 
 $$f_{t} = q_{t}E_{t}$$
 
@@ -273,29 +355,26 @@ One difficulty in this is that the dynamics of the open access model are driven 
 
 $$c_t  = c^{max}c^{rel}$$
 
-where $c^{rel}$ are the relative costs (scaled from 0 to 1) over time *t* supplied by users. $c^{max}$ itself is tuned in a rather long process that results in much cleaner estimation that can actually be provided with informative priors. Rather than estimating  $c^{max}$ itself, we estimate a cost-to-revenue ratio at the start of the fishery. We first estimate a guess of, given the simulated nature of the fishery, something close to maximum revenues (assumed to come by fishing a bit harder than *m* when the population is completely unfished). We then calculate the profits associated with these maximum revenues given the current estimate of the cost to revenue ratio CR. 
+where $c^{rel}$ are the relative costs (scaled from 0 to 1) over time *t* supplied by users. $c^{max}$ itself is tuned in a rather long process that results in much cleaner estimation that can actually be provided with informative priors. Rather than estimating  $c^{max}$ itself, we estimate a cost-to-revenue ratio at the start of the fishery. We first estimate a guess of, given the simulated nature of the fishery, something close to maximum revenues (assumed to come by fishing a bit harder than natural mortality when the population is completely unfished). We then calculate the profits associated with these maximum revenues given the an estimate of the cost to revenue ratio CR. 
 
-$$PROFITS^{max} \sim  MAX(PRICE)CATCH^{B0}*(1 - CR) $$
+$$PROFITS^{max} \sim  MAX(PRICE)CATCH^{B0}(1 - CR) $$
 
 
-Given this estimate of $PROFITS^{max}$, we can then back out the cost coefficient $c_{max}$ that, given the other parameters, would produce those profits. 
-
-Estimating the cost to revenue ratio instead of the actual costs allows for informative priors to be set. A fishery that at its heyday was incredible profitable will have a low cost to revenue ratio, while a fishery that was scrapping on its best day would have a high cost to revenue ratio. 
+Given this estimate of $PROFITS^{max}$, we can then back out the cost coefficient $c_{max}$ that, given the other parameters, would produce those profits. Estimating the cost to revenue ratio instead of the actual costs allows for informative priors to be set. A fishery that at its heyday was incredible profitable will have a low cost to revenue ratio, while a fishery that was scrapping on its best day would have a high cost to revenue ratio. 
 
 While the prior can be informed from local stakeholders, we set a zero truncated normal prior on the cost ratio of 
 
-$$CR \sim normal(0.5,1)$$
+$$CR \sim halfnormal(0.5,1)$$
 
-The other challenging parameter in the open access equation is $\theta$, the amount that effort changes for a one unit change in $PPUE$. Similarly to estimating the cost to revenue ratio instead of raw costs, rather than estimate $theta$ directly, we estimate the maximum percentage change in effort from one time step to the next. As part of the CR process, we estimated the maximum profits, and the effort that would produce those profits. Together that provides us with the maximum expected PPUE. For a given max percentage change ($\Delta^{max}$) in effort then, we calculate $\theta$ as
+The other challenging parameter in the open access equation is $\theta$, the amount that effort changes for a one unit change in $PPUE$. Similarly to estimating the cost to revenue ratio instead of raw costs, rather than estimate $theta$ directly, we estimate the maximum percentage change in effort from one time step to the next. As part of the cost to revenue tuning process, we estimated the maximum profits, and the effort that would produce those profits. Together that provides us with the maximum expected PPUE. For a given max percentage change ($\Delta^{max}$) in effort then, we calculate $\theta$ as
 
 $$\theta = (\Delta^{max}  E^{MAX}) / PPUE^{MAX}$$
 
 While $\theta$ has no intuitive sense for most stakeholders, the maximum percentage year-to-year change in effort can be elicited from stakeholders. For now, we assume a zero truncated normal prior on the max expansion
 
-$$\Delta^{max} \sim normal(0,0.25)$$
+$$\Delta^{max} \sim halfnormal(0,0.25)$$
 
 Together, the `ingredients` model allows us to utilize provided ingredients of profitability to drive our prior expectations of the dynamics of fishing efforts. 
-
 
 ##### Bioeconomic Model with PPUE Data (`ppue`)
 
@@ -313,7 +392,7 @@ $$f_{t} = qE_{t}$$
 
 ##### Effort Data Model (`effort`)
 
-Both of the bio-economic methods `ingredients` and `ppue` model the change in effort as a function of profits per unit effort. Their key function, from the perspective of a model focused on estimating biological fishery metrics, is to help inform estimates of time-step-to-time-step changes in fishing mortality. To follow the old adage "keep it simple stupid", we also build a model that assumes data on the time-step-to-time-step proportional changes in fishing effort. While such data are unlikely to be available for a fishery covering a large and diverse geographic range, for more localized small-scale fisheries such knowledge is not unreasonable. For example, fishing cooperative in Chile often maintain data on fishing effort [citation]. 
+Both of the bio-economic methods `ingredients` and `ppue` model the change in effort as a function of profits per unit effort. Their key function, from the perspective of a model focused on estimating biological fishery metrics, is to help inform estimates of time-step-to-time-step changes in fishing mortality. To follow the old adage "keep it simple stupid", we also build a model that assumes data on the time-step-to-time-step proportional changes in fishing effort. While such data are unlikely to be available for a fishery covering a large and diverse geographic range, for more localized small-scale fisheries such knowledge is not unreasonable. For example, fishing cooperative in Chile often maintain data on fishing effort. 
 
 Under the `effort` model then, we assume knowledge of the proportional changes in effort over time $\Delta^{effort}$, where
 
@@ -329,12 +408,11 @@ $$f_{t} = qE_{t}$$
 
 #### Likelihood Models
 
-The economic process models represent alternative hypotheses as to the true operating model driving the evolution of fishing effort, and partly be extension fishing mortality, in a fishery. In other words, the economic process models inform our prior on the evolution of effort. However, a central motivation of this research is to diversify both the data available to our assessment operating models (as we have done with the use of economic data as components of Bayesian priors), and the data with which we confront these models. The traditional pantheon of data with which we confront models in fisheries are abundance indices (derived from either fishery dependent or independent sources) and length/age composition data [citation]. We propose to add profit per unit effort and proportional changes in effort to this group, at least as a starting point in the data-limited context of this study. 
+The effort process models represent alternative hypotheses as to the true operating model driving the evolution of fishing effort, and partly by extension fishing mortality, in a fishery. In other words, the economic process models inform our prior on the evolution of effort. However, a central motivation of this research is to diversify both the data available to our assessment operating models (as we have done with the use of economic data as components of Bayesian priors), and the data with which we confront these models. The traditional pantheon of data with which we confront models in fisheries are abundance indices (derived from either fishery dependent or independent sources) and length/age composition data. We propose to add profit per unit effort and proportional changes in effort to this group, at least as a starting point in the data-limited context of this study. 
 
-##### PPUE as an Index of Effort (`length + ppue`)
+##### PPUE as an Index of Effort (`lcomp+ppue`)
 
-XX cite that maunder paper Jim mentioned for fitting random effects to an index
-
+<!-- XX cite that maunder paper Jim mentioned for fitting random effects to an index -->
 
 We consider catch-per-unit-effort to be informative in fisheries (on a good day) through the relationship
 
@@ -358,16 +436,16 @@ $\theta$ is estimated in the same manner as outlined in the economic process mod
 
 $$PPUE_{t} \sim normal(\hat{PPUE_{t}},\sigma_{obs})$$
 
-Remember though that in our models we are estimating $\hat{E_{t}}$. Clearly then, the above likelihood is only identifiable if we either provide a constraining prior on the evolution of $\hat{E_{t}}$ (as all of our economic operation models do) and/or include other components to the likelihood, which we do by fitting to the length composition data in all runs. In other words, when we include $PPUE_{t}$ in the likelihood, the model estimates a vector of efforts that maximize the likelihood of both the PPUE and length composition, conditional on the prior probabilities assigned to the evolution of effort by our effort process model. 
+Remember though that in our models we are estimating $\hat{E_{t}}$. Clearly then, the above likelihood is only identifiable if we either provide a constraining prior on the evolution of $\hat{E_{t}}$ (as all of our effort process models do) and/or include other components to the likelihood, which we do by fitting to the length composition data in all runs. In other words, when we include $PPUE_{t}$ in the likelihood, the model estimates a vector of efforts that maximize the likelihood of both the PPUE and length composition data, conditional on the prior probabilities assigned to the evolution of effort by our effort process model. 
 
-It is also worth noting that by including $PPUE$ in the likelihood, we are now including both process error (quantified as $\sigma_E$ in the estimated effort deviates) and observation error ($\sigma_obs$), in a similar manner to the methods outlined in [Thorson2015b], though the Bayesian nature of our analysis makes it hierarchical rather than "mixed effect" in nature, since technically all variables are random in a Bayesian setting [@Gelman2013] XX. Given the data constraints, we are only able to identify both process and observation error by providing constraining priors on our estimates of both. 
+It is also worth noting that by including $PPUE$ in the likelihood, we are now including both process error (quantified as $\sigma_E$ in the estimated effort deviates) and observation error ($\sigma_obs$), in a similar manner to the methods outlined in [Thorson2015b], though the Bayesian nature of our analysis makes it hierarchical rather than "mixed effect" in nature, since technically all variables are random in a Bayesian setting [@Gelman2013]. Given the data constraints, we are only able to identify both process and observation error by providing constraining priors on our estimates of both. 
 
 Our prior for $\sigma_{obs}$ is a zero-truncated normal distribution with a user-specified CV
 
-$$ \sigma_{obs} \sim normal(0, CV^{PPUE}\frac{1}{T}\sum_{t = 1:T}{PPUE_{t}})$$
+$$ \sigma_{obs} \sim halfnormal(0, CV^{PPUE}\frac{1}{T}\sum_{t = 1:T}{PPUE_{t}})$$
 
 
-#### Index of Effort Changes (`effort`)
+##### Index of Effort Changes (`effort`)
 
 Trying to keep it simple one last time, in our `effort` process model, we assumed knowledge of the relative change in effort over time. Rather then than fitting to an index of the change in effort, we could in theory then simply fit a model to the change in effort data, assuming some observation error. 
 
@@ -392,7 +470,7 @@ We simulated two case studies for this paper; an open access model which while c
 
 For every simulated fishery, we then stipulated a range of the data to sample, and a combination of an process model and a likelihood structure to fit `scrooge` to those data. In this study, we sampled length composition and economic data for a period of up to 15 years during the middle of the simulated fishery's evolution. Within this 15 year window, we consider two cases, one where length composition data are available for all 15 years, and another where while economic data are available for all 15 years, length composition data are only available for the last 4 years of the time series. We then pass the chosen model configuration, data and associated life-history parameters to `scrooge` to fit the model. 
 
-For now, we focus on estimation of fishing mortality rates. As the model also estimates selectivity, given assumptions about the spawning biomass at age, it is trivial to also estimate and present common metrics such as the spawning potential ratio (SPR). However, for brevity's sake here, we focus on demonstrating the potential of the model to estimate *f*. XX. In addition, we do not consider observation error at this time. While this is clearly not a remotely realistic choice, we made this decision due to the novel nature of the the integrated use of economic data and dynamics into the stock assessment process. If `scrooge` is unable to provide substantial improvements (or actually provides worse estimates) than a standard lengths-only assessments model, in the form of @Rudd2017 or @Hordyk2014, even with perfect information, then it is unlikely to do well with imperfect knowledge. However, future testing will clearly need to address this step, which our operating model is already capable of incorporating. XX Mention simulation constraints. 
+For now, we focus on estimation of fishing mortality rates. As the model also estimates selectivity, given assumptions about the spawning biomass at age, it is trivial to also estimate and present common metrics such as the spawning potential ratio (SPR). However, for brevity's sake here, we focus on demonstrating the potential of the model to estimate fishing mortlaity *f*. In addition, we do not consider observation error at this time. While this is clearly not a remotely realistic choice, we made this decision due to the novel nature of the the integrated use of economic data and dynamics into the stock assessment process. If `scrooge` is unable to provide substantial improvements (or actually provides worse estimates) than a standard lengths-only assessments model, in the form of @Rudd2017 or @Hordyk2014, even with perfect information, then it is unlikely to do well with imperfect knowledge. However, future testing will clearly need to address this step, which our operating model is already capable of incorporating.
 
 #### Model Comparison
 
@@ -404,11 +482,13 @@ and bias as
 
 $$bias_{i} = median(predicted_{i,t} - observed_{i,t})$$
 
-There are many other potential metrics for use, but we focus on these since the units are interpretable, since both the median and bias are in units of fishing mortality rates. We could also compare estimates such as median relative error, which expresses the median percentage error of a given iteration. While this is useful, we felt that, given the potential low values of fishing mortality this metric could be misleading at times. For example, suppose that the true fishing mortality rate is 0.05, and we estimate a fishing mortality rate of 0.1. The MRE for this case would be 100%. But, if the true fishing mortality is 0.5, and we estimate 0.55, our MRE would only be 10%. From a management perspective though. But, from a management perspective, the two are, we would argue, equally accurate, which RMSE captures. By calculating rmse and bias in terms of absolute (rather than relative) deviations, we can provide managers with a sense of whether the expected uncertainty for a given model spans a large or small range of fishing mortality rates. 
+There are many other potential metrics for use, but we focus on these since the units are interpretable, since both the median and bias are in units of fishing mortality rates, which we can reasonably consider along a range of ~ 0 to 2.  We could also compare estimates such as median relative error, which expresses the median percentage error of a given iteration. While this is useful, we felt that, given the potential low values of fishing mortality this metric could be misleading at times. For example, suppose that the true fishing mortality rate is 0.05, and we estimate a fishing mortality rate of 0.1. The MRE for this case would be 100%. But, if the true fishing mortality is 0.5, and we estimate 0.55, our MRE would only be 10%. But, from a management perspective, the two are, we would argue, equally accurate, which RMSE captures. By calculating rmse and bias in terms of absolute (rather than relative) deviations, we can provide managers with a sense of whether the expected uncertainty for a given model spans a large or small range of fishing mortality rates. 
 
 We use rmse and bias to assess the performance of `scrooge` in our case studies. We also used rmse to provide a higher level summary of overall and context specific performance of the candidate `scrooge` models. To judge overall performance, we fit a hierarchical Bayesian model to our simulated fits, in which the dependent variable is rmse, and the independent variables include simulation characteristics such as the degree of recruitment variation, the degree of variation in economic parameters, the life history of the species, and hierarchical effects for each `scrooge` model. This model then provides posterior probability estimates of the average effect of each candidate `scrooge` model on RMSE, controlling for covariates. 
 
 This method provides estimates of overall model performance, but it is likely that different `scrooge` models will perform best under different circumstances. To examine this possibility, we fit a decision tree model using the `rpart` function implemented in the `caret` package [citation], where the dependent variable is, for each simulated fishery, the best (in terms of RMSE) scrooge model, and the independent data are the simulation characteristics. This method provides an algorithm for deciding on the best `scrooge` model configuration given the characteristics of a fishery. 
+
+Lastly, we also used LIME to estimate fishing mortality for each of the `r nrow(processed_grid)` simulated assessments scenarios, and then for each scenario calcualted the difference in rmse resulting from LIME and `scrooge`
 
 ## Results
 
@@ -420,8 +500,8 @@ prep_figures <-
   
   
 modelo_name <- c(
-  em0_lm0 = "Lengths Only",
-  em1_lm1 =  "Lengths + Economics"
+  em0_lm0 = "random-walk/lcomp",
+  em1_lm1 =  "ingredients/ppue"
 )
 
 perf_summaries <- perf_summaries %>% 
@@ -467,7 +547,8 @@ cs1_plot <- plot_case_studies(cs1 = "em0_lm0", cs2 = "em1_lm1",
                               cs_name = "realistic",
                               lcomp_years = "max",
                               performance_stats = performance_stats,
-                              case_studies = case_studies)
+                              case_studies = case_studies,
+                              modelo_name = modelo_name)
 
 cs1_plot
 
@@ -486,7 +567,7 @@ filter(economic_model == 0, likelihood_model == 0,
 
 length_lengths <- temp$performance[[1]]$length_comps %>% 
     filter(source == "fitted") %>% 
-    mutate(model = "Lengths Only")
+    mutate(model = "random-walk/lcomp")
 
 
 temp <- case_studies %>% 
@@ -496,7 +577,7 @@ filter(economic_model == 1, likelihood_model == 1,
 
 econ_lengths <- temp$performance[[1]]$length_comps %>% 
   filter(source == "fitted") %>% 
-  mutate(model = "Lengths + Economics")
+  mutate(model = "ingredients/ppue")
 
 length_comps <- length_lengths %>% 
   bind_rows(econ_lengths)
@@ -559,7 +640,8 @@ cs2_plot <- plot_case_studies(cs1 = "em0_lm0", cs2 = "em1_lm1",
                               cs_name = "realistic",
                               lcomp_years = "min",
                               performance_stats = performance_stats,
-                              case_studies = case_studies)
+                              case_studies = case_studies,
+                              modelo_name = modelo_name)
 
 cs2_plot
 
@@ -575,7 +657,8 @@ cs3_plot <- plot_case_studies(cs1 = "em0_lm0", cs2 = "em1_lm1",
                               cs_name = "decoupled",
                               lcomp_years = "min",
                               performance_stats = performance_stats,
-                              case_studies = case_studies)
+                              case_studies = case_studies,
+                              modelo_name = modelo_name)
 
 cs3_plot
 
@@ -594,8 +677,15 @@ bad_fisheries <- processed_sandbox %>%
 
 sandbox_performance <- processed_sandbox %>%
   filter(!fishery %in% unique(bad_fisheries$fishery)) %>% 
-  select(-scrooge_fit, -prepped_fishery,-summary_plot,-fleet_params) %>%
+  select(-scrooge_fit, -prepped_fishery,-summary_plot,-fleet_params,-lime_v_scrooge) %>%
   unnest()
+
+sandbox_performance <- sandbox_performance %>% 
+  mutate(em = factor(economic_model),
+         lm = factor(likelihood_model)) %>% 
+  mutate(em = fct_recode(em,`random-walk` = "0", ingredients = "1", ppue = "2", effort = "3"),
+         lm = fct_recode(lm,lcomp = "0", `lcomp+ppue` = "1", `lcomp+effort` = "2"))
+
 
 sandbox_performance <- sandbox_performance%>%
   group_by(fishery,
@@ -605,8 +695,8 @@ sandbox_performance <- sandbox_performance%>%
            window,
            prop_years_lcomp_data,
            variable,
-           economic_model,
-           likelihood_model) %>%
+           em,
+           lm) %>%
   summarise(rmse = sqrt(mean(sq_er)),
             mean_bias = mean(predicted - observed),
             median_bias = median(predicted-observed),
@@ -616,7 +706,7 @@ sandbox_performance <- sandbox_performance%>%
             w_rmse = sqrt(weighted.mean(sq_er, w = (year - min(year) + 1))),
             recent_rmse = sqrt(median(sq_er[year >= (max(year) - 5)])),
             recent_median_bias = median((predicted-observed)[year >= (max(year) - 5)])) %>%
-  mutate(fit_model = glue::glue("em{economic_model}_lm{likelihood_model}")) %>% 
+  mutate(fit_model = paste0(em,"/",lm)) %>% 
   left_join(processed_sandbox %>%
               select(experiment, sigma_r:percnt_loo_selected), by = "experiment")
 
@@ -651,8 +741,10 @@ The case studies provide visual and quantitative evidence that the introduction 
 
 `scrooge` models incorporating data on the percentage change in effort in the process model (em3), or the likelihood (lm2) provide the greatest expected reduction in rmse. Models utilizing profit ingredients (data on prices, costs, technology) in the open-access operating model show some evidence of actually increasing rmse, while models utilizing PPUE in the process model or the likelihood showed uncertain effects on rmse (Fig. \@ref(fig:best-models-plot))
 
-```{r best-models-plot, fig.cap="Posterior probability distributions of the effect of each tested scrooge configuration on log(rmse)"}
+```{r best-models-plot, fig.cap="Posterior probability distributions of the effect of each tested scrooge configuration on log(rmse). Fill illustrates mean change in RMSE"}
 rmse_effect_plot <- tidy_performance %>%
+  ungroup() %>% 
+  mutate(model = str_replace(model,"fit_model:","")) %>% 
   group_by(model) %>%
   mutate(mrmse = mean(b)) %>%
   ungroup() %>%
@@ -662,7 +754,8 @@ rmse_effect_plot <- tidy_performance %>%
   geom_density_ridges(aes(x = b, y = model),alpha = 0.75, show.legend = FALSE)  +
   scale_fill_viridis_d(option = "E") +
   labs(x = "Effect on RMSE") +
-  scale_x_continuous(labels = percent, name = "~ % affect on RMSE")
+  scale_x_continuous(labels = percent, name = "~ % affect on RMSE") + 
+  theme(axis.title.y = element_blank())
 
 rmse_effect_plot
 ```
@@ -696,7 +789,7 @@ model_selected_plot <- mod_select %>%
 
 
 econ_selected_plot <- mod_select %>%
-  mutate(econ_model = !(fit_model == "em0_lm0")) %>%
+  mutate(econ_model = !(fit_model == "random-walk/lcomp")) %>%
   group_by(econ_model) %>%
   count() %>%
   ungroup() %>%
@@ -729,7 +822,7 @@ mod_select <- sandbox_performance %>%
            period,
            window,
            prop_years_lcomp_data) %>%
-  filter(variable == "f", economic_model != 3, likelihood_model!=2) %>%
+  filter(variable == "f", em != "effort", lm!= "lcomp+effort") %>%
   filter(recent_rmse == min(recent_rmse)) %>%
   ungroup()
 
@@ -749,7 +842,7 @@ model_selected_plot <- mod_select %>%
 
 
 econ_selected_plot <- mod_select %>%
-  mutate(econ_model = !(fit_model == "em0_lm0")) %>%
+  mutate(econ_model = !(fit_model == "random-walk/lcomp")) %>%
   group_by(econ_model) %>%
   count() %>%
   ungroup() %>%
@@ -780,7 +873,7 @@ prep_performance <- sandbox_performance %>%
            period,
            window,
            prop_years_lcomp_data) %>%
-  filter(variable == "f", economic_model != 3, likelihood_model!=2) %>%
+  filter(variable == "f", em != "effort", lm!= "lcomp+effort") %>%
   filter(recent_rmse == min(recent_rmse)) %>%
   ungroup() %>% 
   select(w_rmse, fit_model,sigma_r:percnt_loo_selected) %>% {
@@ -797,7 +890,8 @@ set.seed(42)
 decision_tree = train(fit_model ~ .,
                       method = "rpart",
                       data =  prep_performance %>% select(-w_rmse),
-                      tuneLength =40)
+                      tuneLength =40,
+                      model = TRUE)
 
 rpart.plot::rpart.plot(decision_tree$finalModel)
 
@@ -829,12 +923,19 @@ test_lime <- processed_sandbox %>%
   filter(!is.na(lime_pred)) %>%
   gather(model, estimate, contains("_pred"))
 
+test_lime <- test_lime %>% 
+  mutate(em = factor(economic_model),
+         lm = factor(likelihood_model)) %>% 
+  mutate(em = fct_recode(em,`random-walk` = "0", ingredients = "1", ppue = "2", effort = "3"),
+         lm = fct_recode(lm,lcomp = "0", `lcomp+ppue` = "1", `lcomp+effort` = "2"))
+
+
 lime_performance_plot <- test_lime %>%
-  group_by(experiment, economic_model, likelihood_model, model) %>%
+  group_by(experiment, em, lm, model) %>%
   summarise(rmse = sqrt(median((observed - estimate) ^ 2))) %>%
   spread(model, rmse) %>%
   mutate(scrooge_improvement = pmin(0.5, pmax(-0.5, scrooge_pred - lime_pred))) %>%
-  mutate(fit_model = paste0("em", economic_model, "_lm", likelihood_model)) %>%
+  mutate(fit_model = paste0(em,"/",lm)) %>% 
   ungroup() %>%
   mutate(fit_model = fct_reorder(fit_model, scrooge_improvement, mean, .desc = TRUE)) %>%
   ggplot(aes(

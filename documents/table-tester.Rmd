@@ -12,6 +12,30 @@ library(knitr)
 library(kableExtra)
 ```
 
+```{r}
+model_table <-
+  data_frame(Name = "Random Walk",
+  Abbreviation = "random-walk",
+  Description = 'Effort evolves as a random walk independent of economics') %>%
+  rbind(c("Bio-economic model with profit ingredients","ingredients", "Effort responds to profit per unit effort built price, cost, q, etc.")) %>%   
+    rbind(c("Bio-economic model with PPUE","ppue", "Effort responds to profit per unit effort, PPUE data supplised")) %>%   
+    rbind(c("Effort Data","effort", "Effort is adjusted by data on proportional changes in effort"))  %>%  
+    rbind(c("Lengths","lcomp", "Length composition data are the only part of the likelihood")) %>%   
+    rbind(c("Lengths + PPUE","lcomp+ppue", "Likelihood composed of PPUE and length composition data")) %>% 
+    rbind(c("Lengths + Porportional Effort","lcomp+effort", "Likelihood composed of percent change in effort and length composition data"))   
+
+
+  
+kable(model_table, "latex", align="l", booktabs=TRUE, escape = F, row.names = F,linesep = "",
+      caption = "Candidate economic process models and likelihood components of scrooge") %>%
+  kable_styling(latex_options = "striped", full_width = T,font_size = 9) %>% 
+  row_spec(0, bold = T)  %>% 
+  group_rows("Economic Process Models", 1, 4) %>%
+  group_rows("Likelihood Components", 5, 7)
+```
+
+
+
 ```{r, echo = FALSE}
 
 like_table <-
@@ -29,6 +53,7 @@ kable(like_table, "latex", align="l", booktabs=TRUE, escape = F, row.names = F,
       caption = "Candidate likelihoods for scrooge") %>%
   kable_styling(full_width = T, font_size = 9) %>%
   row_spec(0, bold = T) 
+
 ```
 
 ```{r}
@@ -36,18 +61,22 @@ kable(like_table, "latex", align="l", booktabs=TRUE, escape = F, row.names = F,
 prior_table <-
   data_frame(`Parameter` = "Initial Fishing Mortality",
   Transformations = "N/A",
-  Prior = "$f^{init} \\sim normal(0,1)$"
+  Prior = "$f^{init} \\sim halfnormal(0,1)$"
 ) %>% 
-  rbind(c("Log Rec. Dev", "$RecDev = exp(LogRecDev - \\sigma_{r}^2/2)$", "$LogRecDev \\sim normal(0,1)$")) %>% 
-    rbind(c("Log Effort Dev", "$EffDev = exp(LogEffDev - \\sigma_{e}^2/2)$", "$LogEffDev \\sim normal(0,1)$")) %>% 
-      rbind(c("$\\sigma_r$","NA", "$\\sigma_r \\sim halfnormal(0.4,0.4)$")) %>% 
-        rbind(c("$\\sigma_{obs}$","NA", "$\\sigma_{obs} \\sim halfnormal(0,2*sd(DATA))$")) %>%         rbind(c("Max Percent Change Effort","", "$MaxPercEffort \\sim halfnormal(0, 0.25)$")) 
-      
+  rbind(c("Log Rec. Dev", "$RecDev = exp(\\sigma_{r}LogRecDev - \\sigma_{r}^2/2)$", "$LogRecDev \\sim normal(0,1)$")) %>% 
+    rbind(c("Log Effort Dev", "$EffDev = exp(\\sigma_{e}LogEffDev - \\sigma_{e}^2/2)$", "$LogEffDev \\sim normal(0,1)$")) %>% 
+      rbind(c("$\\sigma_r$","N/A", "$\\sigma_r \\sim halfnormal(0.4,0.4)$")) %>% 
+        rbind(c("$\\sigma_{obs}$","N/A", "$\\sigma_{obs} \\sim halfnormal(0,2*sd(DATA))$")) %>%      
+        rbind(c("$\\sigma_e$","N/A", "$\\sigma_e \\sim halfnormal(0.2,0.2)$")) %>% 
+rbind(c("Max Percent Change Effort","N/A", "$MaxPercEffort \\sim halfnormal(0, 0.25)$")) %>% 
+  rbind(c("Cost to Revenue Ratio","N/A", "$crRatio \\sim halfnormal(0.5, 1)$"))%>% 
+ rbind(c("50perc sel as percent of linf","N/A", "$p50Sel \\sim halfnormal(UserGuess, 0.05)$")) 
 
 
+  
 kable(prior_table, "latex", align="l", booktabs=TRUE, escape = F, row.names = F,
       caption = "Model parameters and priors") %>%
-  kable_styling(full_width = T, font_size = 9) %>%
+  kable_styling(latex_options = "striped",full_width = T, font_size = 9) %>%
   row_spec(0, bold = T) 
 
 ```
