@@ -1,5 +1,5 @@
 ---
-title: "Improving Fisheries Stock Assessments by Integrating Economic Data"
+title: "Improving Fisheries Stock Assessment by Integrating Economic Data"
 author: "Dan Ovando"
 date: "3/7/2018"
 output: 
@@ -7,8 +7,11 @@ output:
     latex_engine: xelatex
   bookdown::html_document2: default
 linkcolor: blue
+citecolor: blue
+urlcolor: blue
 bibliography: dissertation.bib
 biblio-style: apalike
+header-includes: \usepackage{color}
 ---
 
 ```{r, include=FALSE}
@@ -31,6 +34,10 @@ library(scales)
 library(caret)
 library(recipes)
 library(viridis)
+library(knitr)
+library(kableExtra)
+library(bayesplot)
+library(tidybayes)
 library(tidyverse)
 
 extrafont::loadfonts()
@@ -45,9 +52,9 @@ run_name <- "d1.0"
 
 scrooge_theme <-
 theme_ipsum(
-base_size = 16,
-axis_title_size = 18,
-strip_text_size = 18
+base_size = 12,
+axis_title_size = 14,
+strip_text_size = 14
 )
 
 theme_set(scrooge_theme)
@@ -111,7 +118,7 @@ max_realistic_f <- 3
 
 The well-being of coastal communities and ecosystems around the world depends on our ability to provide accurate and timely assessments of the status of fished populations. This is typically accomplished by collecting biologically-focused data such as the amount and size of fish captured, and using those data to fit statistical models that estimate factors such as current biomass levels and exploitation rates, usually relative to some benchmark set by stakeholders.
 
-This stock assessment process has had successes throughout the world especially where the data and resources are available to perform what we might call "traditional" statistical stock assessments [@Hilborn2014b]. While many of the world's largest and most valuable fisheries fall into this category, the majority of people that depend on fisheries do so in smaller scale operations that lack the capacity for traditional stock assessment, a group that has been generally called "data limited fisheries"[wakefield citation]. This problem has led to an explosion of "data limited stock assessments" (DLAs), that aim to provide management advice using fewer data (but more assumptions). These DLAs have made fisheries assessment possible in previously unassessed places, but increasingly they have sought to simply use more involved statistics to extract more knowledge from the same data (often length composition of the catch).
+This stock assessment process has had successes throughout the world especially where the data and resources are available to perform what we might call "traditional" statistical stock assessments [@Hilborn2014b]. While many of the world's largest and most valuable fisheries fall into this category, the majority of people that depend on fisheries do so in smaller scale operations that lack the capacity for traditional stock assessment, a group that has been generally called "data limited fisheries". This problem has led to an explosion of "data limited stock assessments" (DLAs), that aim to provide management advice using fewer data (but more assumptions). These DLAs have made fisheries assessment possible in previously unassessed places, but increasingly they have sought to simply use more involved statistics to extract more knowledge from the same data (often length composition of the catch).
 
 This study improves the management capacity of data-limited fisheries by demonstrating how expanding the pool of available data to include economic and biological information together can dramatically (hopefully) improve the accuracy of stock assessments.
 
@@ -122,9 +129,9 @@ Our results demonstrate how often available, but to date underutilized, data can
 
 ## Introduction
 
-Effective fisheries management requires that managers and stakeholders have some ability to estimate and react to the abundance of fishes in the ocean. The history of fisheries science is largely concerned with developing and improving our ability to accomplish this difficult task, starting from early models of growth overfishing [@Smith1994] and leading up to multi-species bio-geo-economic models[e.g. citation some mice model].  While the field has made dramatic advances in our ability to assess the status of fisheries, by and large we have found two solutions to this problem: Fit highly complex integrated statistical models to diverse data streams [cite fancy stock assessment technique], or utilize increasing levels of statistical wizardry to try and squeeze more information out of limited data [what has lately been termed Data Limited Stock Assessments, or DLAs; cite]. The explosion of DLAs has been both promising and concerning. The majority of fisheries in the world lack the resources for fully integrated stock assessments, and so depend on this world of "data limited stock assessment". While there has been tremendous growth in this field, nearly all DLAs rely on the same streams of information that would have been available to a fisheries scientist in the 1800s: lengths [cite], captures [cite], and catch per unit effort[cite], generally only one at a time. While these biological data can be highly informative, economic data can also provide information as to the history and status of a fishery. We present here a novel tool for combining historic economic information with traditional fisheries data to improve fisheries stock assessment.
+Effective fisheries management requires that managers and stakeholders have some ability to estimate and react to the abundance of fishes in the ocean. The history of fisheries science is largely concerned with developing and improving our ability to accomplish this difficult task, starting from early models of growth overfishing [@Smith1994] and leading up to multi-species bio-economic models[e.g. @Plaganyi2014].  While the field has made dramatic advances in our ability to assess the status of fisheries, by and large we have found two solutions to this problem: Fit highly complex integrated statistical models to diverse data streams, or utilize increasing levels of statistical wizardry to try and squeeze more information out of limited data [what has lately been termed Data Limited Stock Assessments, or DLAs]. The explosion of DLAs has been both promising and concerning. The majority of fisheries in the world lack the resources for fully integrated stock assessments, and so depend on this world of "data limited stock assessment". While there has been tremendous growth in this field, nearly all DLAs rely on the same streams of information that would have been available to a fisheries scientist in the 1800s: lengths, captures, and catch per unit effort, generally only one at a time. While these biological data can be highly informative, economic data can also provide information as to the history and status of a fishery. We present here a novel tool for combining historic economic information with traditional fisheries data to improve fisheries stock assessment.
 
-Why do we need a new line of evidence in stock assessment? One could certainly make the case that statistical stock assessments are complicated enough as it is. But, while these "gold standard" assessments appear to by and large perform well using solely biological data, data-limited stock assessments, in which models are fit by trading in data for assumptions, often struggle if the exact requirements of their assumptions are not satisfied. This can present a major problem for communities and ecosystems that depend on the outcomes of these DLAs to guide their management practices. While future work can examine the usefulness of economic data in a data-rich context, our focus here is in demonstrating how economic information augment biological data to improve the performance of data-limited stock assessments.
+Why do we need a new line of evidence in stock assessment? One could certainly make the case that statistical stock assessments are complicated enough as it is. But, while these "gold standard" assessments (usually) perform well using solely biological data, data-limited stock assessments, in which models are fit by trading in data for assumptions, often struggle if the exact requirements of their assumptions are not satisfied. This can present a major problem for communities and ecosystems that depend on the outcomes of these DLAs to guide their management practices. While future work can examine the usefulness of economic data in a data-rich context, our focus here is in demonstrating how economic information augment biological data to improve the performance of data-limited stock assessments.
 
 What defines a data limited assessment? @Dowling2015 provides a useful summary of what we mean by a data-limited fishery, but for now we can broadly consider data-limited assessments as fisheries lacking sufficient quality information to perform a "traditional" stock assessment, meaning at minimum total catch records and catch-per-unit-effort, on up to a fully integrated statistical catch-at-age model requiring catch, CPUE, length compositions, growth and aging, tagging, etc. A common example of a data-limited fishery might then include a fishery for which only CPUE data is available, or for which the only species-specific information are sampled length frequencies from the port or market.
 
@@ -156,7 +163,7 @@ In summary, a large body of literature exists showing there exist predictable dy
 
 ### Why A Bayesian Approach?
 
-Bayesian methods play an important role in fisheries science. Informative priors can help estimate challenging functions such as the stock-recruitment relationship, and the outcomes of Bayesian assessment provide estimates of posterior probability of states of nature, greatly aiding the management strategy evaluation process [@Punt1997; @Myers2002]. While decisions about prior distributions can in some cases dramatically affect assessment accuracy [@Thorson2017a], properly implemented Bayesian methods can provide improved estimates of uncertainty over maximum likelihood approaches [find that citation].
+Bayesian methods play an important role in fisheries science. Informative priors can help estimate challenging functions such as the stock-recruitment relationship, and the outcomes of Bayesian assessment provide estimates of posterior probability of states of nature, greatly aiding the management strategy evaluation process [@Punt1997; @Myers2002]. While decisions about prior distributions can in some cases dramatically affect assessment accuracy [@Thorson2017a], properly implemented Bayesian methods can provide improved estimates of uncertainty over maximum likelihood approaches [find that citation, recent paper looking at Bayesian vs maximum likelihood uncertainty estiamtes in fisheries?].
 
 While there are statistical reasons to favor (and in some circumstances resist) a Bayesian approach to fisheries assessment, our choice of a Bayesian method here is to provide a quantitative framework for bringing local knowledge into the fisheries stock assessment process. To our knowledge, the use of informative priors in data-limited fisheries has focused on biological traits such as growth rates [@Jiao2011] or depletion [@Cope2013]. The core hypothesis behind our model though is that economic data can inform stock status. While economic data in the form of official government statistics maybe hard to come by, may fisheries can be data-limited but knowledge rich, especially where economic histories are concerned. We selected a Bayesian methodology then as an explicit way of bringing this economic knowledge, whether qualitative or quantitative, into the fisheries stock assessment process. 
 
@@ -199,7 +206,7 @@ model_table <-
   
 kable(model_table, "latex", align="l", booktabs=TRUE, escape = F, row.names = F,linesep = "",
       caption = "Candidate economic process models and likelihood components of scrooge") %>%
-  kable_styling(latex_options = "striped", full_width = T,font_size = 9) %>% 
+  kable_styling(latex_options = "striped",full_width = T,font_size = 9) %>% 
   row_spec(0, bold = T)  %>% 
   group_rows("Economic Process Models", 1, 4) %>%
   group_rows("Likelihood Components", 5, 7)
@@ -296,7 +303,7 @@ The key difference in the estimation models is how they estimate *f* and the dat
 
 #### Effort Process Models
 
-All effort process model have an expected process and a process error component. The process error, $E^{dev}$, is estiamted in the same manner across all the process models 
+All effort process model have an expected process and a process error component. The process error, $E^{dev}$, is estimated in the same manner across all the process models 
 
 Effort deviates $E^{dev}$ are assumed to be log-normally distributed
 
@@ -346,7 +353,7 @@ Notice now that the components price (*p*), catchability (*q*), and cost (*c*) a
 
 $$E_{t + 1} = (E_{t} + \theta{\hat{PPUE_{t}}})e^{E^{dev}_{t}}$$
 
-where $\hat{PPUE_{t}}$ the profit per unit effort, and $\theta$ adjusts the responsiveness of effort to *PPUE*. Note that the model includes the same effort process error as utilzied in the random-walk processmodel. 
+where $\hat{PPUE_{t}}$ the profit per unit effort, and $\theta$ adjusts the responsiveness of effort to *PPUE*. Note that the model includes the same effort process error as utilized in the random-walk process model. 
 
 $$f_{t} = q_{t}E_{t}$$
 
@@ -470,7 +477,7 @@ We simulated two case studies for this paper; an open access model which while c
 
 For every simulated fishery, we then stipulated a range of the data to sample, and a combination of an process model and a likelihood structure to fit `scrooge` to those data. In this study, we sampled length composition and economic data for a period of up to 15 years during the middle of the simulated fishery's evolution. Within this 15 year window, we consider two cases, one where length composition data are available for all 15 years, and another where while economic data are available for all 15 years, length composition data are only available for the last 4 years of the time series. We then pass the chosen model configuration, data and associated life-history parameters to `scrooge` to fit the model. 
 
-For now, we focus on estimation of fishing mortality rates. As the model also estimates selectivity, given assumptions about the spawning biomass at age, it is trivial to also estimate and present common metrics such as the spawning potential ratio (SPR). However, for brevity's sake here, we focus on demonstrating the potential of the model to estimate fishing mortlaity *f*. In addition, we do not consider observation error at this time. While this is clearly not a remotely realistic choice, we made this decision due to the novel nature of the the integrated use of economic data and dynamics into the stock assessment process. If `scrooge` is unable to provide substantial improvements (or actually provides worse estimates) than a standard lengths-only assessments model, in the form of @Rudd2017 or @Hordyk2014, even with perfect information, then it is unlikely to do well with imperfect knowledge. However, future testing will clearly need to address this step, which our operating model is already capable of incorporating.
+For now, we focus on estimation of fishing mortality rates. As the model also estimates selectivity, given assumptions about the spawning biomass at age, it is trivial to also estimate and present common metrics such as the spawning potential ratio (SPR). However, for brevity's sake here, we focus on demonstrating the potential of the model to estimate fishing mortality *f*. In addition, we do not consider observation error at this time. While this is clearly not a remotely realistic choice, we made this decision due to the novel nature of the the integrated use of economic data and dynamics into the stock assessment process. If `scrooge` is unable to provide substantial improvements (or actually provides worse estimates) than a standard lengths-only assessments model, in the form of @Rudd2017 or @Hordyk2014, even with perfect information, then it is unlikely to do well with imperfect knowledge. However, future testing will clearly need to address this step, which our operating model is already capable of incorporating.
 
 #### Model Comparison
 
@@ -486,9 +493,9 @@ There are many other potential metrics for use, but we focus on these since the 
 
 We use rmse and bias to assess the performance of `scrooge` in our case studies. We also used rmse to provide a higher level summary of overall and context specific performance of the candidate `scrooge` models. To judge overall performance, we fit a hierarchical Bayesian model to our simulated fits, in which the dependent variable is rmse, and the independent variables include simulation characteristics such as the degree of recruitment variation, the degree of variation in economic parameters, the life history of the species, and hierarchical effects for each `scrooge` model. This model then provides posterior probability estimates of the average effect of each candidate `scrooge` model on RMSE, controlling for covariates. 
 
-This method provides estimates of overall model performance, but it is likely that different `scrooge` models will perform best under different circumstances. To examine this possibility, we fit a decision tree model using the `rpart` function implemented in the `caret` package [citation], where the dependent variable is, for each simulated fishery, the best (in terms of RMSE) scrooge model, and the independent data are the simulation characteristics. This method provides an algorithm for deciding on the best `scrooge` model configuration given the characteristics of a fishery. 
+This method provides estimates of overall model performance, but it is likely that different `scrooge` models will perform best under different circumstances. To examine this possibility, we fit a decision tree model using the `rpart` function implemented in the `caret` package, where the dependent variable is, for each simulated fishery, the best (in terms of RMSE) scrooge model, and the independent data are the simulation characteristics. This method provides an algorithm for deciding on the best `scrooge` model configuration given the characteristics of a fishery. 
 
-Lastly, we also used LIME to estimate fishing mortality for each of the `r nrow(processed_grid)` simulated assessments scenarios, and then for each scenario calcualted the difference in rmse resulting from LIME and `scrooge`
+Lastly, we also used LIME to estimate fishing mortality for each of the `r nrow(processed_sandbox)` simulated assessments scenarios, and then for each scenario calculated the difference in rmse resulting from LIME and `scrooge`
 
 ## Results
 
@@ -660,8 +667,6 @@ cs3_plot <- plot_case_studies(cs1 = "em0_lm0", cs2 = "em1_lm1",
                               case_studies = case_studies,
                               modelo_name = modelo_name)
 
-cs3_plot
-
 ```
 
 ### Overall Model Performance
@@ -677,7 +682,7 @@ bad_fisheries <- processed_sandbox %>%
 
 sandbox_performance <- processed_sandbox %>%
   filter(!fishery %in% unique(bad_fisheries$fishery)) %>% 
-  select(-scrooge_fit, -prepped_fishery,-summary_plot,-fleet_params,-lime_v_scrooge) %>%
+  select(-scrooge_fit, -prepped_fishery,-summary_plot,-fleet_params) %>%
   unnest()
 
 sandbox_performance <- sandbox_performance %>% 
@@ -902,7 +907,7 @@ rpart.plot::rpart.plot(decision_tree$finalModel)
 
 All of our analyses so far have been internal to the `scrooge` model. These results demonstrate that `scrooge` is capable of using economic data to improve estimates of fishing mortality. How does it compare though to other models that utilize length composition data to estimate fishing mortality rates, such as LIME [@Rudd2017]? As a preliminary assessment of this question, we used LIME to estimate fishing mortality rates from our `r nrow(processed_sandbox)` simulated fisheries, using only the length composition data. In these circumstances, LIME does not estimate a process error around fishing mortality, but rather estimates fishing mortality as a fixed effect, with a penalty on the year-to-year changes on estimated fishing mortality. For consistencies sake, we set our prior on the process error for fishing mortality in `scrooge` to the same value as the penalty used in LIME (0.2). Both models receive the exact same data. 
 
-Comparing the two models, we see that inclusion of economic information through `scrooge` more frequently resulted in improved estimates of fishing mortality (as measured in reductions in root mean squared error) than those produced by LIME, though LIME did outperform `scrooge` during many runs, especially in cases where scrooge utilized profit ingredients in the open-access process model (Fig.\@ref(fig:scrooge-v-lime)). Interestingly, the `scrooge` configuration that utilizes length composition only in the likelihood and a random walk for the economic process model (`em0_lm0`) is more or less the exact same model that LIME uses, and yet the `scrooge` version of this model provided lower RMSE than LIME in approximately 80% of the simulations (Fig.\@ref(fig:scrooge-v-lime)). Further research is needed to determine if this is a result of the priors utilized in `scrooge`, or due to some inherent performance traits of fitting through Hamiltonian Monte Carlo in `stan` vs through maximum likelihood with the Laplace approximation in `TMB`. 
+Comparing the two models, we see that inclusion of economic information through `scrooge` more frequently resulted in improved estimates of fishing mortality (as measured in reductions in root mean squared error) than those produced by LIME, though LIME did outperform `scrooge` during many runs, especially in cases where scrooge utilized profit ingredients in the open-access process model (Fig.\@ref(fig:scrooge-v-lime)). Interestingly, the `scrooge` configuration that utilizes length composition only in the likelihood and a random walk for the economic process model (`em0_lm0`) is more or less the exact same model that LIME uses, and yet the `scrooge` version of this model provided lower RMSE than LIME in approximately 80% of the simulations (Fig.\@ref(fig:scrooge-v-lime)). Further research is needed to determine if this is a result of the priors utilized in `scrooge`, or due to some inherent performance traits of fitting through Hamiltonian Monte Carlo in `stan` vs through maximum likelihood with the Laplace approximation in `TMB`, or simply a house effect of both the simulation model and `scrooge` being written by the same author. 
 
 ```{r scrooge-v-lime, fig.cap = "Distributions of difference (scrooge - lime) root mean squared error across simulated fisheriess. Values are capped at differences of |0.5|, which represnts a substantial difference in performance when fishing mortality is commonly on the scale of 0 to 2"}
 
@@ -967,6 +972,8 @@ From the fleet perspective, we do not yet address the complexities of multiple f
 
 Our results show that accurate data on the percentage changes in total fishing effort are likely to provide the most reduction in root median squared error. If these data are not reliably available though, we find that the choice of which model is "best" is highly dependent on the characteristics of a specific fishery. Future work and theory may identify an emergent set of cases where one particular model configuration is preferable. As the number of assessment methods increases, and the range of fishery scenarios in which we we want to run assessment diversify, relying on qualitative rules of thumb is likely to become more challenging. We propose the pairing of large-scale simulation testing with classification algorithms to resolve this problem. On their own, this process allows the data to inform us which models are likely to perform well under a particular set of circumstances. Further work is needed to translate characteristics of simulated fisheries into parameters questions that users could reliably answer. These methods could also serve as the underpinning for ensemble assessment approaches, such as those presented by @Anderson2017b, that rather than picking one model generate an aggregate output based on predictions of each model weighted by their expected accuracy under given circumstances. We recognize that this approach may seem as a "black box", and we would encourage users not blindly trust algorithm outputs. At a minimum, for such a tool to be useful it would have to inform users as to how similar their particular fishery is to the simulated library of fisheries on which the decision algorithm is based. But, we feel that the use of theory and empirical approaches such as these can make the process of deciding which model to use when easier and, properly done, more transparent.  
 
+In a similar vein, comparisons between `scrooge` and other assessments such as LIME as in no way intended to establish a "winner". Our results show that, under the very specific set of circumstances simulated here, inclusion of economic theory and data through `scrooge` often outperformed, in root median squared error, estimation by `LIME` using only length-composition data in the likelihood. However, we also found many cases where `LIME` outperformed `scrooge` (Fig.\@ref(fig:scrooge-v-lime)). Similar to the decision tree method we used to for model selection within `scrooge`, we can also start using this simulation testing method to develop decision tree across models. Two areas of particularly interesting research will be a) how flawed economic data and/or assumptions can be before its inclusion becomes useless or actively harmful and b) comparison of lengths + economic data to for example lengths + CPUE, or lengths + CPUE + PPUE. 
+
 Looking more broadly, there are several important challenges to the integration of economic knowledge in stock assessment that need to be addressed. Open-access dynamics are central to all of the `scrooge` configurations except those that assume some knowledge of the percentage changes in effort in the fishery over time. This clearly begs the question, how would this model work in a limited-entry or rationalized fishery? If effort is constrained by both regulation and profits, profits alone may not be informative. While we do not test these scenarios here, we a) could incorporate them to the simulation framework but more importantly b) can use this assessment as a foundation for thinking about how to integrate economic knowledge from fisheries with different types of effort dynamics into the assessment process. For example, in rationalized fisheries, data on the price and dynamics of quota trading could be informative as to fishery perceptions of stock status. While these are real concerns, as a starting place though we fell that assuming open access dynamics is a reasonable assumption for many data-limited fisheries in which we would envision using the `scrooge` assessment model as envisioned here. 
 
 We also casually suggest that data such as trends in prices, costs, technology, effort, or profit per unit effort be accurately collected and utilized in the assessment process. Our results show that, in theory, collecting these data is likely to be worth it from the perspective of assessment accuracy [though a full cost-benefit management strategy evaluation would be needed to assess the tradeoffs in assessment accuracy with the costs of data collection, as discussed by @Dowling2016]. Why do we feel that these data may be obtainable in a data-limited contexts, where more traditional fisheries data such as total removals are not? The first is that fishermen can talk while fish cannot. In our experience, fishing stakeholders often have detailed knowledge on the economic history of their fishery. While future work is needed to determine the best strategies for translating this knowledge into the form required by `scrooge`, this is a surmountable challenge. Second, governments or stakeholders that have not had the capacity or interest in collecting historic fisheries data may still have official records on data related to the fishing industry, including fuel prices, government subsidies, export prices, and changes in wages. We are under no illusion that obtaining the types of economic data utilized by `scrooge` will be simple, but our results show that it is worth determining how best to obtain and use these data. 
@@ -976,3 +983,234 @@ While Bayesian analysis has a strong tradition in fisheries science, informative
 Similar to the evolution of economic behavior in the MSE process, we begin with simple open-access models of effort dynamics to illustrate this process. These simple models may indeed by accurate for some fisheries (perhaps especially those for which we do not have sufficient data to identify these dynamics), but are certainly not an appropriate model for many fisheries [@Szuwalski2017]. However, future research can begin to incorporate more complex and realistic models of fishing behavior from the wealth of studies examining the dynamics of fishing fleets [e.g. @Marchal2013; @Vermard2008]. 
 
 The dynamics of fisheries are dictated in part by the interplay of economic incentives and ecological constraints. Natural resource management, and fisheries in particular, have gone a long towards understanding these dynamics, from simple theories of open-access dynamics to agent-based multi-species models. While we have increasingly used this understanding to project the likely consequences of policy choices [@Nielsen2017], we have yet broadly utilize these dynamics in the assessment phase of fisheries management. While methods such as SSCOM, described in @Thorson2013a, utilize economic theory to help inform fisheries assessment, to our knowledge this study is the first to incorporate this theory with data on the dynamics of economic incentives to create an integrated bio-economic stock assessment model. We find that integration of economic information can substantially improve the accuracy of fisheries stock assessment, allowing in this case users from a data-limited context to utilize local fishery knowledge to improve their ability to effectively manage their marine resources. Our hope is that this research can serve as a foundation for a broader field of inquiry linking economic behavior with biological knowledge to improve our knowledge of the state of global fisheries. 
+
+## Supplementary Material 
+
+It is not feasible to provide in depth fitting diagnostics for all `r nrow(processed_sandbox)` simulated assessments. However, we can broadly report that the percent of divergent draws across all simulations was less low (generally less than 1%), as were the percentage of draws that exceeded the maximum treedepth. 
+
+To provide some diagnostics of model fitting, we can examine key HMC diagnostics for our third case study (the hardest of the case studies for `scrooge` to fit), to verify that under these circumstances our model converges properly. Standard divergence, energy, and treedepth diagnostic plots were created with the `bayesplot` package [citation]. 
+
+
+```{r cs3-stats, eval = TRUE}
+
+cs3<- case_studies %>% 
+  filter(economic_model  == 1 & likelihood_model == 1,
+         case_study == "decoupled",
+         prop_years_lcomp_data == min(prop_years_lcomp_data))
+
+cs3_fit <- cs3$scrooge_fit[[1]]
+
+np <- nuts_params(cs3_fit)
+
+energy_plot <- mcmc_nuts_energy(np)
+
+lp <- log_posterior(cs3_fit)
+  
+div_plot <- mcmc_nuts_divergence(np, lp = lp)
+
+tree_plot <- mcmc_nuts_treedepth(np, lp)
+
+```
+
+
+
+```{r energy, fig.cap="Energy plot of case study 3. Delta energy histogram closely matches energy, suggesting fat tails are not a problem", eval = TRUE}
+energy_plot 
+```
+
+
+
+```{r d-and-tree, fig.cap = "Log posterioer and acceptance stat as a function of divergence. No runs were divergent", eval = TRUE}
+
+div_plot
+
+```
+
+
+```{r tree-plot, fig.cap="Log poasterior, acceptance stat, and counts of treedepth. Max treedepth was set to 12, which no runs exceeded", eval = TRUE}
+
+tree_plot
+
+```
+
+```{r neff-rhat, fig.cap = "Rhat diagnostic for all estimated parameters. No parameteres exceeded 1.05, meaning there is not clear evidence of insufficient effective sample sizes for any parameters", eval = TRUE}
+mcmc_rhat(rhat(cs3_fit))
+
+```
+
+
+```{r lcomp-pp, fig.cap = "90% pospterior predictive distribution (shaded ribbon) ot fitted length composition data (points). Nearly observed points fall within the posterior predictive distribution", eval = TRUE}
+
+pp_lengths <- cs3$performance[[1]]$length_comps %>% 
+    filter(source == "posterior_predictive") %>% 
+    mutate(model = "ingredients/lcomp+ppue")
+
+
+  pp_fits_plot <- pp_lengths %>% 
+    filter(year >= 13) %>%
+    group_by(year, .chain, .iteration, model) %>%
+    mutate(predicted = predicted / sum(predicted)) %>%
+    group_by(year, .chain, length_bin, model) %>%
+    summarise(
+      lower_90 = quantile(predicted, 0.05),
+      upper_90 = quantile(predicted, 0.95),
+      mean = mean(predicted),
+      observed = unique(observed)
+    ) %>%
+    ggplot() +
+    geom_ribbon(aes(x = length_bin, ymin = lower_90, ymax = upper_90, fill = model),alpha = 0.75, show.legend = FALSE) +
+    geom_point(
+      aes(length_bin, observed),
+      size = 1,
+      alpha = 0.5,
+      color = "black"
+    ) +
+    facet_wrap( ~ year, labeller = label_both) +
+    theme_minimal() +
+    ggsci::scale_fill_aaas() +
+    labs(y = "", x = "Length Bin")
+
+  pp_fits_plot
+  
+
+```
+
+
+```{r mean-length, fig.cap="Posterior predictive distribution of mean length (distribution) and observed mean length (red line) over time. True mean lengths all fell within posterior predictive distribution", eval = TRUE}
+
+  
+  test_stats <- pp_lengths %>% 
+    filter(year >= 13) %>%
+    group_by(year, .chain, .iteration, model) %>%
+    mutate(predicted = predicted / sum(predicted)) %>%
+    na.omit() %>% 
+    group_by(year, .draw, model) %>%
+    summarise(
+      mean_predicted = weighted.mean(length_bin,predicted),
+      mean_observed = weighted.mean(length_bin, observed, na.rm = T)
+    )
+  
+
+  test_stats %>% 
+    ggplot(aes(mean_predicted, group = year)) + 
+    geom_density(fill = "lightblue") + 
+    geom_vline(aes(xintercept = mean_observed), linetype = 2, color = "red") + 
+    facet_wrap(~year, labeller = label_both) +
+    labs(x = "Length (cm)", y = element_blank())
+  
+  
+```
+
+```{r ppue-pp, fig.cap="90% credible interval of posterior predictive draws of profit per unit effort (ribbon), and observed profit per unit effort (points)", eval = TRUE}
+
+  sampled_years <- cs3$prepped_fishery[[1]]$sampled_years
+
+  sampled_years <- data_frame(year =1:length(sampled_years),
+                              sampled_year = sampled_years)
+
+
+pp_ppue <- tidybayes::spread_draws(cs3_fit, pp_ppue[year]) %>%
+    ungroup() %>%
+    left_join(sampled_years, by = "year") %>%
+    mutate(year = sampled_year) %>%
+    select(-sampled_year)
+
+  true_ppue <- cs3$prepped_fishery[[1]]$simed_fishery %>%
+    group_by(year) %>%
+    summarise(profits = sum(profits),
+              effort = unique(effort)) %>%
+    ungroup() %>%
+    mutate(ppue = profits / effort)
+
+  pp_ppue_pref <- pp_ppue %>%
+    left_join(true_ppue, by = "year") %>%
+    mutate(resid = pp_ppue - ppue) %>%
+    rename(predicted = pp_ppue,
+           observed = ppue) %>%
+    mutate(sq_er = resid^2,
+           variable = "pp_ppue") 
+  
+  pp_ppue_plot <- pp_ppue_pref %>% 
+    group_by(year, .chain) %>%
+    summarise(
+      lower_90 = quantile(predicted, 0.05),
+      upper_90 = quantile(predicted, 0.95),
+      mean = mean(predicted),
+      observed = unique(observed)
+    ) %>%
+    ggplot() +
+    geom_hline(aes(yintercept = 0), linetype = 2, color = "red") +
+    geom_ribbon(aes(x = year, ymin = lower_90, ymax = upper_90),alpha = 0.75, show.legend = FALSE,
+                fill = "lightblue") +
+    geom_point(
+      aes(year, observed),
+      size = 4,
+      shape = 21,
+      alpha = 0.95,
+      fill = "red"
+    ) +
+    theme_minimal() +
+    ggsci::scale_fill_aaas() +
+    labs(y = "PPUE", x = "Year")
+
+  pp_ppue_plot
+  
+```
+
+
+```{r ppue-hat, eval = TRUE}
+
+  sampled_years <- cs3$prepped_fishery[[1]]$sampled_years
+
+  sampled_years <- data_frame(year =1:length(sampled_years),
+                              sampled_year = sampled_years)
+
+
+ppue_hat <- tidybayes::spread_draws(cs3_fit, ppue_hat[year]) %>%
+    ungroup() %>%
+    left_join(sampled_years, by = "year") %>%
+    mutate(year = sampled_year) %>%
+    select(-sampled_year)
+
+  true_ppue <- cs3$prepped_fishery[[1]]$simed_fishery %>%
+    group_by(year) %>%
+    summarise(profits = sum(profits),
+              effort = unique(effort)) %>%
+    ungroup() %>%
+    mutate(ppue = profits / effort)
+
+  hat_ppue_pref <- ppue_hat %>%
+    left_join(true_ppue, by = "year") %>%
+    mutate(resid = ppue_hat - ppue) %>%
+    rename(predicted = ppue_hat,
+           observed = ppue) %>%
+    mutate(sq_er = resid^2,
+           variable = "ppue_hat")
+
+  
+  hat_ppue_plot <- hat_ppue_pref %>% 
+    group_by(year, .chain) %>%
+    summarise(
+      lower_90 = quantile(predicted, 0.05),
+      upper_90 = quantile(predicted, 0.95),
+      mean = mean(predicted),
+      observed = unique(observed)
+    ) %>%
+    ggplot() +
+    geom_hline(aes(yintercept = 0), linetype = 2, color = "red") +
+    geom_ribbon(aes(x = year, ymin = lower_90, ymax = upper_90),alpha = 0.75, show.legend = FALSE,
+                fill = "lightblue") +
+    geom_point(
+      aes(year, observed),
+      size = 4,
+      alpha = 0.5,
+      color = "black"
+    ) +
+    theme_minimal() +
+    ggsci::scale_fill_aaas() +
+    labs(y = "PPUE", x = "Year")
+  hat_ppue_plot
+  
+```
+
+
