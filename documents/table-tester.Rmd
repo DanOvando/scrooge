@@ -3,7 +3,20 @@ title: "table-tester"
 author: "Dan Ovando"
 date: "8/8/2018"
 output: pdf_document
+header-includes:
+  - \usepackage[left]{lineno}
+  - \linenumbers
+  
+bibliography: dissertation.bib
+# Download your specific bibliography database file and refer to it in the line above.
+csl: fish-and-fisheries.csl
 ---
+
+@Costello2016
+
+Is this working with line numbers?
+
+I'm not sure
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
