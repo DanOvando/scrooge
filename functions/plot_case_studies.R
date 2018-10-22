@@ -1,6 +1,7 @@
 plot_case_studies <- function(cs1,
          cs2,
          performance_stats,
+         perf_summaries,
          case_studies,
          cs_name = "realistic",
          lcomp_years = "max",
@@ -81,9 +82,11 @@ cs_plot <- cs %>%
   facet_wrap(~model, labeller = labeller(model = modelo_name)) +
   theme(plot.margin = unit(c(0,0,0,0), units = "lines"),
         panel.spacing = unit(0.1, units = "lines"),
-        axis.title.x = element_blank(),
         strip.text = element_text(size = 14))
 
+go_away <- ls()[!ls() %in% c("cs_plot","cs_summ_plot")]
+
+rm(list = go_away)
 
 out <- cs_plot + cs_summ_plot + plot_layout(nrow = 1, ncol = 2, widths = c(3,1))
 

@@ -1,4 +1,11 @@
 fit_lbspr<- function(data,fish, fleet){
+
+  # data <- fisheries_sandbox$prepped_fishery[[1]]$scrooge_data
+  #
+  # fish <- fisheries_sandbox$prepped_fishery[[1]]$fish
+  #
+  # fleet <- fisheries_sandbox$prepped_fishery[[1]]$fleet
+
   pars <- new("LB_pars")
 
   pars@Species <- fish$scientific_name
@@ -20,7 +27,7 @@ fit_lbspr<- function(data,fish, fleet){
   lcomps <- new("LB_lengths")
 
 
-  bin_mids <- data_frame(lbin = colnames(data$length_comps) %>% as.numeric()) %>%
+  bin_mids <- data_frame(lbin = colnames(data$length_comps %>% select(-year)) %>% as.numeric()) %>%
     mutate(ubin = dplyr::lead(lbin))
 
   bin_mids$ubin[nrow(bin_mids)] <- bin_mids$lbin[nrow(bin_mids)] + 1

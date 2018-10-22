@@ -73,7 +73,7 @@ subsample_data <-
       prepped_fishery$scrooge_data$price_t[sampled_years]
 
     prepped_fishery$scrooge_data$q_t <-
-      prepped_fishery$scrooge_data$q_t[sampled_years]/(prepped_fishery$scrooge_data$q_t[sampled_years])
+      prepped_fishery$scrooge_data$q_t[sampled_years]/max(prepped_fishery$scrooge_data$q_t[sampled_years])
 
     prepped_fishery$scrooge_data$cost_t <-
       prepped_fishery$scrooge_data$cost_t[sampled_years]/max(prepped_fishery$scrooge_data$cost_t[sampled_years])

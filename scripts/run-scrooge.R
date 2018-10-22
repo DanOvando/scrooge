@@ -75,7 +75,7 @@ theme_set(scrooge_theme)
 
 sim_fisheries <- FALSE
 
-run_case_studies <- TRUE
+run_case_studies <- FALSE
 
 run_clouds <- FALSE
 
@@ -83,7 +83,7 @@ fit_models <- FALSE
 
 process_cloud_fits <- FALSE
 
-run_lime <- TRUE
+run_lime <- FALSE
 
 n_fisheries <- 10 # number of fisheries to simulate
 
@@ -980,6 +980,106 @@ lcomp_years <- map(processed_sandbox$prepped_fishery,c("scrooge_data","length_co
 processed_limes <- map2(lime_fits, lcomp_years, safely(process_lime))
 
 saveRDS(object = processed_limes,file =  paste0(run_dir,"/processed_limes.RDS"))
+
+}
+
+if (run_lbspr == TRUE){
+
+  # processed_sandbox <- readRDS(file = glue::glue("results/scrooge-results/{run_name}/processed_fisheries_sandbox.RDS"))
+
+
+  experiments <- expand.grid(
+    period = c("middle", "end"),
+    window = c(15),
+    economic_model = c(0),
+    likelihood_model = c(0),
+    prop_years_lcomp_data = c(1),
+    fishery =   unique(fisheries_sandbox$fishery),
+    stringsAsFactors = F
+  ) %>%
+    filter(
+      !(economic_model == 2 & likelihood_model == 1),!(economic_model == 3 &
+                                                         likelihood_model == 2)
+    )
+
+  sub_fisheries_sandbox <- experiments %>%
+    left_join(fisheries_sandbox, by = "fishery") %>%
+    mutate(experiment = 1:nrow(.)) %>%
+    mutate(prepped_fishery = pmap(
+      list(
+        prepped_fishery = prepped_fishery,
+        window = window,
+        period = period,
+        experiment = experiment,
+        prop_years_lcomp_data = prop_years_lcomp_data
+      ),
+      subsample_data
+    ))
+
+
+  lbspr_fits <- pmap(list(
+    fish = map(sub_fisheries_sandbox$prepped_fishery, "fish"),
+    fleet = map(sub_fisheries_sandbox$prepped_fishery, "fleet"),
+    data = map(sub_fisheries_sandbox$prepped_fishery, "scrooge_data")
+  ),
+  safely(fit_lbspr))
+
+lbspr_worked <- map(lbspr_fits,"error") %>% map_lgl(is_null)
+
+lbspr_results <- map(lbspr_fits,"result") %>% keep(lbspr_worked)
+
+fit <- lbspr_results[[1]]
+
+truth <- sub_fisheries_sandbox$prepped_fishery[[1]]
+
+process_lbspr <- function(fit,truth){
+
+  ests <- fit@Ests %>%
+    as_data_frame() %>%
+    set_names(tolower)
+
+  sampled_years <- truth$sampled_years
+
+  true_f <- truth$simed_fishery %>%
+    filter(year %in% sampled_years) %>%
+    group_by(year) %>%
+    summarise(true_f = unique(f))
+
+  ests$true_fm <- true_f$true_f / truth$fish$m
+
+  ests$true_sel50 <- truth$fleet$length_50_sel
+
+  return(ests)
+
+}
+
+compare_lbspr <-  sub_fisheries_sandbox %>%
+  filter(lbspr_worked) %>%
+  mutate(lbspr_results = map2(lbspr_results, prepped_fishery, process_lbspr)) %>%
+  select(experiment, rec_ac, sigma_r, economic_model, lbspr_results) %>%
+  unnest() %>%
+  group_by(experiment,rec_ac,sigma_r,economic_model) %>%
+  summarise(rmse = sqrt(mean((true_fm - fm)^2))) %>%
+  ungroup()
+
+compare_lbspr %>%
+  ggplot(aes(pmin(2,rmse))) +
+  geom_histogram(aes(y = ..ncount..),fill = "lightgrey", color = "black") +
+  labs(x = "rmse (units of F)", y = "Proportion")
+
+
+compare_lbspr %>%
+  ggplot(aes(sigma_r, pmin(2,rmse))) +
+  geom_point()
+
+compare_lbspr %>%
+  ggplot(aes(rec_ac, pmin(2, rmse))) +
+  geom_point()
+
+
+
+
+
 
 }
 
